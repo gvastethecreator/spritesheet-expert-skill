@@ -29,6 +29,12 @@ python .\SKILLS\spritesheet-expert\scripts\smoke_pipeline.py
 
 The smoke test uses fixtures. Representative game art still requires real generated or imported source images.
 
+Validate the public skill package:
+
+```powershell
+npm run validate
+```
+
 ## What's Inside
 
 - [`SKILL.md`](./SKILLS/spritesheet-expert/SKILL.md): routing, rules, and pipeline contract.

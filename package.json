@@ -1,0 +1,10 @@
+{
+  "name": "spritesheet-expert-skill",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "validate": "node scripts/validate-skill-pack.mjs",
+    "smoke": "python ./SKILLS/spritesheet-expert/scripts/smoke_pipeline.py"
+  }
+}
