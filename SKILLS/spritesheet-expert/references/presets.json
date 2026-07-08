@@ -1,0 +1,279 @@
+{
+  "version": 1,
+  "presets": {
+    "codex-pet": {
+      "description": "Codex custom pet atlas compatible with hatch-pet output.",
+      "camera": "mascot",
+      "art_profiles": ["pixel-core", "pixel-character", "pixel-motion"],
+      "cell": { "width": 192, "height": 208, "safe_margin_x": 18, "safe_margin_y": 16 },
+      "columns": 8,
+      "transparent": true,
+      "formats": ["webp", "png"],
+      "compatibility": ["codex-custom-pet"],
+      "rows": [
+        { "id": "idle", "frames": 6, "durations_ms": [280, 110, 110, 140, 140, 320] },
+        { "id": "running-right", "frames": 8, "durations_ms": [120, 120, 120, 120, 120, 120, 120, 220], "mirror_pair": "running-left" },
+        { "id": "running-left", "frames": 8, "durations_ms": [120, 120, 120, 120, 120, 120, 120, 220], "mirror_pair": "running-right" },
+        { "id": "waving", "frames": 4, "durations_ms": [140, 140, 140, 280] },
+        { "id": "jumping", "frames": 5, "durations_ms": [140, 140, 140, 140, 280] },
+        { "id": "failed", "frames": 8, "durations_ms": [140, 140, 140, 140, 140, 140, 140, 240] },
+        { "id": "waiting", "frames": 6, "durations_ms": [150, 150, 150, 150, 150, 260] },
+        { "id": "running", "frames": 6, "durations_ms": [120, 120, 120, 120, 120, 220] },
+        { "id": "review", "frames": 6, "durations_ms": [150, 150, 150, 150, 150, 280] }
+      ]
+    },
+    "platformer-character": {
+      "description": "Side-view platformer character sheet.",
+      "camera": "side",
+      "art_profiles": ["pixel-core", "pixel-character", "pixel-motion", "pixel-sideview"],
+      "cell": { "width": 128, "height": 128, "safe_margin": 16 },
+      "columns": 8,
+      "transparent": true,
+      "formats": ["png", "webp"],
+      "rows": [
+        { "id": "idle", "frames": 6 },
+        { "id": "run", "frames": 8 },
+        { "id": "jump", "frames": 4 },
+        { "id": "fall", "frames": 4 },
+        { "id": "land", "frames": 4 },
+        { "id": "attack", "frames": 6 },
+        { "id": "hurt", "frames": 4 },
+        { "id": "death", "frames": 8 }
+      ]
+    },
+    "topdown-character": {
+      "description": "Four-direction RPG or adventure character sheet.",
+      "camera": "topdown",
+      "art_profiles": ["pixel-core", "pixel-character", "pixel-motion", "pixel-topdown"],
+      "cell": { "width": 64, "height": 64, "safe_margin": 8 },
+      "columns": 8,
+      "transparent": true,
+      "formats": ["png", "webp"],
+      "directions": ["down", "left", "right", "up"],
+      "rows": [
+        { "id": "idle-down", "frames": 4 },
+        { "id": "idle-left", "frames": 4, "mirror_pair": "idle-right" },
+        { "id": "idle-right", "frames": 4, "mirror_pair": "idle-left" },
+        { "id": "idle-up", "frames": 4 },
+        { "id": "walk-down", "frames": 8 },
+        { "id": "walk-left", "frames": 8, "mirror_pair": "walk-right" },
+        { "id": "walk-right", "frames": 8, "mirror_pair": "walk-left" },
+        { "id": "walk-up", "frames": 8 },
+        { "id": "attack-down", "frames": 6 },
+        { "id": "attack-left", "frames": 6, "mirror_pair": "attack-right" },
+        { "id": "attack-right", "frames": 6, "mirror_pair": "attack-left" },
+        { "id": "attack-up", "frames": 6 }
+      ]
+    },
+    "isometric-character": {
+      "description": "Four-diagonal isometric character sheet.",
+      "camera": "isometric",
+      "art_profiles": ["pixel-core", "pixel-character", "pixel-motion", "pixel-isometric"],
+      "cell": { "width": 96, "height": 96, "safe_margin": 12 },
+      "columns": 8,
+      "transparent": true,
+      "formats": ["png", "webp"],
+      "directions": ["se", "sw", "ne", "nw"],
+      "rows": [
+        { "id": "idle-se", "frames": 4, "mirror_pair": "idle-sw" },
+        { "id": "idle-sw", "frames": 4, "mirror_pair": "idle-se" },
+        { "id": "idle-ne", "frames": 4, "mirror_pair": "idle-nw" },
+        { "id": "idle-nw", "frames": 4, "mirror_pair": "idle-ne" },
+        { "id": "walk-se", "frames": 8, "mirror_pair": "walk-sw" },
+        { "id": "walk-sw", "frames": 8, "mirror_pair": "walk-se" },
+        { "id": "walk-ne", "frames": 8, "mirror_pair": "walk-nw" },
+        { "id": "walk-nw", "frames": 8, "mirror_pair": "walk-ne" },
+        { "id": "attack-se", "frames": 6, "mirror_pair": "attack-sw" },
+        { "id": "attack-sw", "frames": 6, "mirror_pair": "attack-se" },
+        { "id": "attack-ne", "frames": 6, "mirror_pair": "attack-nw" },
+        { "id": "attack-nw", "frames": 6, "mirror_pair": "attack-ne" }
+      ]
+    },
+    "combat-character": {
+      "description": "Action RPG or beat-em-up combat character sheet.",
+      "camera": "side",
+      "art_profiles": ["pixel-core", "pixel-character", "pixel-motion", "pixel-sideview", "pixel-combat"],
+      "cell": { "width": 160, "height": 160, "safe_margin": 20 },
+      "columns": 10,
+      "transparent": true,
+      "formats": ["png", "webp"],
+      "rows": [
+        { "id": "idle", "frames": 6 },
+        { "id": "walk", "frames": 8 },
+        { "id": "run", "frames": 8 },
+        { "id": "light-attack", "frames": 8 },
+        { "id": "heavy-attack", "frames": 10 },
+        { "id": "block", "frames": 4 },
+        { "id": "dodge", "frames": 6 },
+        { "id": "hit", "frames": 4 },
+        { "id": "death", "frames": 10 }
+      ]
+    },
+    "fighting-game-character": {
+      "description": "Large side-view fighting game character sheet.",
+      "camera": "side",
+      "art_profiles": ["pixel-core", "pixel-character", "pixel-motion", "pixel-sideview", "pixel-combat"],
+      "cell": { "width": 192, "height": 192, "safe_margin": 24 },
+      "columns": 12,
+      "transparent": true,
+      "formats": ["png", "webp"],
+      "rows": [
+        { "id": "idle", "frames": 8 },
+        { "id": "walk-forward", "frames": 8 },
+        { "id": "walk-back", "frames": 8 },
+        { "id": "crouch", "frames": 4 },
+        { "id": "jump", "frames": 8 },
+        { "id": "punch", "frames": 6 },
+        { "id": "kick", "frames": 8 },
+        { "id": "special", "frames": 12 },
+        { "id": "hitstun", "frames": 6 },
+        { "id": "knockdown", "frames": 10 },
+        { "id": "win", "frames": 10 }
+      ]
+    },
+    "rpg-monster": {
+      "description": "RPG enemy or creature animation sheet.",
+      "camera": "side-or-three-quarter",
+      "art_profiles": ["pixel-core", "pixel-character", "pixel-motion"],
+      "cell": { "width": 128, "height": 128, "safe_margin": 16 },
+      "columns": 8,
+      "transparent": true,
+      "formats": ["png", "webp"],
+      "rows": [
+        { "id": "idle", "frames": 6 },
+        { "id": "move", "frames": 6 },
+        { "id": "attack", "frames": 8 },
+        { "id": "cast", "frames": 8 },
+        { "id": "hit", "frames": 4 },
+        { "id": "death", "frames": 8 },
+        { "id": "taunt", "frames": 6 },
+        { "id": "sleep", "frames": 4 }
+      ]
+    },
+    "ui-avatar": {
+      "description": "Portrait or avatar expression animation sheet.",
+      "camera": "portrait",
+      "art_profiles": ["pixel-core", "pixel-character", "pixel-motion", "pixel-items-ui"],
+      "cell": { "width": 256, "height": 256, "safe_margin": 24 },
+      "columns": 6,
+      "transparent": true,
+      "formats": ["png", "webp"],
+      "rows": [
+        { "id": "idle", "frames": 6 },
+        { "id": "blink", "frames": 4 },
+        { "id": "talk", "frames": 6 },
+        { "id": "happy", "frames": 4 },
+        { "id": "sad", "frames": 4 },
+        { "id": "thinking", "frames": 6 },
+        { "id": "alert", "frames": 4 },
+        { "id": "success", "frames": 4 }
+      ]
+    },
+    "tileset-topdown": {
+      "description": "Top-down tilemap atlas for terrain, paths, water, walls, cliffs, and decor.",
+      "camera": "topdown-tile",
+      "asset_kind": "tileset",
+      "extraction_mode": "slots",
+      "art_profiles": ["pixel-core", "pixel-texture", "pixel-topdown"],
+      "style": "game-ready top-down tilemap art, consistent grid scale, coherent palette, clean readable materials, tileable edges where the row action asks for them.",
+      "cell": { "width": 64, "height": 64, "safe_margin": 0 },
+      "columns": 8,
+      "transparent": true,
+      "formats": ["png", "webp"],
+      "output": { "use": "tilemap", "frame_semantics": "tiles" },
+      "rows": [
+        { "id": "terrain", "frames": 8, "fps": 1, "loop": false, "action": "top-down grass, dirt, stone, sand, mud, snow, and cracked ground tile variants with compatible edges" },
+        { "id": "paths", "frames": 8, "fps": 1, "loop": false, "action": "top-down path and road tiles: straight, corner, tee, cross, endcap, bridge, and worn variants" },
+        { "id": "water", "frames": 8, "fps": 1, "loop": false, "action": "top-down water, shoreline, foam, pond, river, and wet edge tiles with consistent palette" },
+        { "id": "walls", "frames": 8, "fps": 1, "loop": false, "action": "top-down wall, fence, cliff, ledge, gate, and obstacle tiles with readable collision edges" },
+        { "id": "decor", "frames": 8, "fps": 1, "loop": false, "action": "small top-down decor tiles: rocks, flowers, shrubs, crates, signs, debris, and ground decals" }
+      ]
+    },
+    "tileset-platformer": {
+      "description": "Side-view platformer tileset atlas for ground, slopes, ledges, hazards, backgrounds, and decor.",
+      "camera": "side-tile",
+      "asset_kind": "tileset",
+      "extraction_mode": "slots",
+      "art_profiles": ["pixel-core", "pixel-texture", "pixel-sideview"],
+      "style": "game-ready side-view platformer tileset art, consistent tile grid, readable silhouettes, coherent palette, strong collision surfaces.",
+      "cell": { "width": 64, "height": 64, "safe_margin": 0 },
+      "columns": 8,
+      "transparent": true,
+      "formats": ["png", "webp"],
+      "output": { "use": "platformer-tilemap", "frame_semantics": "tiles" },
+      "rows": [
+        { "id": "ground", "frames": 8, "fps": 1, "loop": false, "action": "solid ground tiles: center, top, side, corner, inner corner, cap, and broken variants" },
+        { "id": "slopes", "frames": 8, "fps": 1, "loop": false, "action": "platformer slope and ramp tiles with clean collision-readable silhouettes" },
+        { "id": "ledges", "frames": 8, "fps": 1, "loop": false, "action": "platform, bridge, one-way ledge, hanging edge, cracked ledge, and support tiles" },
+        { "id": "hazards", "frames": 8, "fps": 1, "loop": false, "action": "spikes, lava edge, thorns, saw base, acid, and warning hazard tiles, all readable at runtime" },
+        { "id": "decor", "frames": 8, "fps": 1, "loop": false, "action": "side-view decorative tiles: grass tufts, vines, signs, rocks, chains, background trims, and decals" }
+      ]
+    },
+    "texture-pack": {
+      "description": "Seamless material texture atlas for terrain, props, and environment surfaces.",
+      "camera": "material-flat",
+      "asset_kind": "texture",
+      "extraction_mode": "slots",
+      "art_profiles": ["pixel-core", "pixel-texture"],
+      "style": "game-ready seamless material textures, orthographic flat samples, no labels, no perspective scene, consistent texel density and lighting.",
+      "cell": { "width": 128, "height": 128, "safe_margin": 0 },
+      "columns": 6,
+      "transparent": false,
+      "formats": ["png", "webp"],
+      "output": { "use": "materials", "frame_semantics": "seamless-textures" },
+      "rows": [
+        { "id": "stone", "frames": 6, "fps": 1, "loop": false, "action": "seamless stone material samples: rough block, cracked slate, cobble, carved tile, wet stone, and mossy stone" },
+        { "id": "wood", "frames": 6, "fps": 1, "loop": false, "action": "seamless wood material samples: plank, bark, worn board, dark beam, painted wood, and splintered wood" },
+        { "id": "metal", "frames": 6, "fps": 1, "loop": false, "action": "seamless metal material samples: clean steel, rust, brass, scratched plate, riveted panel, and dark iron" },
+        { "id": "fabric", "frames": 6, "fps": 1, "loop": false, "action": "seamless fabric material samples: canvas, wool, leather, stitched cloth, banner weave, and padded textile" },
+        { "id": "ground", "frames": 6, "fps": 1, "loop": false, "action": "seamless ground material samples: soil, sand, snow, grass, gravel, and mud" }
+      ]
+    },
+    "asset-pack": {
+      "description": "Mixed still asset atlas for props, pickups, UI icons, VFX, and decals.",
+      "camera": "asset",
+      "asset_kind": "asset",
+      "extraction_mode": "slots",
+      "art_profiles": ["pixel-core", "pixel-texture", "pixel-items-ui", "pixel-vfx"],
+      "style": "game-ready isolated asset art, consistent palette, scale, outline weight, and runtime readability.",
+      "cell": { "width": 128, "height": 128, "safe_margin": 8 },
+      "columns": 8,
+      "transparent": true,
+      "formats": ["png", "webp"],
+      "output": { "use": "mixed-assets", "frame_semantics": "still-assets" },
+      "rows": [
+        { "id": "props", "frames": 8, "fps": 1, "loop": false, "action": "environment props: crate, barrel, lantern, sign, plant, rock, tool, and furniture item, isolated per slot" },
+        { "id": "pickups", "frames": 8, "fps": 1, "loop": false, "action": "pickup items: coin, gem, potion, key, scroll, food, ammo, and power-up, isolated per slot" },
+        { "id": "ui-icons", "frames": 8, "fps": 1, "loop": false, "action": "runtime UI icons: heart, shield, sword, map, bag, gear, star, and alert marker, isolated per slot" },
+        { "id": "vfx", "frames": 8, "fps": 1, "loop": false, "action": "self-contained VFX stills: impact, spark, smoke puff, flame burst, magic glint, slash arc, splash, and dust ring" },
+        { "id": "decals", "frames": 8, "fps": 1, "loop": false, "action": "ground and wall decals: crack, scorch, footprint, stain, moss patch, arrow mark, scrape, and rune mark" }
+      ]
+    },
+    "custom-asset-atlas": {
+      "description": "User-defined still asset, texture, tileset, icon, prop, or VFX atlas contract.",
+      "camera": "custom-asset",
+      "asset_kind": "asset",
+      "extraction_mode": "slots",
+      "art_profiles": ["auto"],
+      "style": "custom user-provided game asset style, consistent runtime scale, palette, and alpha-safe isolation.",
+      "cell": { "width": 128, "height": 128, "safe_margin": 8 },
+      "columns": 8,
+      "transparent": true,
+      "formats": ["png", "webp"],
+      "requires_user_rows": true,
+      "output": { "use": "custom-assets", "frame_semantics": "user-defined" },
+      "rows": []
+    },
+    "custom-atlas": {
+      "description": "User-defined atlas contract.",
+      "camera": "custom",
+      "art_profiles": ["auto"],
+      "cell": { "width": 128, "height": 128, "safe_margin": 16 },
+      "columns": 8,
+      "transparent": true,
+      "formats": ["png", "webp"],
+      "requires_user_rows": true,
+      "rows": []
+    }
+  }
+}
