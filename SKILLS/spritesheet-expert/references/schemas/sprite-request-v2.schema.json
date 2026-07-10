@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spritesheet-expert.local/schemas/sprite-request-v2.schema.json",
+  "title": "Spritesheet Expert sprite request v2",
+  "type": "object",
+  "required": [
+    "version",
+    "kind",
+    "asset_kind",
+    "frame_semantics",
+    "extraction_mode",
+    "raw_layout_policy",
+    "cell",
+    "states",
+    "sampling_policy"
+  ],
+  "properties": {
+    "version": { "const": 2 },
+    "kind": { "const": "sprite-gen-request" },
+    "asset_kind": {
+      "enum": ["sprite", "tileset", "texture", "asset", "prop", "icon", "ui", "vfx"]
+    },
+    "frame_semantics": {
+      "enum": ["animation", "variants", "tiles", "seamless-textures", "still-assets", "effects", "user-defined"]
+    },
+    "extraction_mode": { "enum": ["components", "slots"] },
+    "raw_layout_policy": {
+      "enum": ["compact-body-grids", "strip", "legacy-strip", "off"]
+    },
+    "cell": {
+      "type": "object",
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "safe_margin": { "type": "integer", "minimum": 0 },
+        "safe_margin_x": { "type": "integer", "minimum": 0 },
+        "safe_margin_y": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "states": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "maxLength": 64
+      },
+      "additionalProperties": { "$ref": "#/$defs/state" }
+    },
+    "sampling_policy": { "$ref": "#/$defs/samplingPolicy" }
+  },
+  "$defs": {
+    "state": {
+      "type": "object",
+      "required": ["frames", "fps"],
+      "properties": {
+        "frames": { "type": "integer", "minimum": 1 },
+        "fps": { "type": "integer", "minimum": 1 },
+        "loop": { "type": "boolean" },
+        "action": { "type": "string" },
+        "durations_ms": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1 },
+          "minItems": 1
+        },
+        "raw_layout": { "$ref": "#/$defs/rawLayout" },
+        "vfx": { "$ref": "#/$defs/vfxMetadata" }
+      },
+      "additionalProperties": true
+    },
+    "normalizedPivot": {
+      "type": "object",
+      "required": ["role", "x", "y"],
+      "properties": {
+        "role": { "enum": ["emitter", "contact"] },
+        "x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "vfxMetadata": {
+      "type": "object",
+      "required": [
+        "pivot",
+        "blend_mode",
+        "phase_sequence",
+        "loop_behavior",
+        "compositing_backgrounds"
+      ],
+      "properties": {
+        "pivot": { "$ref": "#/$defs/normalizedPivot" },
+        "blend_mode": {
+          "enum": ["alpha", "premultiplied-alpha", "additive", "multiply", "screen"]
+        },
+        "phase_sequence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "enum": ["buildup", "peak", "decay", "hold"] }
+        },
+        "loop_behavior": { "enum": ["once", "loop", "hold-last"] },
+        "compositing_backgrounds": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "rawLayout": {
+      "type": "object",
+      "required": ["kind", "columns", "rows", "order", "delivery"],
+      "properties": {
+        "kind": { "enum": ["strip", "compact-grid"] },
+        "columns": { "type": "integer", "minimum": 1 },
+        "rows": { "type": "integer", "minimum": 1 },
+        "order": { "enum": ["left-to-right", "row-major"] },
+        "delivery": { "const": "compose-runtime-row" },
+        "reason": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "samplingPolicy": {
+      "type": "object",
+      "required": ["filter", "wrap", "mipmaps", "pixel_snap"],
+      "properties": {
+        "filter": { "enum": ["nearest", "linear"] },
+        "wrap": { "enum": ["clamp-to-edge", "repeat", "mirror-repeat"] },
+        "mipmaps": { "type": "boolean" },
+        "pixel_snap": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "asset_kind": { "const": "vfx" } },
+        "required": ["asset_kind"]
+      },
+      "then": {
+        "properties": {
+          "states": {
+            "additionalProperties": { "required": ["loop", "vfx"] }
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": true
+}

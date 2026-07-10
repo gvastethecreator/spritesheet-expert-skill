@@ -2,5 +2,8 @@
 node_modules/
 .scratch/
 coverage/
+.pytest_cache/
+.coverage
+htmlcov/
 __pycache__/
 *.pyc

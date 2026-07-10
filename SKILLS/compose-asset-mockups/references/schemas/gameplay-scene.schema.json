@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.openai.local/compose-asset-mockups/gameplay-scene.schema.json",
+  "title": "Gameplay presentation scene",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "asset_ids", "truth_type", "proof_role"],
+  "properties": {
+    "id": {"$ref": "#/$defs/id"},
+    "asset_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/id"}
+    },
+    "truth_type": {"enum": ["concept", "reconstructed", "runtime-captured"]},
+    "proof_role": {"enum": ["illustrative", "runtime-proof"]},
+    "capture_evidence": {
+      "$ref": "https://schemas.openai.local/compose-asset-mockups/capture-evidence.schema.json"
+    },
+    "notes": {"type": "string"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"truth_type": {"const": "runtime-captured"}}},
+      "then": {"required": ["capture_evidence"]}
+    },
+    {
+      "if": {"properties": {"proof_role": {"const": "runtime-proof"}}},
+      "then": {
+        "properties": {"truth_type": {"const": "runtime-captured"}},
+        "required": ["capture_evidence"]
+      }
+    }
+  ],
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"}
+  }
+}

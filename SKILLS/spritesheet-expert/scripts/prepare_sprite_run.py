@@ -19,6 +19,16 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
+from runio import acquire_run_dir_lock
+from spritecore.contracts import ContractError, normalize_contract
+from spritecore.models import is_state_slug
+from spritecore.paths import (
+    RUN_MARKER_FILENAME,
+    PathSafetyError,
+    create_run_marker,
+    remove_known_outputs,
+)
+
 
 DEFAULT_STATES: dict[str, dict[str, Any]] = {
     "idle": {"frames": 4, "fps": 4, "loop": True, "action": "subtle breathing and blinking"},
@@ -109,6 +119,19 @@ DEFAULT_BEN2_MODEL = "PramaLLC/BEN2"
 ART_DIRECTION_MODES = {"none", "pixel-art"}
 ART_DIRECTION_MODE_ALIASES: dict[str, str] = {}
 ART_PROFILE_AUTO = "auto"
+PREPARE_KNOWN_OUTPUTS = (
+    "prompts",
+    "references/layout-guides",
+    "references/art-direction.json",
+    "frames",
+    "qa",
+    "sprite-request.json",
+    "sprite-sheet-alpha.png",
+    "sprite-sheet-alpha.webp",
+    "manifest.json",
+    "preview.gif",
+    "preview.png",
+)
 
 TRANSPARENCY_ARTIFACT_RULES = [
     "Prefer pose, expression, and silhouette changes over decorative effects.",
@@ -451,6 +474,13 @@ ART_PROFILES: dict[str, dict[str, Any]] = {
 ART_PROFILE_ORDER = list(ART_PROFILES)
 ART_PROFILE_CHOICES = {ART_PROFILE_AUTO, *ART_PROFILES}
 ANIMATION_WORKFLOW_AUTO = "auto"
+TEMPORAL_FRAME_SEMANTICS = {"animation", "effects"}
+STATIC_FRAME_SEMANTICS = {
+    "variants",
+    "tiles",
+    "still-assets",
+    "seamless-textures",
+}
 
 ANIMATION_WORKFLOWS: dict[str, dict[str, Any]] = {
     "idle-breath": {
@@ -761,17 +791,26 @@ def normalize_background_removal(raw: dict[str, Any], args: argparse.Namespace, 
 
 
 def normalize_states(raw: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
-    source = raw or DEFAULT_STATES
+    source = DEFAULT_STATES if raw is None else raw
+    if not isinstance(source, dict) or not source:
+        raise SystemExit("states must be a non-empty object")
     normalized: dict[str, dict[str, Any]] = {}
     for state, entry in source.items():
+        if not is_state_slug(state):
+            raise SystemExit(
+                f"invalid state id {state!r}; use a 1-64 character lowercase kebab slug"
+            )
         if not isinstance(entry, dict):
             raise SystemExit(f"state {state!r} must be an object")
         frames = int(entry.get("frames", 0))
         if frames <= 0:
             raise SystemExit(f"state {state!r} must have positive frames")
+        fps = int(entry.get("fps", DEFAULT_STATES.get(state, {}).get("fps", 6)))
+        if fps <= 0:
+            raise SystemExit(f"state {state!r} must have positive fps")
         normalized[state] = {
             "frames": frames,
-            "fps": int(entry.get("fps", DEFAULT_STATES.get(state, {}).get("fps", 6))),
+            "fps": fps,
             "loop": bool(entry.get("loop", True)),
             "action": str(entry.get("action", DEFAULT_STATES.get(state, {}).get("action", state))),
         }
@@ -783,7 +822,7 @@ def normalize_states(raw: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
             normalized[state]["pose_geometry"] = entry["pose_geometry"]
         if "raw_layout" in entry:
             normalized[state]["raw_layout"] = entry["raw_layout"]
-        for key in ("labels", "asset_labels", "asset_names"):
+        for key in ("label", "labels", "asset_labels", "asset_names"):
             if key in entry:
                 normalized[state][key] = entry[key]
     return normalized
@@ -1066,6 +1105,8 @@ def active_art_profiles(request: dict[str, Any], state: str, entry: dict[str, An
 
 
 def infer_animation_workflows(request: dict[str, Any], state: str, entry: dict[str, Any], asset_kind: str) -> list[str]:
+    if request.get("frame_semantics", "animation") not in TEMPORAL_FRAME_SEMANTICS:
+        return []
     descriptor = request_descriptor(request, state, entry)
     tokens = state_tokens(state, entry)
     state_only_tokens = set(re.findall(r"[a-z0-9]+", state.lower()))
@@ -1152,11 +1193,27 @@ def infer_animation_workflows(request: dict[str, Any], state: str, entry: dict[s
 
 def active_animation_workflows(request: dict[str, Any], state: str, entry: dict[str, Any], asset_kind: str) -> list[str]:
     art_direction = request.get("art_direction") if isinstance(request.get("art_direction"), dict) else {}
+    request_declared = "animation_workflows" in request
+    row_declared = "animation_workflows" in entry
     requested: list[str] = []
     requested.extend(normalize_workflow_list(request.get("animation_workflows"), "animation_workflows"))
     requested.extend(normalize_workflow_list(entry.get("animation_workflows"), f"states.{state}.animation_workflows"))
+    frame_semantics = str(request.get("frame_semantics", "animation"))
+    if frame_semantics in STATIC_FRAME_SEMANTICS:
+        if requested:
+            raise SystemExit(
+                f"states.{state}: static frame_semantics {frame_semantics!r} "
+                "cannot declare animation workflows"
+            )
+        return []
     explicit = [workflow for workflow in requested if workflow != ANIMATION_WORKFLOW_AUTO]
-    use_auto = not requested or ANIMATION_WORKFLOW_AUTO in requested
+    use_auto = (
+        frame_semantics in TEMPORAL_FRAME_SEMANTICS
+        and (
+            (not request_declared and not row_declared)
+            or ANIMATION_WORKFLOW_AUTO in requested
+        )
+    )
     workflows: list[str] = []
     if use_auto and art_direction.get("mode") == "pixel-art":
         workflows.extend(infer_animation_workflows(request, state, entry, asset_kind))
@@ -2010,6 +2067,14 @@ def main() -> int:
         raise SystemExit(f"output dir exists and is not empty: {out_dir}; pass --force")
 
     raw_request = load_request(args.request, args.request_json)
+    declared_kind = raw_request.get("kind")
+    if declared_kind is not None and declared_kind != "sprite-gen-request":
+        raise SystemExit(f"request kind must be 'sprite-gen-request', got {declared_kind!r}")
+    if "kind" in raw_request or "version" in raw_request:
+        try:
+            raw_request = normalize_contract(raw_request, expected_kind="sprite-request").to_dict()
+        except ContractError as exc:
+            raise SystemExit(str(exc)) from exc
     states = normalize_states(raw_request.get("states"))
     raw_cell = dict(raw_request.get("cell", {}))
     if args.cell_width is not None:
@@ -2018,16 +2083,12 @@ def main() -> int:
         raw_cell["height"] = args.cell_height
     cell = normalize_cell(raw_cell, args.cell_size, args.safe_margin)
 
-    out_dir.mkdir(parents=True, exist_ok=True)
-    base_dest = None
-    if args.base_image:
-        base_source = args.base_image.expanduser().resolve()
-        if not base_source.is_file():
-            raise SystemExit(f"missing base image: {base_source}")
-        base_dest = out_dir / f"base-source{base_source.suffix.lower() or '.png'}"
-        shutil.copy2(base_source, base_dest)
+    base_source = args.base_image.expanduser().resolve() if args.base_image else None
+    if base_source is not None and not base_source.is_file():
+        raise SystemExit(f"missing base image: {base_source}")
 
-    chroma_key = choose_chroma_key(base_dest, args.chroma_key)
+    base_dest_name = f"base-source{base_source.suffix.lower() or '.png'}" if base_source else None
+    chroma_key = choose_chroma_key(base_source, args.chroma_key)
     style_preset = str(raw_request.get("style_preset") or args.style_preset)
     if style_preset not in STYLE_PRESETS:
         raise SystemExit(f"unknown style_preset {style_preset!r}; choices: {', '.join(sorted(STYLE_PRESETS))}")
@@ -2060,7 +2121,7 @@ def main() -> int:
         "character": {
             "id": args.character_id,
             "description": args.description,
-            "base_image": base_dest.name if base_dest else None,
+            "base_image": base_dest_name,
         },
         "cell": cell,
         "chroma_key": chroma_key,
@@ -2072,11 +2133,38 @@ def main() -> int:
         "art_direction": art_direction,
         "raw_layout_policy": str(raw_request.get("raw_layout_policy", "compact-body-grids")),
     }
-    for key in ("preset", "output", "frame_budget", "asset_catalog", "iso", "tile", "projection"):
+    for key in (
+        "preset",
+        "output",
+        "frame_budget",
+        "asset_catalog",
+        "iso",
+        "tile",
+        "projection",
+        "frame_semantics",
+        "sampling_policy",
+    ):
         if key in raw_request:
             request[key] = raw_request[key]
     apply_raw_layout_policy(request, states, asset_kind)
+    try:
+        request = normalize_contract(request, expected_kind="sprite-request").to_dict()
+    except ContractError as exc:
+        raise SystemExit(str(exc)) from exc
     validate_isometric_catalog_contract(request)
+
+    try:
+        create_run_marker(out_dir, run_id=args.character_id)
+        acquire_run_dir_lock(out_dir, "prepare_sprite_run")
+        if out_dir.exists() and any(out_dir.iterdir()) and args.force:
+            known_outputs = list(PREPARE_KNOWN_OUTPUTS)
+            known_outputs.extend(path.name for path in out_dir.glob("base-source.*") if path.is_file())
+            remove_known_outputs(out_dir, known_outputs)
+    except PathSafetyError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    if base_source is not None and base_dest_name is not None:
+        shutil.copy2(base_source, out_dir / base_dest_name)
 
     references = out_dir / "references" / "layout-guides"
     reference_root = out_dir / "references"

@@ -6,6 +6,47 @@ from pathlib import Path
 
 
 ROW_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+ASSET_LABEL = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
+FRAME_SEMANTICS = {
+    "animation",
+    "effects",
+    "variants",
+    "tiles",
+    "still-assets",
+    "seamless-textures",
+    "user-defined",
+}
+TEMPORAL_FRAME_SEMANTICS = {"animation", "effects"}
+STATIC_FRAME_SEMANTICS = {
+    "variants",
+    "tiles",
+    "still-assets",
+    "seamless-textures",
+}
+ANIMATION_WORKFLOWS = {
+    "idle-breath",
+    "fighting-stance-idle",
+    "sideview-locomotion",
+    "topdown-locomotion",
+    "combat-quick-strike",
+    "combat-power-strike",
+    "topdown-weapon-attack",
+    "responsive-jump",
+    "hit-reaction-knockdown",
+    "run-gun-layered-motion",
+    "vfx-buildup-peak-decay",
+    "water-loop",
+    "wind-ambient-loop",
+    "pickup-feedback",
+    "tiny-motion",
+}
+PROP_STRATEGY_CLASSES = {
+    "compact_prop",
+    "wide_or_long_object",
+    "tall_or_large_object",
+    "collision_bearing_object",
+    "tileset_or_strip_piece",
+}
 RATIO_KEYS = {
     "guide_height_ratio",
     "start_height_vs_reference",
@@ -96,6 +137,55 @@ def validate_art_direction(preset_id, preset):
     return None
 
 
+def validate_workflows(preset_id, row_id, value):
+    if not isinstance(value, list):
+        return f"{preset_id}/{row_id}: animation_workflows must be a list"
+    unknown = sorted(set(value) - ANIMATION_WORKFLOWS)
+    if unknown:
+        return (
+            f"{preset_id}/{row_id}: unknown animation workflow(s): "
+            f"{', '.join(unknown)}"
+        )
+    if len(value) != len(set(value)):
+        return f"{preset_id}/{row_id}: animation_workflows cannot contain duplicates"
+    return None
+
+
+def validate_slot_metadata(preset_id, row_id, row, frames, asset_kind, seen_labels):
+    labels = row.get("asset_labels")
+    if not isinstance(labels, list) or len(labels) != frames:
+        return f"{preset_id}/{row_id}: asset_labels must contain one label per frame"
+    for label in labels:
+        if not isinstance(label, str) or not ASSET_LABEL.match(label):
+            return f"{preset_id}/{row_id}: invalid asset_labels entry {label!r}"
+        if label in seen_labels:
+            return f"{preset_id}/{row_id}: duplicate asset label {label!r}"
+        seen_labels.add(label)
+    catalog = row.get("catalog")
+    if not isinstance(catalog, dict):
+        return f"{preset_id}/{row_id}: catalog metadata must be an object"
+    category = catalog.get("category")
+    if not isinstance(category, str) or not category.strip():
+        return f"{preset_id}/{row_id}: catalog.category must be a non-empty string"
+    pivot = catalog.get("pivot")
+    if (
+        not isinstance(pivot, list)
+        or len(pivot) != 2
+        or not all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in pivot)
+    ):
+        return f"{preset_id}/{row_id}: catalog.pivot must be a numeric [x, y] pair"
+    if asset_kind == "tileset":
+        if not (catalog.get("tile_role") or catalog.get("edge_role")):
+            return f"{preset_id}/{row_id}: catalog needs tile_role or edge_role"
+        if not isinstance(catalog.get("collision"), str) or not catalog["collision"].strip():
+            return f"{preset_id}/{row_id}: catalog.collision must be a non-empty string"
+    if asset_kind in {"asset", "prop", "props", "icon", "ui"}:
+        strategy = catalog.get("strategy_class")
+        if strategy not in PROP_STRATEGY_CLASSES:
+            return f"{preset_id}/{row_id}: catalog.strategy_class is missing or unsupported"
+    return None
+
+
 def main(argv):
     path = Path(argv[1] if len(argv) > 1 else Path(__file__).parents[1] / "references" / "presets.json")
     data = json.loads(path.read_text(encoding="utf-8-sig"))
@@ -121,6 +211,21 @@ def main(argv):
         art_error = validate_art_direction(preset_id, preset)
         if art_error:
             return fail(art_error)
+        frame_semantics = preset.get("frame_semantics")
+        if frame_semantics not in FRAME_SEMANTICS:
+            return fail(
+                f"{preset_id}: frame_semantics must be one of "
+                f"{', '.join(sorted(FRAME_SEMANTICS))}"
+            )
+        output = preset.get("output")
+        if not isinstance(output, dict):
+            return fail(f"{preset_id}: output policy must be an object")
+        if not isinstance(output.get("use"), str) or not output["use"].strip():
+            return fail(f"{preset_id}: output.use must be a non-empty string")
+        if output.get("frame_semantics") != frame_semantics:
+            return fail(
+                f"{preset_id}: output.frame_semantics must match frame_semantics"
+            )
         cell = preset.get("cell") or {}
         width = cell.get("width")
         height = cell.get("height")
@@ -132,6 +237,25 @@ def main(argv):
             return fail(f"{preset_id}: rows must be a list")
         if not rows and not preset.get("requires_user_rows"):
             return fail(f"{preset_id}: rows cannot be empty")
+
+        row_workflows = preset.get("row_workflows", {})
+        if not isinstance(row_workflows, dict):
+            return fail(f"{preset_id}: row_workflows must be an object")
+        row_ids = {row.get("id") for row in rows if isinstance(row, dict)}
+        unknown_workflow_rows = sorted(set(row_workflows) - row_ids)
+        if unknown_workflow_rows:
+            return fail(
+                f"{preset_id}: row_workflows references unknown row(s): "
+                f"{', '.join(unknown_workflow_rows)}"
+            )
+        if frame_semantics in TEMPORAL_FRAME_SEMANTICS:
+            missing_workflow_rows = sorted(row_ids - set(row_workflows))
+            if missing_workflow_rows:
+                return fail(
+                    f"{preset_id}: temporal rows missing animation_workflows: "
+                    f"{', '.join(missing_workflow_rows)}"
+                )
+        seen_labels = set()
 
         seen = set()
         for row in rows:
@@ -155,6 +279,33 @@ def main(argv):
             pose_error = validate_pose_geometry(preset_id, row_id, row.get("pose_geometry"))
             if pose_error:
                 return fail(pose_error)
+            declared_workflows = row.get(
+                "animation_workflows", row_workflows.get(row_id, [])
+            )
+            workflow_error = validate_workflows(
+                preset_id, row_id, declared_workflows
+            )
+            if workflow_error:
+                return fail(workflow_error)
+            if frame_semantics in STATIC_FRAME_SEMANTICS and declared_workflows:
+                return fail(
+                    f"{preset_id}/{row_id}: static frame_semantics cannot declare animation workflows"
+                )
+            if frame_semantics in STATIC_FRAME_SEMANTICS and row.get("loop") is True:
+                return fail(
+                    f"{preset_id}/{row_id}: static frame_semantics rows cannot loop"
+                )
+            if extraction_mode == "slots":
+                metadata_error = validate_slot_metadata(
+                    preset_id,
+                    row_id,
+                    row,
+                    frames,
+                    asset_kind,
+                    seen_labels,
+                )
+                if metadata_error:
+                    return fail(metadata_error)
 
     print(f"OK: {len(presets)} presets in {path}")
     return 0

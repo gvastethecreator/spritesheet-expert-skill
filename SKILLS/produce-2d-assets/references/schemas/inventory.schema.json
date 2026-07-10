@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.openai.local/produce-2d-assets/inventory.schema.json",
+  "title": "2D asset inventory DAG",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["assets"],
+  "properties": {
+    "assets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/asset"}
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "owner", "depends_on", "required_variants", "validation_report"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "kind": {
+          "enum": ["sprite", "tileset", "texture", "icon", "background", "ui", "mockup", "presentation", "vfx", "other"]
+        },
+        "owner": {"$ref": "#/$defs/id"},
+        "depends_on": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/id"}
+        },
+        "required_variants": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/id"}
+        },
+        "validation_report": {"$ref": "#/$defs/validationReport"},
+        "metadata": {"type": "object"}
+      }
+    },
+    "validationReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "input_fingerprint", "status"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![A-Za-z]:[\\\\/]|[\\\\/]).+"
+        },
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "input_fingerprint": {"type": "string", "minLength": 1},
+        "status": {
+          "enum": ["pass", "fail", "blocked", "operational-error", "skipped"]
+        }
+      }
+    }
+  }
+}

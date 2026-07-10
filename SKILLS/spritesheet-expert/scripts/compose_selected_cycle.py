@@ -19,6 +19,7 @@ from PIL import Image, ImageDraw
 
 from curation import apply_transform, load_curation, state_plan
 from gif_utils import delay_ticks_to_duration_ms, save_clean_gif
+from spritecore.image_ops import ResizePolicy, resize_policy_from_sampling_policy
 
 
 def sha256(path: Path) -> str:
@@ -61,13 +62,16 @@ def load_frame(
     user_frame: int,
     transform: dict[str, float] | None = None,
     cell_size: tuple[int, int] | None = None,
+    resize_policy: ResizePolicy | None = None,
 ) -> tuple[Path, Image.Image]:
     path = run_dir / "frames" / state / f"frame-{user_frame - 1}.png"
     if not path.is_file():
         raise SystemExit(f"missing selected frame {user_frame}: {path}")
     image = Image.open(path).convert("RGBA")
     if transform and cell_size:
-        image = apply_transform(image, transform, cell_size)
+        image = apply_transform(
+            image, transform, cell_size, policy=resize_policy
+        )
     return path, image
 
 
@@ -103,6 +107,7 @@ def main() -> int:
     qa_dir.mkdir(parents=True, exist_ok=True)
 
     request = json.loads((run_dir / "sprite-request.json").read_text(encoding="utf-8"))
+    resize_policy = resize_policy_from_sampling_policy(request.get("sampling_policy"))
     cell = request["cell"]
     cell_size = (
         int(cell.get("width", cell.get("size", 0))),
@@ -119,7 +124,14 @@ def main() -> int:
         user_frames = [index + 1 for index in ordered]
 
     selected = [
-        load_frame(run_dir, args.state, number, transforms.get(number - 1), cell_size)
+        load_frame(
+            run_dir,
+            args.state,
+            number,
+            transforms.get(number - 1),
+            cell_size,
+            resize_policy,
+        )
         for number in user_frames
     ]
     frame_paths = [path for path, _image in selected]

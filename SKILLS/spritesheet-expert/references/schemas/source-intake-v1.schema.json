@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spritesheet-expert.local/schemas/source-intake-v1.schema.json",
+  "title": "Spritesheet Expert source intake v1",
+  "type": "object",
+  "required": [
+    "version",
+    "kind",
+    "job_id",
+    "status",
+    "expected",
+    "source_type",
+    "engine",
+    "source_stage",
+    "provider",
+    "candidate",
+    "request",
+    "license_ref",
+    "license_status",
+    "processing_policy"
+  ],
+  "properties": {
+    "version": { "const": 1 },
+    "kind": { "const": "sprite-source-intake" },
+    "job_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "status": {
+      "enum": ["selected", "provider-failed", "blocked", "cancelled", "no-output"]
+    },
+    "expected": {
+      "type": "object",
+      "required": ["state", "artifact_kind"],
+      "properties": {
+        "state": { "$ref": "#/$defs/stateSlug" },
+        "artifact_kind": { "const": "raw-row" }
+      },
+      "additionalProperties": false
+    },
+    "source_type": { "enum": ["imagegen", "imported", "fixture"] },
+    "engine": { "enum": ["imagegen", "imported", "fixture"] },
+    "source_stage": {
+      "enum": ["provider-output", "user-import", "fixture"]
+    },
+    "provider": {
+      "type": "object",
+      "required": ["name", "status"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "status": {
+          "enum": ["succeeded", "failed", "blocked", "cancelled", "no-output"]
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "request_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "model": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "error_code": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "error_message": { "type": "string", "minLength": 1, "maxLength": 2000 }
+      },
+      "additionalProperties": false
+    },
+    "candidate": {
+      "type": "object",
+      "required": ["role", "path", "sha256", "mime", "width", "height"],
+      "properties": {
+        "role": { "enum": ["selected", "comparison", "contact", "preview"] },
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "mime": { "type": "string", "minLength": 1 },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "request": {
+      "type": "object",
+      "required": ["path", "fingerprint"],
+      "properties": {
+        "path": { "const": "sprite-request.json" },
+        "fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "style_reference": { "$ref": "#/$defs/hashBinding" },
+    "identity_anchor": { "$ref": "#/$defs/hashBinding" },
+    "license_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "license_status": {
+      "enum": ["user-owned", "generated", "licensed", "fixture"]
+    },
+    "processing_policy": {
+      "type": "object",
+      "required": ["selection", "normalization", "background_removal", "resize"],
+      "properties": {
+        "selection": { "const": "selected-candidate" },
+        "normalization": { "const": "rgba-png" },
+        "background_removal": { "const": "none" },
+        "resize": { "const": "none" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "stateSlug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "maxLength": 64
+    },
+    "hashBinding": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

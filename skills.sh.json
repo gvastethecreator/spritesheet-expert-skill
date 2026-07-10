@@ -1,0 +1,13 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "notGrouped": "bottom",
+  "groupings": [
+    {
+      "title": "Game Assets",
+      "description": "Spritesheets, tilesets, atlases, and QA pipelines.",
+      "skills": [
+        "spritesheet-expert"
+      ]
+    }
+  ]
+}

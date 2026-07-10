@@ -488,9 +488,11 @@ def main() -> int:
     qa_dir = run_dir / "qa"
     qa_dir.mkdir(parents=True, exist_ok=True)
     request = load_json(run_dir / "sprite-request.json", {})
-    manifest = load_json(run_dir / "manifest.json", {})
+    manifest_path = run_dir / "manifest.json"
+    manifest = load_json(manifest_path, {})
     frames_manifest = load_json(run_dir / "frames" / "frames-manifest.json", {})
     segmentation = load_json(run_dir / "qa" / "segmentation-report.json", {})
+    asset_slot_report = load_json(run_dir / "qa" / "asset-slot-review.json", {})
     asset_kind = str(request.get("asset_kind", "sprite"))
     cell = cell_geometry(request)
     catalog = catalog_from(request, manifest)
@@ -500,6 +502,14 @@ def main() -> int:
 
     errors: list[str] = []
     warnings: list[str] = []
+    if frames_manifest.get("ok") is not True:
+        errors.append("frames/frames-manifest.json is missing ok:true")
+    if not manifest_path.is_file():
+        errors.append("manifest.json is missing")
+    if manifest.get("ok") is False:
+        errors.append("manifest.json is marked ok:false")
+    if asset_slot_report and asset_slot_report.get("ok") is False:
+        errors.append("qa/asset-slot-review.json is marked ok:false")
     if asset_kind != "tileset":
         errors.append(f"isometric tile QA requires asset_kind=tileset, got {asset_kind!r}")
     projection = str(catalog.get("projection", request.get("projection", ""))).lower()
@@ -525,12 +535,29 @@ def main() -> int:
     else:
         warnings.append("asset_catalog.tile.runtimeCell missing; runtime importer must infer atlas cell from request.cell")
     if segmentation and segmentation.get("ok") is False:
+        errors.append("segmentation report is marked ok:false")
         for message in segmentation.get("warnings", []) or []:
             errors.append(f"segmentation blocked: {message}")
 
     records, record_errors, record_warnings = collect_records(indexed, items, cell)
     errors.extend(record_errors)
     warnings.extend(record_warnings)
+    request_states = request.get("states", {})
+    if not isinstance(request_states, dict) or not request_states:
+        errors.append("sprite-request.json.states must be a non-empty object")
+    expected_states = set(request_states) if isinstance(request_states, dict) else set()
+    manifest_rows = frames_manifest.get("rows", [])
+    checked_states = {
+        str(row.get("state", ""))
+        for row in manifest_rows
+        if isinstance(row, dict)
+    }
+    for state in sorted(expected_states - checked_states):
+        errors.append(f"{state}: expected request state has no frames-manifest row")
+    if not indexed:
+        errors.append("no isometric tiles were checked; nothing checked")
+    for label in sorted(set(items) - set(indexed)):
+        errors.append(f"{label}: expected asset_catalog item was not checked")
     calibration = infer_grid_calibration(records)
     effective_tile = dict(tile)
     if calibration.get("ok"):

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.openai.local/compose-asset-mockups/content-reference.schema.json",
+  "title": "Hash-pinned upstream content reference",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifact", "manifest", "validation_report"],
+  "properties": {
+    "artifact": {"$ref": "#/$defs/pin"},
+    "manifest": {"$ref": "#/$defs/pin"},
+    "validation_report": {"$ref": "#/$defs/pin"}
+  },
+  "$defs": {
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![A-Za-z]:[\\\\/]|[\\\\/]).+"
+    },
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "pin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/path"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

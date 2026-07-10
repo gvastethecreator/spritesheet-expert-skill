@@ -29,6 +29,7 @@ from PIL import Image
 
 from curation import apply_transform, load_curation, state_plan
 from runio import acquire_run_dir_lock, atomic_save_image
+from spritecore.image_ops import resize_policy_from_sampling_policy
 
 
 def main() -> int:
@@ -42,6 +43,7 @@ def main() -> int:
     run_dir = args.run_dir.expanduser().resolve()
     acquire_run_dir_lock(run_dir, "export_curated_pngs")
     request = json.loads((run_dir / "sprite-request.json").read_text(encoding="utf-8"))
+    resize_policy = resize_policy_from_sampling_policy(request.get("sampling_policy"))
     cell = request["cell"]
     cell_size = (int(cell.get("width", cell.get("size", 0))), int(cell.get("height", cell.get("size", 0))))
     curation = load_curation(run_dir)
@@ -72,7 +74,12 @@ def main() -> int:
             if not src_path.is_file():
                 continue
             with Image.open(src_path) as opened:
-                baked = apply_transform(opened.convert("RGBA"), transforms.get(index), cell_size)
+                baked = apply_transform(
+                    opened.convert("RGBA"),
+                    transforms.get(index),
+                    cell_size,
+                    policy=resize_policy,
+                )
             name = labels[index] if index < len(labels) and labels[index] else f"frame-{index}"
             filename = f"{state}-{name}.png" if multi_state else f"{name}.png"
             dest = out_dir / filename

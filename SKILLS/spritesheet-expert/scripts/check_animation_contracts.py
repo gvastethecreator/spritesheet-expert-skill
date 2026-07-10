@@ -195,6 +195,9 @@ def dedupe_ordered(values: list[str]) -> list[str]:
 
 def ordered_workflows(values: list[str]) -> list[str]:
     requested = dedupe_ordered(values)
+    unknown = sorted(set(requested) - set(WORKFLOW_ORDER))
+    if unknown:
+        raise ValueError(f"unknown animation workflows: {', '.join(unknown)}")
     return [workflow for workflow in WORKFLOW_ORDER if workflow in requested]
 
 
@@ -250,6 +253,13 @@ def infer_workflows(request: dict[str, Any], state: str, entry: dict[str, Any]) 
     tokens = state_tokens(state, entry)
     state_only_tokens = set(re.findall(r"[a-z0-9]+", state.lower()))
     asset_kind = str(request.get("asset_kind", "sprite")).lower()
+    default_semantics = (
+        "animation" if asset_kind == "sprite" else "effects" if asset_kind == "vfx" else "variants"
+    )
+    frame_semantics = str(request.get("frame_semantics", default_semantics)).lower()
+    frame_count = int(entry.get("frames", 0) or 0)
+    if frame_semantics not in {"animation", "effects"} or frame_count <= 1:
+        return []
     cell = request.get("cell") if isinstance(request.get("cell"), dict) else {}
     cell_width = int(cell.get("width", cell.get("size", 999)))
     cell_height = int(cell.get("height", cell.get("size", 999)))
@@ -902,11 +912,14 @@ def main() -> int:
 
     states = request.get("states") if isinstance(request.get("states"), dict) else {}
     rows_by_state = {row["state"]: row for row in frames_manifest.get("rows", []) if isinstance(row, dict) and "state" in row}
-    states_to_check = selected_states(request, rows_by_state, art_direction, args.states)
-
     results = []
     errors = []
     warnings = []
+    try:
+        states_to_check = selected_states(request, rows_by_state, art_direction, args.states)
+    except ValueError as exc:
+        states_to_check = []
+        errors.append(str(exc))
     for state in states_to_check:
         if state not in states:
             errors.append(f"unknown state: {state}")
@@ -915,7 +928,13 @@ def main() -> int:
             errors.append(f"missing extracted frames for state: {state}")
             continue
         entry = states[state]
-        workflows, workflow_source = workflows_for_state(request, art_direction, state, entry)
+        try:
+            workflows, workflow_source = workflows_for_state(
+                request, art_direction, state, entry
+            )
+        except ValueError as exc:
+            errors.append(f"{state}: {exc}")
+            continue
         if not workflows and args.states == "animated":
             continue
         result = inspect_state(
@@ -930,8 +949,8 @@ def main() -> int:
         errors.extend(f"{state}: {error}" for error in result["errors"])
         warnings.extend(f"{state}: {warning}" for warning in result["warnings"])
 
-    if args.states == "animated" and not results:
-        warnings.append("no animated workflow states matched; nothing checked")
+    if args.states == "animated" and not results and not errors:
+        errors.append("no animated workflow states matched; zero expected states were checked")
 
     ok = not errors or args.warn_only
     report = {

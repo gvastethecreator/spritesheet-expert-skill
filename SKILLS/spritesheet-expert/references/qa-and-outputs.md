@@ -4,8 +4,9 @@
 
 Block done unless:
 
+- `validate_run.py --stage pre-package` exits `0` and `qa/run-validation-report.json.status` is `pass`. This aggregate report is the final machine decision; individual commands remain useful diagnostics but cannot replace it.
 - `frames/frames-manifest.json.ok` true.
-- `qa/generation-provenance-report.json.ok` true for generated production art. Procedural/PIL/synthetic art passes only with explicit fixture mode and cannot be called representative. Imported/user-provided sheets require explicit provenance and `--allow-imported-source`.
+- `qa/generation-provenance-report.json.status` is `pass` for production art. Provenance uses exact source types, safe run-relative paths, byte sizes, SHA-256 and complete state coverage; substring hints are never accepted. Procedural/PIL/synthetic art passes only with explicit fixture mode and cannot be called representative. Imported/user-provided sheets require verified provenance and `--allow-imported-source`.
 - `references/art-direction.json` exists for pixel-art runs, and active row profiles plus `animation_workflows` match the asset kind/state before generation or final review.
 - `frames/frames-manifest.json.sprite_registration.reference_height`, `reference_width`, `reference_scale`, and stable proxy values exist for sprite runs, and jump/crouch/fall/land frame records show reasonable `height_vs_reference`, `width_vs_reference`, `head_width_vs_reference`, `upper_width_vs_reference`, `expected_height_vs_reference`, and `bottom_y` for their pose profile.
 - Crouch/duck/squat transition rows are compared frame-to-frame: early frames can be taller, final frames must be visibly compressed, final width should usually stay at least around 0.78x of idle width, head/upper-body proxies should remain near idle scale, and the sequence must not shrink uniformly as it settles into the crouch.
@@ -81,6 +82,8 @@ qa/segmentation-overlay.png
 qa/registration-report.json
 qa/registration-overlay.png
 qa/generation-provenance-report.json
+qa/visual-review.json
+qa/run-validation-report.json
 qa/animation-contract-report.json
 qa/motion-variation-report.json
 qa/asset-slot-review.json
@@ -95,3 +98,13 @@ qa/isometric-calibrated-catalog.json
 ```
 
 Use `manifest.json.frame_layout` as runtime SSoT. Do not recover frame rectangles from alpha at runtime.
+
+Run the aggregate gate at each useful boundary:
+
+```bash
+python scripts/validate_run.py --run-dir /abs/run --stage preflight
+python scripts/validate_run.py --run-dir /abs/run --stage post-extract
+python scripts/validate_run.py --run-dir /abs/run --stage pre-package
+```
+
+`pre-package` returns `2` while required visual review is missing, `1` for contract/quality failures, and `3` for operational failures. A partial `--gate` selection is diagnostic and can never produce an aggregate final green.

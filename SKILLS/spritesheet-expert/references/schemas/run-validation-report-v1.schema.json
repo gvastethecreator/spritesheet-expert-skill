@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spritesheet-expert.local/schemas/run-validation-report-v1.schema.json",
+  "title": "Spritesheet Expert aggregate run validation report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "kind",
+    "run_dir",
+    "stage",
+    "workflow",
+    "ok",
+    "status",
+    "complete",
+    "exit_code",
+    "input_fingerprint",
+    "policy",
+    "checked_items",
+    "results",
+    "blockers"
+  ],
+  "properties": {
+    "version": {"const": 1},
+    "kind": {"const": "sprite-run-validation-report"},
+    "run_dir": {"type": "string", "minLength": 1},
+    "stage": {"enum": ["preflight", "post-extract", "pre-package"]},
+    "workflow": {"enum": ["production", "import-diagnostic"]},
+    "ok": {"type": "boolean"},
+    "status": {"enum": ["pass", "fail", "blocked", "operational-error"]},
+    "complete": {"type": "boolean"},
+    "exit_code": {"enum": [0, 1, 2, 3]},
+    "input_fingerprint": {
+      "type": ["string", "null"],
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "policy": {"type": ["object", "null"]},
+    "checked_items": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "results": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/checkResult"}
+    },
+    "blockers": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
+  },
+  "$defs": {
+    "checkResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "applicable",
+        "checked_items",
+        "errors",
+        "warnings",
+        "evidence",
+        "input_fingerprint",
+        "complete",
+        "status"
+      ],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+        "applicable": {"type": "boolean"},
+        "checked_items": {"type": "array", "items": {"type": "string"}},
+        "errors": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "warnings": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "evidence": {"type": "object"},
+        "input_fingerprint": {"type": ["string", "null"]},
+        "complete": {"type": "boolean"},
+        "status": {"enum": ["pass", "fail", "blocked", "operational-error", "skipped"]}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"ok": {"const": true}}, "required": ["ok"]},
+      "then": {
+        "properties": {
+          "status": {"const": "pass"},
+          "complete": {"const": true},
+          "exit_code": {"const": 0},
+          "blockers": {"maxItems": 0}
+        }
+      },
+      "else": {"properties": {"blockers": {"minItems": 1}}}
+    }
+  ]
+}

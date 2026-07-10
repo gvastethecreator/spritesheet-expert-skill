@@ -17,6 +17,16 @@ from typing import Any
 from PIL import Image, ImageDraw
 
 from runio import acquire_run_dir_lock, atomic_save_image, atomic_write_text
+from spritecore.image_ops import (
+    ArtMode,
+    ImagePolicyError,
+    ResizePolicy,
+    inspect_transform_invariants,
+    inspect_hard_alpha,
+    resize_image,
+    resize_policy_from_sampling_policy,
+    validate_frame,
+)
 from segmentation import alpha_mass_extent_80, projection_sprites
 
 
@@ -924,6 +934,7 @@ def fit_to_cell(
     bottom_y: int | None = None,
     scale_override: float | None = None,
     top_margin: int | None = None,
+    resize_policy: ResizePolicy | None = None,
 ) -> Image.Image:
     bbox = image.getbbox()
     target = Image.new("RGBA", (cell_width, cell_height), (0, 0, 0, 0))
@@ -939,10 +950,18 @@ def fit_to_cell(
     fit_scale = min(max_width / sprite.width, max_height / sprite.height, 1.0)
     scale = min(scale_override, fit_scale) if scale_override else fit_scale
     if scale != 1.0:
-        sprite = sprite.resize(
+        source_sprite = sprite
+        sprite = resize_image(
+            source_sprite,
             (max(1, round(sprite.width * scale)), max(1, round(sprite.height * scale))),
-            Image.Resampling.LANCZOS,
+            policy=resize_policy or ResizePolicy(mode=ArtMode.ILLUSTRATED),
         )
+        if resize_policy is not None and resize_policy.mode is ArtMode.PIXEL:
+            invariants = inspect_transform_invariants(source_sprite, sprite)
+            if not invariants.ok:
+                raise ImagePolicyError(
+                    "pixel resize violated palette or hard-alpha invariants"
+                )
     left = (cell_width - sprite.width) // 2
     if bottom_y is None:
         top = (cell_height - sprite.height) // 2
@@ -1139,13 +1158,21 @@ def fitted_reference_metric(
     cell_height: int,
     safe_margin_x: int,
     safe_margin_y: int,
+    resize_policy: ResizePolicy | None = None,
 ) -> dict[str, float] | None:
     bbox = sprite.getbbox()
     if not bbox:
         return None
     raw_width = bbox[2] - bbox[0]
     raw_height = bbox[3] - bbox[1]
-    frame = fit_to_cell(sprite, cell_width, cell_height, safe_margin_x, safe_margin_y)
+    frame = fit_to_cell(
+        sprite,
+        cell_width,
+        cell_height,
+        safe_margin_x,
+        safe_margin_y,
+        resize_policy=resize_policy,
+    )
     fitted_bbox = frame.getbbox()
     if not fitted_bbox or raw_width <= 0 or raw_height <= 0:
         return None
@@ -1184,6 +1211,7 @@ def reference_metrics_for_rows(
     states = request.get("states", {})
     registration = request.get("registration") if isinstance(request.get("registration"), dict) else {}
     preferred = str(registration.get("reference_state", "idle"))
+    resize_policy = resize_policy_from_sampling_policy(request.get("sampling_policy"))
     candidates = sorted(
         pending_rows,
         key=lambda row: (
@@ -1196,7 +1224,14 @@ def reference_metrics_for_rows(
         if state_pose_geometry(row["state"], entry) and row["state"] != preferred:
             continue
         metrics = [
-            fitted_reference_metric(sprite, cell_width, cell_height, safe_margin_x, safe_margin_y)
+            fitted_reference_metric(
+                sprite,
+                cell_width,
+                cell_height,
+                safe_margin_x,
+                safe_margin_y,
+                resize_policy,
+            )
             for sprite in row["sprites"]
         ]
         metrics = [metric for metric in metrics if metric]
@@ -1270,6 +1305,7 @@ def fit_pose_frames(
     cell_height: int,
     safe_margin_x: int,
     safe_margin_y: int,
+    resize_policy: ResizePolicy | None = None,
 ) -> list[Image.Image]:
     frames = []
     reference_height = int(reference_metrics.get("height", 0)) if reference_metrics else None
@@ -1298,6 +1334,7 @@ def fit_pose_frames(
                 bottom_y=bottom_y,
                 scale_override=scale_override,
                 top_margin=top_margin,
+                resize_policy=resize_policy,
             )
         )
     return frames
@@ -1452,8 +1489,25 @@ def inspect_frames(
                 "chroma_adjacent_pixels": adjacent,
             }
         )
-        if nontransparent < args.min_used_pixels:
-            errors.append(f"frame {index:02d} is empty or too sparse ({nontransparent} pixels)")
+        validation = validate_frame(
+            frame,
+            allow_full_cell=bool(getattr(args, "allow_full_cell", False)),
+        )
+        if bool(getattr(args, "pixel_art", False)):
+            alpha_invariant = inspect_hard_alpha(frame)
+            if not alpha_invariant.ok:
+                errors.append(
+                    f"frame {index:02d} alpha invariant violation: "
+                    f"{len(alpha_invariant.new_fractional_alpha_values)} "
+                    "fractional alpha values"
+                )
+        if args.min_used_pixels is not None:
+            if nontransparent < args.min_used_pixels:
+                errors.append(
+                    f"frame {index:02d} is empty or too sparse ({nontransparent} pixels)"
+                )
+        profile_failures = validation.failures
+        errors.extend(f"frame {index:02d} {failure}" for failure in profile_failures)
         if edge > args.edge_pixel_threshold:
             warnings.append(f"frame {index:02d} has {edge} non-transparent edge pixels")
         if adjacent > args.chroma_adjacent_pixel_threshold:
@@ -1485,7 +1539,12 @@ def main() -> int:
     parser.add_argument("--fringe-key-threshold", type=float, default=180.0)
     parser.add_argument("--fringe-delta", type=float, default=18.0)
     parser.add_argument("--allow-slot-fallback", action="store_true")
-    parser.add_argument("--min-used-pixels", type=int, default=400)
+    parser.add_argument(
+        "--min-used-pixels",
+        type=int,
+        default=None,
+        help="explicit absolute sparse-frame override; default uses scale-aware profiles",
+    )
     parser.add_argument("--edge-margin", type=int, default=2)
     parser.add_argument("--edge-pixel-threshold", type=int, default=24)
     parser.add_argument("--chroma-adjacent-threshold", type=float, default=150.0)
@@ -1532,6 +1591,11 @@ def main() -> int:
     frames_root = run_dir / "frames"
     frames_root.mkdir(parents=True, exist_ok=True)
     asset_kind = str(request.get("asset_kind", "sprite"))
+    resize_policy = resize_policy_from_sampling_policy(request.get("sampling_policy"))
+    args.pixel_art = resize_policy.mode is ArtMode.PIXEL
+    args.allow_full_cell = (
+        extraction_mode == "slots" and asset_kind in {"texture", "tileset"}
+    )
     background_removal = normalize_background_removal(request, args)
     rembg_sessions: dict[str, Any] = {}
     matte_review_entries: list[dict[str, Any]] = []
@@ -1643,21 +1707,33 @@ def main() -> int:
         state = pending["state"]
         frame_count = pending["frames"]
         pose_geometry = pending["pose_geometry"]
-        if asset_kind == "sprite":
-            frames = fit_pose_frames(
-                pending["sprites"],
-                pose_geometry,
-                reference_metrics,
-                cell_width,
-                cell_height,
-                safe_margin_x,
-                safe_margin_y,
-            )
-        else:
-            frames = [
-                fit_to_cell(sprite, cell_width, cell_height, safe_margin_x, safe_margin_y)
-                for sprite in pending["sprites"]
-            ]
+        try:
+            if asset_kind == "sprite":
+                frames = fit_pose_frames(
+                    pending["sprites"],
+                    pose_geometry,
+                    reference_metrics,
+                    cell_width,
+                    cell_height,
+                    safe_margin_x,
+                    safe_margin_y,
+                    resize_policy,
+                )
+            else:
+                frames = [
+                    fit_to_cell(
+                        sprite,
+                        cell_width,
+                        cell_height,
+                        safe_margin_x,
+                        safe_margin_y,
+                        resize_policy=resize_policy,
+                    )
+                    for sprite in pending["sprites"]
+                ]
+        except ImagePolicyError as exc:
+            all_errors.append(f"{state}: {exc}")
+            continue
 
         state_dir = frames_root / state
         state_dir.mkdir(parents=True, exist_ok=True)

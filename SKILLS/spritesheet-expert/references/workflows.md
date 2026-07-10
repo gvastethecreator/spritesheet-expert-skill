@@ -85,7 +85,7 @@ an intentional non-legged/hovering motion with a separate visual rationale.
    - Prompt: `prompts/<state>.txt`
    - Inputs: accepted base/anchor image plus `references/layout-guides/<state>.png`
    - Output path: `raw/<state>.png`
-   - Local app path: write a `codex-handoff/inbox/<jobId>.json` job, let Codex/imagegen, a manual operator, or another provider return `<jobId>-<state>.png` to `codex-handoff/outbox/`, then import/copy that accepted image into `raw/<state>.png`.
+   - Accept provider output only through the executable source-intake contract. The intake command verifies the expected job/state/kind, hashes the selected file, and writes provenance; there is no prose-only inbox/outbox handoff.
    - Do not generate a whole atlas in one image for animated production work unless the user specifically asks for a sheet-level prototype/import. Generate per-state raw sheets, then assemble the runtime atlas after QA.
    - For animated body rows, `prepare_sprite_run.py` writes `states.<state>.raw_layout`. Compact grids such as `2x2`, `3x2`, `4x2`, `3x3`, or `4x3` are the default because long raw `1xN` character strips drift and crop more often. The final atlas can still be a runtime row; raw generation and delivery shape are separate contracts.
    - Use `raw_layout_policy: "legacy-strip"` only for explicit low-risk compatibility/import cases, and report that the row is using the weaker long-strip path.
@@ -113,6 +113,13 @@ python scripts/preview_animation.py --run-dir /abs/run
 python scripts/check_frame_alignment.py --run-dir /abs/run
 python scripts/check_identity_consistency.py --run-dir /abs/run
 python scripts/check_animation_contracts.py --run-dir /abs/run
+python scripts/validate_run.py --run-dir /abs/run --stage post-extract
+```
+
+After packaging and recording the hash-bound visual review, run the final gate:
+
+```bash
+python scripts/validate_run.py --run-dir /abs/run --stage pre-package
 ```
 
 For dirty generated backgrounds or imported rows:
@@ -190,7 +197,7 @@ real art; it does not satisfy generated-art provenance unless the imported sourc
 is explicitly imagegen-backed.
 
 ```bash
-python scripts/unpack_atlas_run.py --atlas /abs/sheet.png --out-dir /abs/sheet-curator --force
+python scripts/unpack_atlas_run.py --atlas /abs/sheet.png --out-dir /abs/sheet-curator --diagnostic --force
 python scripts/check_generation_provenance.py --run-dir /abs/sheet-curator --allow-imported-source
 python scripts/serve_curation.py --run-dir /abs/sheet-curator
 ```
@@ -208,7 +215,7 @@ Before composing an imported sprite sheet, matte/segment it, then register frame
 to a stable runtime pivot:
 
 ```bash
-python scripts/unpack_atlas_run.py --atlas /abs/sheet.png --states walk-down,walk-left,walk-right,walk-up --background-removal auto --out-dir /abs/sheet-auto --force
+python scripts/unpack_atlas_run.py --atlas /abs/sheet.png --states walk-down,walk-left,walk-right,walk-up --background-removal auto --out-dir /abs/sheet-auto --diagnostic --force
 python scripts/register_sprite_frames.py --run-dir /abs/sheet-auto --out-dir /abs/sheet-registered --cell 256x256 --anchor body-bottom --force
 python scripts/compose_sprite_atlas.py --run-dir /abs/sheet-registered
 ```
@@ -217,7 +224,7 @@ For hard imported sheets where auto/rembg leaves scenery or cuts the subject,
 rerun unpacking with explicit BEN2 and compare the segmentation overlay:
 
 ```bash
-python scripts/unpack_atlas_run.py --atlas /abs/sheet.png --states walk-down,walk-left,walk-right,walk-up --background-removal ben2 --background-model PramaLLC/BEN2 --background-device auto --out-dir /abs/sheet-ben2 --force
+python scripts/unpack_atlas_run.py --atlas /abs/sheet.png --states walk-down,walk-left,walk-right,walk-up --background-removal ben2 --background-model PramaLLC/BEN2 --background-device auto --out-dir /abs/sheet-ben2 --diagnostic --force
 ```
 
 Review `qa/preprocessed-atlas-alpha.png`, `qa/segmentation-overlay.png`, and
@@ -230,7 +237,7 @@ Projection repair example for a known 4-row, 8-frame-per-row sheet whose gutters
 are uneven:
 
 ```bash
-python scripts/unpack_atlas_run.py --atlas /abs/sheet.png --projection-grid 8x4 --states idle,walk,attack,hurt --background-removal auto --out-dir /abs/sheet-projection --force
+python scripts/unpack_atlas_run.py --atlas /abs/sheet.png --projection-grid 8x4 --states idle,walk,attack,hurt --background-removal auto --out-dir /abs/sheet-projection --diagnostic --force
 ```
 
 If the projection overlay is visually correct, convert the accepted rectangles

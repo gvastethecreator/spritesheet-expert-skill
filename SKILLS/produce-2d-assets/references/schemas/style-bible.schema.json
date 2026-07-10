@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.openai.local/produce-2d-assets/style-bible.schema.json",
+  "title": "2D asset style bible",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "summary",
+    "palette",
+    "principles",
+    "scale",
+    "target_resolution",
+    "materials",
+    "references",
+    "avoid",
+    "projection",
+    "camera",
+    "shading",
+    "lighting",
+    "line_weight",
+    "identity_tokens",
+    "typography"
+  ],
+  "properties": {
+    "id": {"$ref": "#/$defs/id"},
+    "summary": {"type": "string", "minLength": 1},
+    "palette": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}
+    },
+    "principles": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "scale": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit", "pixels_per_unit"],
+      "properties": {
+        "unit": {"type": "string", "minLength": 1},
+        "pixels_per_unit": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "target_resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1}
+      }
+    },
+    "materials": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "references": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/path"}
+    },
+    "avoid": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "projection": {"type": "string", "minLength": 1},
+    "camera": {"type": "string", "minLength": 1},
+    "shading": {"type": "string", "minLength": 1},
+    "perspective": {"type": "string", "minLength": 1},
+    "lighting": {"type": "string", "minLength": 1},
+    "line_weight": {"type": "string", "minLength": 1},
+    "identity_tokens": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "typography": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![A-Za-z]:[\\\\/]|[\\\\/]).+"
+    }
+  }
+}

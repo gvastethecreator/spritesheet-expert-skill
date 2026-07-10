@@ -25,29 +25,34 @@ edit sessions.
 from __future__ import annotations
 
 import atexit
-import json
 import os
 import tempfile
-import time
 from pathlib import Path
+from typing import Any
 
 from PIL import Image
 
-LOCK_FILENAME = ".sprite-gen.lock"
-# reclaim threshold for locks whose holder pid cannot be verified
-# (unreadable lock file, or a writer on another host of a shared volume)
-STALE_LOCK_SECONDS = 15 * 60
+from spritecore.locks import (
+    LOCK_FILENAME,
+    STALE_LOCK_SECONDS,
+    RunLock,
+    RunLockError,
+    acquire_run_lock,
+)
+
+
+_LEGACY_LOCKS: list[RunLock] = []
 
 
 def _pid_alive(pid: int) -> bool:
     try:
         os.kill(pid, 0)
+    except PermissionError:
+        return True
     except ProcessLookupError:
         return False
     except OSError:
         return False
-    except PermissionError:
-        return True
     return True
 
 
@@ -62,52 +67,13 @@ def acquire_run_dir_lock(run_dir: Path, owner: str) -> Path:
     Release runs via atexit (normal return, SystemExit, KeyboardInterrupt).
     A SIGKILL'd holder is covered by the dead-pid reclaim above.
     """
-    lock_path = run_dir / LOCK_FILENAME
-    while True:
-        try:
-            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            break
-        except FileExistsError:
-            holder: dict = {}
-            try:
-                holder = json.loads(lock_path.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                pass
-            pid = holder.get("pid")
-            if isinstance(pid, int) and _pid_alive(pid):
-                raise SystemExit(
-                    f"run dir is locked by {holder.get('owner', 'unknown')} (pid {pid}): {run_dir}\n"
-                    f"  another sprite-gen process is writing this run dir; wait for it to finish,\n"
-                    f"  or delete {lock_path} if you are sure that process is gone"
-                )
-            try:
-                age = time.time() - lock_path.stat().st_mtime
-            except OSError:
-                continue  # holder released it between our checks; retry the create
-            if isinstance(pid, int) or age > STALE_LOCK_SECONDS:
-                # dead pid, or unverifiable and old: reclaim, then retry the
-                # exclusive create (one winner if two reclaimers race)
-                try:
-                    lock_path.unlink()
-                except OSError:
-                    pass
-                continue
-            raise SystemExit(
-                f"run dir has a lock whose holder cannot be verified ({age:.0f}s old): {lock_path}\n"
-                f"  delete the lock file if no sprite-gen process is running"
-            )
-
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        json.dump({"owner": owner, "pid": os.getpid(), "started": time.time()}, handle)
-
-    def _release() -> None:
-        try:
-            lock_path.unlink()
-        except OSError:
-            pass
-
-    atexit.register(_release)
-    return lock_path
+    try:
+        lease = acquire_run_lock(run_dir, owner)
+    except RunLockError as exc:
+        raise SystemExit(str(exc)) from exc
+    _LEGACY_LOCKS.append(lease)
+    atexit.register(lease.release)
+    return lease.path
 
 
 def _atomic_replace(target: Path, write_payload) -> None:
@@ -131,13 +97,13 @@ def atomic_write_text(target: Path, text: str) -> None:
     _atomic_replace(target, payload)
 
 
-def atomic_save_image(image: Image.Image, target: Path) -> None:
+def atomic_save_image(image: Image.Image, target: Path, **save_kwargs: Any) -> None:
     """Save a PIL image via temp file + os.replace (format from target suffix)."""
     fmt = (target.suffix.lstrip(".") or "png").upper()
     fmt = {"JPG": "JPEG"}.get(fmt, fmt)
 
     def payload(fd: int, tmp_name: str) -> None:
         os.close(fd)
-        image.save(tmp_name, format=fmt)
+        image.save(tmp_name, format=fmt, **save_kwargs)
 
     _atomic_replace(target, payload)

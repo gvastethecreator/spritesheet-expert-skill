@@ -19,6 +19,16 @@ from typing import Any
 from PIL import Image, ImageDraw, ImageFont
 
 from runio import acquire_run_dir_lock, atomic_save_image, atomic_write_text
+from spritecore.image_ops import (
+    ArtMode,
+    ImagePolicyError,
+    ResizePolicy,
+    inspect_transform_invariants,
+    inspect_hard_alpha,
+    resize_image,
+    resize_policy_from_sampling_policy,
+    validate_frame,
+)
 
 
 def parse_cell(value: str) -> tuple[int, int]:
@@ -104,6 +114,7 @@ def register_frame(
     image: Image.Image,
     cell: tuple[int, int],
     args: argparse.Namespace,
+    resize_policy: ResizePolicy | None = None,
 ) -> tuple[Image.Image, dict[str, Any], list[str]]:
     cell_w, cell_h = cell
     warnings: list[str] = []
@@ -124,7 +135,15 @@ def register_frame(
     scale = min(1.0, max_w / crop.width, max_h / crop.height)
     if scale < 1.0:
         new_size = (max(1, round(crop.width * scale)), max(1, round(crop.height * scale)))
-        crop = crop.resize(new_size, Image.Resampling.LANCZOS)
+        source_crop = crop
+        effective_policy = resize_policy or ResizePolicy(mode=ArtMode.ILLUSTRATED)
+        crop = resize_image(source_crop, new_size, policy=effective_policy)
+        if effective_policy.mode is ArtMode.PIXEL:
+            invariants = inspect_transform_invariants(source_crop, crop)
+            if not invariants.ok:
+                raise ImagePolicyError(
+                    "pixel registration violated palette or hard-alpha invariants"
+                )
         local_anchor_x *= scale
         local_anchor_y *= scale
 
@@ -132,6 +151,14 @@ def register_frame(
     target_y = args.target_bottom if args.target_bottom is not None else cell_h - args.safe_margin_y
     left = round(target_x - local_anchor_x)
     top = round(target_y - local_anchor_y)
+    left = max(
+        args.safe_margin_x,
+        min(cell_w - args.safe_margin_x - crop.width, left),
+    )
+    top = max(
+        args.safe_margin_y,
+        min(cell_h - args.safe_margin_y - crop.height, top),
+    )
     clipped = clipped_alpha_composite(target, crop, left, top)
     if clipped:
         warnings.append("registered crop clipped by target cell")
@@ -230,10 +257,15 @@ def main() -> int:
     parser.add_argument("--anchor", choices=("body-bottom", "bbox-bottom", "footprint", "center"), default="body-bottom")
     parser.add_argument("--target-x", type=float, default=0.5)
     parser.add_argument("--target-bottom", type=int)
-    parser.add_argument("--safe-margin-x", type=int, default=8)
-    parser.add_argument("--safe-margin-y", type=int, default=8)
+    parser.add_argument("--safe-margin-x", type=int)
+    parser.add_argument("--safe-margin-y", type=int)
     parser.add_argument("--alpha-threshold", type=int, default=16)
-    parser.add_argument("--min-used-pixels", type=int, default=80)
+    parser.add_argument(
+        "--min-used-pixels",
+        type=int,
+        default=None,
+        help="explicit absolute sparse-frame override; default uses scale-aware profiles",
+    )
     parser.add_argument("--allow-clipping", action="store_true", help="downgrade target-cell clipping to a warning")
     parser.add_argument("--overlay-cell", type=int, default=128)
     parser.add_argument("--force", action="store_true", help="allow writing into an existing out-dir")
@@ -247,6 +279,7 @@ def main() -> int:
     acquire_run_dir_lock(out_dir, "register_sprite_frames")
 
     request = json.loads((run_dir / "sprite-request.json").read_text(encoding="utf-8"))
+    resize_policy = resize_policy_from_sampling_policy(request.get("sampling_policy"))
     input_cell = request.get("cell", {})
     cell = args.cell or (
         int(input_cell.get("width", input_cell.get("size", 0))),
@@ -254,6 +287,23 @@ def main() -> int:
     )
     if cell[0] <= 0 or cell[1] <= 0:
         raise SystemExit("output cell must be positive; pass --cell WxH")
+    request_margin = int(input_cell.get("safe_margin", 0))
+    args.safe_margin_x = (
+        int(input_cell.get("safe_margin_x", request_margin))
+        if args.safe_margin_x is None and ("safe_margin_x" in input_cell or "safe_margin" in input_cell)
+        else args.safe_margin_x
+    )
+    args.safe_margin_y = (
+        int(input_cell.get("safe_margin_y", request_margin))
+        if args.safe_margin_y is None and ("safe_margin_y" in input_cell or "safe_margin" in input_cell)
+        else args.safe_margin_y
+    )
+    if args.safe_margin_x is None:
+        args.safe_margin_x = max(1, round(cell[0] / 32))
+    if args.safe_margin_y is None:
+        args.safe_margin_y = max(1, round(cell[1] / 32))
+    args.safe_margin_x = max(0, min(args.safe_margin_x, max(0, (cell[0] - 1) // 2)))
+    args.safe_margin_y = max(0, min(args.safe_margin_y, max(0, (cell[1] - 1) // 2)))
 
     selected = None if args.states == "all" else {state.strip() for state in args.states.split(",") if state.strip()}
     rows_by_state = {row["state"]: row for row in load_manifest_rows(run_dir)}
@@ -287,6 +337,7 @@ def main() -> int:
     report_rows: list[dict[str, Any]] = []
     errors: list[str] = []
     warnings: list[str] = []
+    allow_full_cell = str(request.get("asset_kind", "sprite")) in {"tileset", "texture"}
     for state in states:
         if state not in rows_by_state:
             errors.append(f"missing extracted row for state: {state}")
@@ -302,11 +353,38 @@ def main() -> int:
                 errors.append(f"missing frame: {frame_path}")
                 continue
             with Image.open(frame_path) as opened:
-                registered, metrics, frame_warnings = register_frame(opened.convert("RGBA"), cell, args)
+                try:
+                    registered, metrics, frame_warnings = register_frame(
+                        opened.convert("RGBA"), cell, args, resize_policy
+                    )
+                except ImagePolicyError as exc:
+                    errors.append(f"{state} frame {index}: {exc}")
+                    continue
             used_pixels = alpha_nonzero_count(registered)
             metrics["nontransparent_pixels"] = used_pixels
-            if used_pixels < args.min_used_pixels:
-                errors.append(f"{state} frame {index}: registered frame is too sparse ({used_pixels} pixels)")
+            validation = validate_frame(
+                registered,
+                alpha_threshold=args.alpha_threshold,
+                allow_full_cell=allow_full_cell,
+            )
+            if resize_policy.mode is ArtMode.PIXEL:
+                alpha_invariant = inspect_hard_alpha(registered)
+                if not alpha_invariant.ok:
+                    errors.append(
+                        f"{state} frame {index}: alpha invariant violation: "
+                        f"{len(alpha_invariant.new_fractional_alpha_values)} "
+                        "fractional alpha values"
+                    )
+            if args.min_used_pixels is not None:
+                if used_pixels < args.min_used_pixels:
+                    errors.append(
+                        f"{state} frame {index}: registered frame is too sparse "
+                        f"({used_pixels} pixels)"
+                    )
+            profile_failures = validation.failures
+            errors.extend(
+                f"{state} frame {index}: {failure}" for failure in profile_failures
+            )
             if metrics.get("clipped") and not args.allow_clipping:
                 errors.append(f"{state} frame {index}: registered crop clipped by target cell")
             out_path = state_dir / f"frame-{index}.png"

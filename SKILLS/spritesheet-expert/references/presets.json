@@ -10,6 +10,13 @@
       "transparent": true,
       "formats": ["webp", "png"],
       "compatibility": ["codex-custom-pet"],
+      "frame_semantics": "animation",
+      "output": { "use": "animated-character", "frame_semantics": "animation" },
+      "row_workflows": {
+        "idle": ["idle-breath"], "running-right": ["sideview-locomotion"], "running-left": ["sideview-locomotion"],
+        "waving": [], "jumping": ["responsive-jump"], "failed": ["hit-reaction-knockdown"],
+        "waiting": ["idle-breath"], "running": ["sideview-locomotion"], "review": []
+      },
       "rows": [
         { "id": "idle", "frames": 6, "durations_ms": [280, 110, 110, 140, 140, 320] },
         { "id": "running-right", "frames": 8, "durations_ms": [120, 120, 120, 120, 120, 120, 120, 220], "mirror_pair": "running-left" },
@@ -30,6 +37,13 @@
       "columns": 8,
       "transparent": true,
       "formats": ["png", "webp"],
+      "frame_semantics": "animation",
+      "output": { "use": "animated-character", "frame_semantics": "animation" },
+      "row_workflows": {
+        "idle": ["idle-breath"], "run": ["sideview-locomotion"], "jump": ["responsive-jump"],
+        "fall": ["responsive-jump"], "land": ["responsive-jump"], "attack": ["combat-power-strike"],
+        "hurt": ["hit-reaction-knockdown"], "death": ["hit-reaction-knockdown"]
+      },
       "rows": [
         { "id": "idle", "frames": 6 },
         { "id": "run", "frames": 8 },
@@ -50,6 +64,13 @@
       "transparent": true,
       "formats": ["png", "webp"],
       "directions": ["down", "left", "right", "up"],
+      "frame_semantics": "animation",
+      "output": { "use": "animated-character", "frame_semantics": "animation" },
+      "row_workflows": {
+        "idle-down": ["idle-breath"], "idle-left": ["idle-breath"], "idle-right": ["idle-breath"], "idle-up": ["idle-breath"],
+        "walk-down": ["topdown-locomotion"], "walk-left": ["topdown-locomotion"], "walk-right": ["topdown-locomotion"], "walk-up": ["topdown-locomotion"],
+        "attack-down": ["topdown-weapon-attack"], "attack-left": ["topdown-weapon-attack"], "attack-right": ["topdown-weapon-attack"], "attack-up": ["topdown-weapon-attack"]
+      },
       "rows": [
         { "id": "idle-down", "frames": 4 },
         { "id": "idle-left", "frames": 4, "mirror_pair": "idle-right" },
@@ -74,6 +95,13 @@
       "transparent": true,
       "formats": ["png", "webp"],
       "directions": ["se", "sw", "ne", "nw"],
+      "frame_semantics": "animation",
+      "output": { "use": "animated-character", "frame_semantics": "animation" },
+      "row_workflows": {
+        "idle-se": ["idle-breath"], "idle-sw": ["idle-breath"], "idle-ne": ["idle-breath"], "idle-nw": ["idle-breath"],
+        "walk-se": ["topdown-locomotion"], "walk-sw": ["topdown-locomotion"], "walk-ne": ["topdown-locomotion"], "walk-nw": ["topdown-locomotion"],
+        "attack-se": ["topdown-weapon-attack"], "attack-sw": ["topdown-weapon-attack"], "attack-ne": ["topdown-weapon-attack"], "attack-nw": ["topdown-weapon-attack"]
+      },
       "rows": [
         { "id": "idle-se", "frames": 4, "mirror_pair": "idle-sw" },
         { "id": "idle-sw", "frames": 4, "mirror_pair": "idle-se" },
@@ -97,6 +125,13 @@
       "columns": 10,
       "transparent": true,
       "formats": ["png", "webp"],
+      "frame_semantics": "animation",
+      "output": { "use": "animated-character", "frame_semantics": "animation" },
+      "row_workflows": {
+        "idle": ["fighting-stance-idle"], "walk": ["sideview-locomotion"], "run": ["sideview-locomotion"],
+        "light-attack": ["combat-quick-strike"], "heavy-attack": ["combat-power-strike"], "block": ["fighting-stance-idle"],
+        "dodge": [], "hit": ["hit-reaction-knockdown"], "death": ["hit-reaction-knockdown"]
+      },
       "rows": [
         { "id": "idle", "frames": 6 },
         { "id": "walk", "frames": 8 },
@@ -117,6 +152,14 @@
       "columns": 12,
       "transparent": true,
       "formats": ["png", "webp"],
+      "frame_semantics": "animation",
+      "output": { "use": "animated-character", "frame_semantics": "animation" },
+      "row_workflows": {
+        "idle": ["fighting-stance-idle"], "walk-forward": ["sideview-locomotion"], "walk-back": ["sideview-locomotion"],
+        "crouch": ["fighting-stance-idle"], "jump": ["responsive-jump"], "punch": ["combat-quick-strike"],
+        "kick": ["combat-power-strike"], "special": ["combat-power-strike"], "hitstun": ["hit-reaction-knockdown"],
+        "knockdown": ["hit-reaction-knockdown"], "win": []
+      },
       "rows": [
         { "id": "idle", "frames": 8 },
         { "id": "walk-forward", "frames": 8 },
@@ -139,6 +182,13 @@
       "columns": 8,
       "transparent": true,
       "formats": ["png", "webp"],
+      "frame_semantics": "animation",
+      "output": { "use": "animated-creature", "frame_semantics": "animation" },
+      "row_workflows": {
+        "idle": ["idle-breath"], "move": ["sideview-locomotion"], "attack": ["combat-power-strike"],
+        "cast": ["combat-power-strike"], "hit": ["hit-reaction-knockdown"], "death": ["hit-reaction-knockdown"],
+        "taunt": [], "sleep": ["idle-breath"]
+      },
       "rows": [
         { "id": "idle", "frames": 6 },
         { "id": "move", "frames": 6 },
@@ -158,6 +208,11 @@
       "columns": 6,
       "transparent": true,
       "formats": ["png", "webp"],
+      "frame_semantics": "animation",
+      "output": { "use": "animated-avatar", "frame_semantics": "animation" },
+      "row_workflows": {
+        "idle": ["idle-breath"], "blink": [], "talk": [], "happy": [], "sad": [], "thinking": [], "alert": [], "success": []
+      },
       "rows": [
         { "id": "idle", "frames": 6 },
         { "id": "blink", "frames": 4 },
@@ -180,13 +235,14 @@
       "columns": 8,
       "transparent": true,
       "formats": ["png", "webp"],
+      "frame_semantics": "tiles",
       "output": { "use": "tilemap", "frame_semantics": "tiles" },
       "rows": [
-        { "id": "terrain", "frames": 8, "fps": 1, "loop": false, "action": "top-down grass, dirt, stone, sand, mud, snow, and cracked ground tile variants with compatible edges" },
-        { "id": "paths", "frames": 8, "fps": 1, "loop": false, "action": "top-down path and road tiles: straight, corner, tee, cross, endcap, bridge, and worn variants" },
-        { "id": "water", "frames": 8, "fps": 1, "loop": false, "action": "top-down water, shoreline, foam, pond, river, and wet edge tiles with consistent palette" },
-        { "id": "walls", "frames": 8, "fps": 1, "loop": false, "action": "top-down wall, fence, cliff, ledge, gate, and obstacle tiles with readable collision edges" },
-        { "id": "decor", "frames": 8, "fps": 1, "loop": false, "action": "small top-down decor tiles: rocks, flowers, shrubs, crates, signs, debris, and ground decals" }
+        { "id": "terrain", "frames": 8, "fps": 1, "loop": false, "action": "top-down grass, dirt, stone, sand, mud, snow, and cracked ground tile variants with compatible edges", "asset_labels": ["grass-ground", "dirt-ground", "stone-ground", "sand-ground", "mud-ground", "snow-ground", "cracked-ground", "moss-ground"], "catalog": { "category": "terrain", "pivot": [32, 56], "tile_role": "base", "collision": "walkable" } },
+        { "id": "paths", "frames": 8, "fps": 1, "loop": false, "action": "top-down path and road tiles: straight, corner, tee, cross, endcap, bridge, and worn variants", "asset_labels": ["path-straight", "path-corner", "path-tee", "path-cross", "path-endcap", "wood-bridge", "worn-path", "stone-road"], "catalog": { "category": "paths", "pivot": [32, 56], "tile_role": "transition", "collision": "walkable" } },
+        { "id": "water", "frames": 8, "fps": 1, "loop": false, "action": "top-down water, shoreline, foam, pond, river, and wet edge tiles with consistent palette", "asset_labels": ["water-center", "shore-north", "shore-south", "shore-east", "shore-west", "river-straight", "river-corner", "pond-water"], "catalog": { "category": "water", "pivot": [32, 56], "tile_role": "water", "collision": "slow" } },
+        { "id": "walls", "frames": 8, "fps": 1, "loop": false, "action": "top-down wall, fence, cliff, ledge, gate, and obstacle tiles with readable collision edges", "asset_labels": ["stone-wall", "wood-fence", "cliff-edge", "raised-ledge", "iron-gate", "rock-obstacle", "wall-corner", "wall-endcap"], "catalog": { "category": "walls", "pivot": [32, 56], "edge_role": "boundary", "collision": "blocked" } },
+        { "id": "decor", "frames": 8, "fps": 1, "loop": false, "action": "small top-down decor tiles: rocks, flowers, shrubs, crates, signs, debris, and ground decals", "asset_labels": ["small-rock", "red-flower", "green-shrub", "wood-crate", "trail-sign", "ground-debris", "leaf-patch", "moss-decal"], "catalog": { "category": "decor", "pivot": [32, 56], "tile_role": "detail", "collision": "walkable" } }
       ]
     },
     "tileset-platformer": {
@@ -200,13 +256,14 @@
       "columns": 8,
       "transparent": true,
       "formats": ["png", "webp"],
+      "frame_semantics": "tiles",
       "output": { "use": "platformer-tilemap", "frame_semantics": "tiles" },
       "rows": [
-        { "id": "ground", "frames": 8, "fps": 1, "loop": false, "action": "solid ground tiles: center, top, side, corner, inner corner, cap, and broken variants" },
-        { "id": "slopes", "frames": 8, "fps": 1, "loop": false, "action": "platformer slope and ramp tiles with clean collision-readable silhouettes" },
-        { "id": "ledges", "frames": 8, "fps": 1, "loop": false, "action": "platform, bridge, one-way ledge, hanging edge, cracked ledge, and support tiles" },
-        { "id": "hazards", "frames": 8, "fps": 1, "loop": false, "action": "spikes, lava edge, thorns, saw base, acid, and warning hazard tiles, all readable at runtime" },
-        { "id": "decor", "frames": 8, "fps": 1, "loop": false, "action": "side-view decorative tiles: grass tufts, vines, signs, rocks, chains, background trims, and decals" }
+        { "id": "ground", "frames": 8, "fps": 1, "loop": false, "action": "solid ground tiles: center, top, side, corner, inner corner, cap, and broken variants", "asset_labels": ["ground-center", "ground-top", "ground-side", "ground-corner", "ground-inner-corner", "ground-cap", "ground-broken", "ground-support"], "catalog": { "category": "ground", "pivot": [32, 56], "tile_role": "base", "collision": "solid" } },
+        { "id": "slopes", "frames": 8, "fps": 1, "loop": false, "action": "platformer slope and ramp tiles with clean collision-readable silhouettes", "asset_labels": ["slope-low-left", "slope-low-right", "slope-high-left", "slope-high-right", "ramp-left", "ramp-right", "slope-inner", "slope-outer"], "catalog": { "category": "slopes", "pivot": [32, 56], "tile_role": "slope", "collision": "walkable" } },
+        { "id": "ledges", "frames": 8, "fps": 1, "loop": false, "action": "platform, bridge, one-way ledge, hanging edge, cracked ledge, and support tiles", "asset_labels": ["platform-center", "platform-left", "platform-right", "wood-bridge", "one-way-ledge", "hanging-edge", "cracked-ledge", "ledge-support"], "catalog": { "category": "ledges", "pivot": [32, 56], "edge_role": "platform", "collision": "one-way" } },
+        { "id": "hazards", "frames": 8, "fps": 1, "loop": false, "action": "spikes, lava edge, thorns, saw base, acid, and warning hazard tiles, all readable at runtime", "asset_labels": ["floor-spikes", "lava-edge", "thorn-patch", "saw-base", "acid-pool", "warning-stripe", "fire-vent", "crumble-block"], "catalog": { "category": "hazards", "pivot": [32, 56], "tile_role": "hazard", "collision": "damage" } },
+        { "id": "decor", "frames": 8, "fps": 1, "loop": false, "action": "side-view decorative tiles: grass tufts, vines, signs, rocks, chains, background trims, and decals", "asset_labels": ["grass-tuft", "hanging-vine", "wood-sign", "small-rock", "hanging-chain", "background-trim", "wall-decal", "flower-cluster"], "catalog": { "category": "decor", "pivot": [32, 56], "tile_role": "detail", "collision": "nonblocking" } }
       ]
     },
     "texture-pack": {
@@ -220,13 +277,14 @@
       "columns": 6,
       "transparent": false,
       "formats": ["png", "webp"],
+      "frame_semantics": "seamless-textures",
       "output": { "use": "materials", "frame_semantics": "seamless-textures" },
       "rows": [
-        { "id": "stone", "frames": 6, "fps": 1, "loop": false, "action": "seamless stone material samples: rough block, cracked slate, cobble, carved tile, wet stone, and mossy stone" },
-        { "id": "wood", "frames": 6, "fps": 1, "loop": false, "action": "seamless wood material samples: plank, bark, worn board, dark beam, painted wood, and splintered wood" },
-        { "id": "metal", "frames": 6, "fps": 1, "loop": false, "action": "seamless metal material samples: clean steel, rust, brass, scratched plate, riveted panel, and dark iron" },
-        { "id": "fabric", "frames": 6, "fps": 1, "loop": false, "action": "seamless fabric material samples: canvas, wool, leather, stitched cloth, banner weave, and padded textile" },
-        { "id": "ground", "frames": 6, "fps": 1, "loop": false, "action": "seamless ground material samples: soil, sand, snow, grass, gravel, and mud" }
+        { "id": "stone", "frames": 6, "fps": 1, "loop": false, "action": "seamless stone material samples: rough block, cracked slate, cobble, carved tile, wet stone, and mossy stone", "asset_labels": ["rough-stone", "cracked-slate", "stone-cobble", "carved-stone", "wet-stone", "mossy-stone"], "catalog": { "category": "stone", "pivot": [64, 64] } },
+        { "id": "wood", "frames": 6, "fps": 1, "loop": false, "action": "seamless wood material samples: plank, bark, worn board, dark beam, painted wood, and splintered wood", "asset_labels": ["wood-plank", "tree-bark", "worn-board", "dark-beam", "painted-wood", "splintered-wood"], "catalog": { "category": "wood", "pivot": [64, 64] } },
+        { "id": "metal", "frames": 6, "fps": 1, "loop": false, "action": "seamless metal material samples: clean steel, rust, brass, scratched plate, riveted panel, and dark iron", "asset_labels": ["clean-steel", "rusted-metal", "brass-metal", "scratched-plate", "riveted-panel", "dark-iron"], "catalog": { "category": "metal", "pivot": [64, 64] } },
+        { "id": "fabric", "frames": 6, "fps": 1, "loop": false, "action": "seamless fabric material samples: canvas, wool, leather, stitched cloth, banner weave, and padded textile", "asset_labels": ["canvas-fabric", "wool-fabric", "leather-fabric", "stitched-cloth", "banner-weave", "padded-textile"], "catalog": { "category": "fabric", "pivot": [64, 64] } },
+        { "id": "ground", "frames": 6, "fps": 1, "loop": false, "action": "seamless ground material samples: soil, sand, snow, grass, gravel, and mud", "asset_labels": ["soil-ground", "sand-ground", "snow-ground", "grass-ground", "gravel-ground", "mud-ground"], "catalog": { "category": "ground", "pivot": [64, 64] } }
       ]
     },
     "asset-pack": {
@@ -240,13 +298,14 @@
       "columns": 8,
       "transparent": true,
       "formats": ["png", "webp"],
+      "frame_semantics": "still-assets",
       "output": { "use": "mixed-assets", "frame_semantics": "still-assets" },
       "rows": [
-        { "id": "props", "frames": 8, "fps": 1, "loop": false, "action": "environment props: crate, barrel, lantern, sign, plant, rock, tool, and furniture item, isolated per slot" },
-        { "id": "pickups", "frames": 8, "fps": 1, "loop": false, "action": "pickup items: coin, gem, potion, key, scroll, food, ammo, and power-up, isolated per slot" },
-        { "id": "ui-icons", "frames": 8, "fps": 1, "loop": false, "action": "runtime UI icons: heart, shield, sword, map, bag, gear, star, and alert marker, isolated per slot" },
-        { "id": "vfx", "frames": 8, "fps": 1, "loop": false, "action": "self-contained VFX stills: impact, spark, smoke puff, flame burst, magic glint, slash arc, splash, and dust ring" },
-        { "id": "decals", "frames": 8, "fps": 1, "loop": false, "action": "ground and wall decals: crack, scorch, footprint, stain, moss patch, arrow mark, scrape, and rune mark" }
+        { "id": "props", "frames": 8, "fps": 1, "loop": false, "action": "environment props: crate, barrel, lantern, sign, plant, rock, tool, and furniture item, isolated per slot", "asset_labels": ["wood-crate", "oak-barrel", "iron-lantern", "trail-sign", "potted-plant", "small-boulder", "hand-tool", "wood-stool"], "catalog": { "category": "props", "pivot": [64, 120], "strategy_class": "compact_prop" } },
+        { "id": "pickups", "frames": 8, "fps": 1, "loop": false, "action": "pickup items: coin, gem, potion, key, scroll, food, ammo, and power-up, isolated per slot", "asset_labels": ["gold-coin", "blue-gem", "health-potion", "brass-key", "magic-scroll", "food-ration", "ammo-pack", "power-core"], "catalog": { "category": "pickups", "pivot": [64, 120], "strategy_class": "compact_prop" } },
+        { "id": "ui-icons", "frames": 8, "fps": 1, "loop": false, "action": "runtime UI icons: heart, shield, sword, map, bag, gear, star, and alert marker, isolated per slot", "asset_labels": ["heart-icon", "shield-icon", "sword-icon", "map-icon", "bag-icon", "gear-icon", "star-icon", "alert-icon"], "catalog": { "category": "ui-icons", "pivot": [64, 120], "strategy_class": "compact_prop" } },
+        { "id": "vfx", "frames": 8, "fps": 1, "loop": false, "action": "self-contained VFX stills: impact, spark, smoke puff, flame burst, magic glint, slash arc, splash, and dust ring", "asset_labels": ["impact-burst", "electric-spark", "smoke-puff", "flame-burst", "magic-glint", "slash-arc", "water-splash", "dust-ring"], "catalog": { "category": "vfx", "pivot": [64, 120], "strategy_class": "compact_prop" } },
+        { "id": "decals", "frames": 8, "fps": 1, "loop": false, "action": "ground and wall decals: crack, scorch, footprint, stain, moss patch, arrow mark, scrape, and rune mark", "asset_labels": ["ground-crack", "scorch-mark", "boot-print", "wall-stain", "moss-patch", "arrow-mark", "wall-scrape", "rune-mark"], "catalog": { "category": "decals", "pivot": [64, 120], "strategy_class": "compact_prop" } }
       ]
     },
     "custom-asset-atlas": {
@@ -261,6 +320,7 @@
       "transparent": true,
       "formats": ["png", "webp"],
       "requires_user_rows": true,
+      "frame_semantics": "user-defined",
       "output": { "use": "custom-assets", "frame_semantics": "user-defined" },
       "rows": []
     },
@@ -273,6 +333,8 @@
       "transparent": true,
       "formats": ["png", "webp"],
       "requires_user_rows": true,
+      "frame_semantics": "user-defined",
+      "output": { "use": "custom-atlas", "frame_semantics": "user-defined" },
       "rows": []
     }
   }

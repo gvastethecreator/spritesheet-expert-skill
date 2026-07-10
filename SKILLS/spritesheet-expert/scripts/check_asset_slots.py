@@ -13,6 +13,12 @@ from typing import Any
 from PIL import Image, ImageDraw
 
 from runio import atomic_save_image, atomic_write_text
+from spritecore.image_ops import (
+    ArtMode,
+    inspect_hard_alpha,
+    resize_policy_from_sampling_policy,
+    validate_frame,
+)
 
 
 ASSET_KINDS = {"tileset", "texture", "asset", "prop", "props", "icon", "ui", "vfx"}
@@ -90,9 +96,9 @@ def strategy_class(meta: dict[str, Any]) -> str | None:
 
 def label_errors(label: str) -> list[str]:
     errors = []
-    if not LABEL_RE.match(label):
+    if not LABEL_RE.fullmatch(label):
         errors.append(f"{label}: label must be kebab-case")
-    if GENERIC_LABEL_RE.match(label):
+    if GENERIC_LABEL_RE.fullmatch(label):
         errors.append(f"{label}: label is generic; use a runtime asset name")
     return errors
 
@@ -184,9 +190,19 @@ def make_tile_repeat_review(run_dir: Path, rows: list[dict[str, Any]], cell_size
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-dir", required=True, type=Path)
-    parser.add_argument("--min-used-pixels", type=int, default=120)
+    parser.add_argument(
+        "--min-used-pixels",
+        type=int,
+        default=None,
+        help="explicit absolute sparse-slot override; default uses scale-aware profiles",
+    )
     parser.add_argument("--edge-margin", type=int, default=2)
-    parser.add_argument("--max-prop-edge-pixels", type=int, default=12)
+    parser.add_argument(
+        "--max-prop-edge-pixels",
+        type=int,
+        default=None,
+        help="explicit legacy edge-pixel override; default uses normalized edge contact",
+    )
     parser.add_argument("--strict-catalog", action="store_true", default=True)
     parser.add_argument("--no-strict-catalog", dest="strict_catalog", action="store_false")
     args = parser.parse_args()
@@ -195,6 +211,7 @@ def main() -> int:
     request = json.loads((run_dir / "sprite-request.json").read_text(encoding="utf-8"))
     frames_manifest = json.loads((run_dir / "frames" / "frames-manifest.json").read_text(encoding="utf-8"))
     asset_kind = str(request.get("asset_kind", "sprite"))
+    resize_policy = resize_policy_from_sampling_policy(request.get("sampling_policy"))
     cell_size = cell_geometry(request["cell"])
     cell_w, cell_h = cell_size
     square_like_cell = abs((cell_w / max(1, cell_h)) - 1.0) <= 0.25
@@ -206,9 +223,20 @@ def main() -> int:
     warnings: list[str] = []
     records: list[dict[str, Any]] = []
     seen_labels: set[str] = set()
+    if frames_manifest.get("ok") is not True:
+        errors.append("frames/frames-manifest.json is missing ok:true")
     catalog = catalog_items(request)
     if args.strict_catalog and not catalog:
         errors.append("missing sprite-request.json.asset_catalog.items; asset sheets need reviewed runtime metadata")
+    request_states = request.get("states", {})
+    if not isinstance(request_states, dict) or not request_states:
+        errors.append("sprite-request.json.states must be a non-empty object")
+    expected_states = set(request_states) if isinstance(request_states, dict) else set()
+    checked_states = {
+        str(row.get("state", "")) for row in rows if isinstance(row, dict)
+    }
+    for state in sorted(expected_states - checked_states):
+        errors.append(f"{state}: expected request state has no frames-manifest row")
 
     for row in rows:
         state = str(row["state"])
@@ -248,11 +276,39 @@ def main() -> int:
             bbox = frame.getbbox()
             nontransparent = alpha_nonzero_count(frame)
             edge_pixels = edge_alpha_count(frame, args.edge_margin)
-            if nontransparent < args.min_used_pixels:
-                item_errors.append(f"{label}: empty or too sparse ({nontransparent} pixels)")
-            if asset_kind not in FULL_CELL_KINDS and edge_pixels > args.max_prop_edge_pixels:
-                item_errors.append(f"{label}: {edge_pixels} non-transparent edge pixels; probable clipping or slot bleed")
-            edge_touch = edge_pixels > args.max_prop_edge_pixels
+            validation = validate_frame(
+                frame,
+                allow_full_cell=asset_kind in FULL_CELL_KINDS,
+            )
+            if resize_policy.mode is ArtMode.PIXEL:
+                alpha_invariant = inspect_hard_alpha(frame)
+                if not alpha_invariant.ok:
+                    item_errors.append(
+                        f"{label}: alpha invariant violation: "
+                        f"{len(alpha_invariant.new_fractional_alpha_values)} "
+                        "fractional alpha values"
+                    )
+            if args.min_used_pixels is not None:
+                if nontransparent < args.min_used_pixels:
+                    item_errors.append(
+                        f"{label}: empty or too sparse ({nontransparent} pixels)"
+                    )
+            profile_failures = validation.failures
+            item_errors.extend(f"{label}: {failure}" for failure in profile_failures)
+            if (
+                args.max_prop_edge_pixels is not None
+                and asset_kind not in FULL_CELL_KINDS
+                and edge_pixels > args.max_prop_edge_pixels
+            ):
+                item_errors.append(
+                    f"{label}: {edge_pixels} non-transparent edge pixels; "
+                    "probable clipping or slot bleed"
+                )
+            edge_touch = (
+                edge_pixels > args.max_prop_edge_pixels
+                if args.max_prop_edge_pixels is not None
+                else validation.metrics.edge_contact_pixels > 0
+            )
             occupancy = round(nontransparent / max(1, frame.width * frame.height), 4)
             if asset_kind in {"icon", "ui"} and occupancy < 0.05:
                 warnings.append(f"{label}: icon occupancy is very small; review readability")
@@ -275,6 +331,11 @@ def main() -> int:
             }
             records.append(record)
             errors.extend(f"{state}/{index}: {message}" for message in item_errors)
+
+    if not records:
+        errors.append("no asset slots were checked; nothing checked")
+    for label in sorted(set(catalog) - seen_labels):
+        errors.append(f"{label}: expected asset_catalog item was not checked")
 
     overlay = make_overlay(run_dir, rows, cell_size, records)
     repeat_review = make_tile_repeat_review(run_dir, rows, cell_size) if asset_kind in {"tileset", "texture"} else None

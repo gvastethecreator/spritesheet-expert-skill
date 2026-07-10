@@ -260,24 +260,47 @@ def main() -> int:
     states = selected_states(request, args.states)
 
     results = []
-    errors = []
+    contract_errors = []
+    heuristic_errors = []
     warnings = []
     for state in states:
         if state not in request.get("states", {}):
-            errors.append(f"unknown state: {state}")
+            contract_errors.append(f"unknown state: {state}")
             continue
         if state not in rows_by_state:
-            errors.append(f"missing extracted frames for state: {state}")
+            contract_errors.append(f"missing extracted frames for state: {state}")
             continue
-        result = inspect_state(state, request["states"][state], load_frames(run_dir, rows_by_state[state]), args)
+        entry = request["states"][state]
+        row = rows_by_state[state]
+        files = row.get("files", [])
+        expected_frames = entry.get("frames")
+        if not isinstance(files, list):
+            contract_errors.append(f"{state}: frames-manifest files must be a list")
+            continue
+        if (
+            isinstance(expected_frames, bool)
+            or not isinstance(expected_frames, int)
+            or expected_frames < 1
+        ):
+            contract_errors.append(f"{state}: request frames must be a positive integer")
+            continue
+        if len(files) != expected_frames:
+            contract_errors.append(
+                f"{state}: expected {expected_frames} frames, found {len(files)}"
+            )
+            continue
+        result = inspect_state(state, entry, load_frames(run_dir, row), args)
         results.append(result)
-        errors.extend(f"{state}: {error}" for error in result["errors"])
+        heuristic_errors.extend(f"{state}: {error}" for error in result["errors"])
         warnings.extend(f"{state}: {warning}" for warning in result["warnings"])
 
     if args.states == "locomotion" and not results:
-        warnings.append("no locomotion states matched; nothing checked")
+        contract_errors.append("no locomotion states matched; nothing checked")
+    elif not results and not contract_errors:
+        contract_errors.append("no states were checked; nothing checked")
 
-    ok = not errors or args.warn_only
+    errors = [*contract_errors, *heuristic_errors]
+    ok = not contract_errors and (not heuristic_errors or args.warn_only)
     report = {
         "ok": ok,
         "engine": "motion-variation-heuristic",

@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -13,9 +12,12 @@ from typing import Any
 
 from PIL import Image, ImageOps
 
+from spritecore.paths import PathSafetyError, create_run_marker, replace_owned_run
+
 
 CHROMA = "#00FF00"
 CHROMA_RGB = (0, 255, 0, 255)
+FULL_CELL_MATTE = (72, 60, 96, 255)
 
 
 def run(script: str, *args: str) -> None:
@@ -69,7 +71,14 @@ def crop_reference_frames(path: Path, grid: tuple[int, int]) -> list[Image.Image
     return frames
 
 
-def paste_fit(canvas: Image.Image, sprite: Image.Image, slot: int, cell: dict[str, Any], flip: bool) -> None:
+def paste_fit(
+    canvas: Image.Image,
+    sprite: Image.Image,
+    slot: int,
+    columns: int,
+    cell: dict[str, Any],
+    flip: bool,
+) -> None:
     cell_w = int(cell["width"])
     cell_h = int(cell["height"])
     margin_x = int(cell.get("safe_margin_x", cell.get("safe_margin", max(4, cell_w // 12))))
@@ -78,8 +87,10 @@ def paste_fit(canvas: Image.Image, sprite: Image.Image, slot: int, cell: dict[st
     scale = min((cell_w - 2 * margin_x) / src.width, (cell_h - 2 * margin_y) / src.height, 1.0)
     size = (max(1, round(src.width * scale)), max(1, round(src.height * scale)))
     resized = src.resize(size, Image.Resampling.LANCZOS)
-    x = slot * cell_w + (cell_w - resized.width) // 2
-    y = cell_h - margin_y - resized.height
+    column = slot % columns
+    row = slot // columns
+    x = column * cell_w + (cell_w - resized.width) // 2
+    y = row * cell_h + cell_h - margin_y - resized.height
     canvas.alpha_composite(resized, (x, y))
 
 
@@ -90,42 +101,56 @@ def write_raw_rows(run_dir: Path, frames: list[Image.Image]) -> None:
     cell_h = int(cell["height"])
     raw_dir = run_dir / "raw"
     raw_dir.mkdir(exist_ok=True)
+    full_cell_assets = request.get("asset_kind") in {"tileset", "texture"}
     for state_index, (state, entry) in enumerate(request["states"].items()):
         count = int(entry["frames"])
-        strip = Image.new("RGBA", (count * cell_w, cell_h), CHROMA_RGB)
+        layout = entry.get("raw_layout", {})
+        columns = int(layout.get("columns", count))
+        rows = int(layout.get("rows", 1))
+        if columns < 1 or rows < 1 or columns * rows < count:
+            raise SystemExit(
+                f"{state}: invalid raw_layout {columns}x{rows} for {count} frames"
+            )
+        strip = Image.new(
+            "RGBA", (columns * cell_w, rows * cell_h), CHROMA_RGB
+        )
         flip = "left" in state or state.endswith("-sw") or state.endswith("-nw")
         for index in range(count):
-            paste_fit(strip, frames[(state_index + index) % len(frames)], index, cell, flip)
+            if full_cell_assets:
+                column = index % columns
+                row = index // columns
+                strip.paste(
+                    FULL_CELL_MATTE,
+                    (
+                        column * cell_w,
+                        row * cell_h,
+                        (column + 1) * cell_w,
+                        (row + 1) * cell_h,
+                    ),
+                )
+            paste_fit(
+                strip,
+                frames[(state_index + index) % len(frames)],
+                index,
+                columns,
+                cell,
+                flip,
+            )
         strip.save(raw_dir / f"{state}.png")
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--reference", required=True, type=Path)
-    parser.add_argument("--out-dir", required=True, type=Path)
-    parser.add_argument("--source-grid", default="4x2")
-    parser.add_argument("--preset", action="append", help="repeat to limit presets")
-    parser.add_argument("--force", action="store_true")
-    args = parser.parse_args()
-
-    reference = args.reference.expanduser().resolve()
-    out_dir = args.out_dir.expanduser().resolve()
-    if out_dir.exists() and args.force:
-        shutil.rmtree(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    presets_path = Path(__file__).parents[1] / "references" / "presets.json"
-    presets = json.loads(presets_path.read_text(encoding="utf-8"))["presets"]
-    selected = args.preset or list(presets)
-    frames = crop_reference_frames(reference, parse_grid(args.source_grid))
-
+def execute_smoke(reference: Path, out_dir: Path, selected: list[str], frames: list[Image.Image]) -> int:
     summary: dict[str, Any] = {"ok": True, "reference": str(reference), "out_dir": str(out_dir), "presets": {}}
     for preset in selected:
         run_dir = out_dir / preset
         run_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            create_run_marker(run_dir, run_id=preset)
+        except PathSafetyError as exc:
+            raise SystemExit(str(exc)) from exc
         request_path = run_dir / "request.from-preset.json"
         preset_args = [preset, "--out", str(request_path)]
-        if preset in {"custom-atlas", "custom-asset-atlas"}:
+        if preset == "custom-atlas":
             preset_args += [
                 "--states-json",
                 json.dumps({
@@ -133,6 +158,48 @@ def main() -> int:
                     "sniff": {"frames": 4, "fps": 6, "loop": False, "action": "reference creature nose sniff"},
                     "belly-bounce": {"frames": 5, "fps": 6, "loop": True, "action": "reference creature belly bounce"},
                 }),
+            ]
+        elif preset == "custom-asset-atlas":
+            preset_args += [
+                "--states-json",
+                json.dumps(
+                    {
+                        "props": {
+                            "frames": 4,
+                            "fps": 1,
+                            "loop": False,
+                            "action": "four isolated compact prop variants",
+                            "asset_labels": [
+                                "wood-crate",
+                                "oak-barrel",
+                                "iron-lantern",
+                                "trail-sign",
+                            ],
+                            "catalog": {
+                                "category": "props",
+                                "pivot": [64, 120],
+                                "strategy_class": "compact_prop",
+                            },
+                        },
+                        "pickups": {
+                            "frames": 4,
+                            "fps": 1,
+                            "loop": False,
+                            "action": "four isolated compact pickup variants",
+                            "asset_labels": [
+                                "gold-coin",
+                                "blue-gem",
+                                "health-potion",
+                                "brass-key",
+                            ],
+                            "catalog": {
+                                "category": "pickups",
+                                "pivot": [64, 120],
+                                "strategy_class": "compact_prop",
+                            },
+                        },
+                    }
+                ),
             ]
         try:
             run("preset_to_request.py", *preset_args)
@@ -170,6 +237,44 @@ def main() -> int:
     (out_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 0 if summary["ok"] else 1
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--reference", required=True, type=Path)
+    parser.add_argument("--out-dir", required=True, type=Path)
+    parser.add_argument("--source-grid", default="4x2")
+    parser.add_argument("--preset", action="append", help="repeat to limit presets")
+    parser.add_argument("--force", action="store_true")
+    parser.add_argument("--clean", action="store_true", help="destructively reset an owned output directory")
+    args = parser.parse_args()
+    if args.force and args.clean:
+        raise SystemExit("use only one of --force or --clean")
+
+    reference = args.reference.expanduser().resolve()
+    out_dir = args.out_dir.expanduser().resolve()
+    frames = crop_reference_frames(reference, parse_grid(args.source_grid))
+
+    presets_path = Path(__file__).parents[1] / "references" / "presets.json"
+    presets = json.loads(presets_path.read_text(encoding="utf-8"))["presets"]
+    selected = args.preset or list(presets)
+    unknown_presets = sorted(set(selected) - set(presets))
+    if unknown_presets:
+        raise SystemExit(f"unknown presets: {', '.join(unknown_presets)}")
+
+    try:
+        if args.clean and out_dir.exists():
+            with replace_owned_run(out_dir, run_id="preset-smoke"):
+                result = execute_smoke(reference, out_dir, selected, frames)
+                if result:
+                    raise RuntimeError("preset smoke failed; restoring the previous owned output")
+                return result
+        if out_dir.exists() and any(out_dir.iterdir()) and not args.force:
+            raise SystemExit(f"output dir exists and is not empty: {out_dir}; pass --force or --clean")
+        create_run_marker(out_dir, run_id="preset-smoke")
+    except PathSafetyError as exc:
+        raise SystemExit(str(exc)) from exc
+    return execute_smoke(reference, out_dir, selected, frames)
 
 
 if __name__ == "__main__":

@@ -241,10 +241,41 @@ def main() -> int:
     args = parser.parse_args()
 
     run_dir = args.run_dir.expanduser().resolve()
-    manifest = load_json(run_dir / "frames" / "frames-manifest.json")
-    request = load_json(run_dir / "sprite-request.json")
+    manifest_path = run_dir / "frames" / "frames-manifest.json"
+    request_path = run_dir / "sprite-request.json"
+    manifest = load_json(manifest_path)
+    request = load_json(request_path)
+    precondition_errors: list[str] = []
+    if not request_path.is_file() or not request:
+        precondition_errors.append("sprite-request.json is missing or invalid")
+    if not manifest_path.is_file() or not manifest:
+        precondition_errors.append("frames/frames-manifest.json is missing or invalid")
+    elif manifest.get("ok") is not True:
+        precondition_errors.append("frames/frames-manifest.json is not ok")
     rows = manifest.get("rows") if isinstance(manifest.get("rows"), list) else []
-    selected = select_rows(rows, args.states)
+    request_states = request.get("states") if isinstance(request.get("states"), dict) else {}
+    available_states = {
+        str(row.get("state")) for row in rows if isinstance(row, dict) and row.get("state")
+    }
+    if args.states in {"all", "*"}:
+        expected_states = set(request_states)
+    else:
+        expected_states = {state.strip() for state in args.states.split(",") if state.strip()}
+        unknown_states = sorted(expected_states - set(request_states))
+        if unknown_states:
+            precondition_errors.append(
+                f"unknown requested states: {', '.join(unknown_states)}"
+            )
+    missing_states = sorted(expected_states - available_states)
+    if missing_states:
+        precondition_errors.append(
+            f"missing extracted rows for states: {', '.join(missing_states)}"
+        )
+    selected = [
+        row for row in rows if isinstance(row, dict) and row.get("state") in expected_states
+    ]
+    if not selected:
+        precondition_errors.append("zero expected rows were checked")
     registration = manifest.get("sprite_registration") if isinstance(manifest.get("sprite_registration"), dict) else {}
     baseline_raw = registration.get("baseline_y")
     baseline_y = int(baseline_raw) if isinstance(baseline_raw, (int, float)) else None
@@ -252,10 +283,11 @@ def main() -> int:
     qa_dir.mkdir(parents=True, exist_ok=True)
 
     reports = [inspect_row(run_dir, qa_dir, row, request, baseline_y, args) for row in selected]
-    errors = [f"{row['state']}: {error}" for row in reports for error in row["errors"]]
+    quality_errors = [f"{row['state']}: {error}" for row in reports for error in row["errors"]]
+    errors = precondition_errors + quality_errors
     warnings = [f"{row['state']}: {warning}" for row in reports for warning in row["warnings"]]
     payload = {
-        "ok": not errors or args.warn_only,
+        "ok": not precondition_errors and (not quality_errors or args.warn_only),
         "engine": "frame-alignment-onion-skin",
         "run_dir": str(run_dir),
         "states_mode": args.states,
@@ -269,7 +301,7 @@ def main() -> int:
     report_path = args.report or (qa_dir / "frame-alignment-report.json")
     atomic_write_text(report_path, json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
     print(json.dumps(payload, indent=2, ensure_ascii=False))
-    if errors and not args.warn_only:
+    if precondition_errors or (quality_errors and not args.warn_only):
         return 1
     return 0
 

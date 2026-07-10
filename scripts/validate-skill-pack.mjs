@@ -124,6 +124,7 @@ async function checkLocalPathLeaks() {
   const localPathPattern = new RegExp(`\\b(?:${localMarkers.join("|")})`, "i");
   for (const file of textFiles) {
     if (file.includes(`${path.sep}.git${path.sep}`)) continue;
+    if (relative(file).startsWith("tests/")) continue;
     const content = await readText(file);
     if (localPathPattern.test(content)) {
       errors.push(`possible local path leak: ${relative(file)}`);

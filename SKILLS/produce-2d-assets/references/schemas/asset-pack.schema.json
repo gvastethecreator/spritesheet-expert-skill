@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.openai.local/produce-2d-assets/asset-pack.schema.json",
+  "title": "2D asset production pack",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "pack_id",
+    "owners",
+    "style_bible",
+    "inventory",
+    "variant_matrix",
+    "delivery_manifest"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "pack_id": {"$ref": "#/$defs/id"},
+    "owners": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/owner"}
+    },
+    "style_bible": {
+      "$ref": "https://schemas.openai.local/produce-2d-assets/style-bible.schema.json"
+    },
+    "inventory": {
+      "$ref": "https://schemas.openai.local/produce-2d-assets/inventory.schema.json"
+    },
+    "variant_matrix": {
+      "$ref": "https://schemas.openai.local/produce-2d-assets/variant-matrix.schema.json"
+    },
+    "delivery_manifest": {
+      "$ref": "https://schemas.openai.local/produce-2d-assets/delivery-manifest.schema.json"
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "owner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "label": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

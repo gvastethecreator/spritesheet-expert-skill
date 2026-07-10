@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.openai.local/build-game-backgrounds/background-pack-v1.schema.json",
+  "title": "Layered game background pack v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "pack_id", "style_fingerprint", "canvas", "camera", "layers"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "game-background-pack"},
+    "pack_id": {"$ref": "#/$defs/id"},
+    "style_fingerprint": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "canvas": {
+      "type": "object", "additionalProperties": false,
+      "required": ["width", "height", "color_space"],
+      "properties": {
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1},
+        "color_space": {"const": "srgb"}
+      }
+    },
+    "camera": {
+      "type": "object", "additionalProperties": false,
+      "required": ["aspect_ratio", "horizon_y", "focal_safe_zone"],
+      "properties": {
+        "aspect_ratio": {"type": "string", "pattern": "^[0-9]+:[0-9]+$"},
+        "horizon_y": {"type": "number", "minimum": 0, "maximum": 1},
+        "focal_safe_zone": {"$ref": "#/$defs/normalizedRect"}
+      }
+    },
+    "layers": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/layer"}}
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$", "maxLength": 64},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "normalizedRect": {
+      "type": "object", "additionalProperties": false,
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": {"type": "number", "minimum": 0, "maximum": 1},
+        "y": {"type": "number", "minimum": 0, "maximum": 1},
+        "width": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "height": {"type": "number", "exclusiveMinimum": 0, "maximum": 1}
+      }
+    },
+    "layer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "role", "path", "sha256", "order", "depth", "parallax_x", "parallax_y", "repeat_x", "blend_mode"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "role": {"enum": ["sky", "far", "mid", "near", "foreground", "fog", "lighting"]},
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "order": {"type": "integer", "minimum": 0},
+        "depth": {"type": "number", "minimum": 0, "maximum": 1},
+        "parallax_x": {"type": "number", "minimum": 0, "maximum": 1},
+        "parallax_y": {"type": "number", "minimum": 0, "maximum": 1},
+        "repeat_x": {"type": "boolean"},
+        "blend_mode": {"enum": ["normal", "screen", "multiply", "add"]}
+      }
+    }
+  }
+}

@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+"""Validate a static raster pack and render its deterministic contact proof."""
+
+from __future__ import annotations
+
+import argparse
+from collections.abc import Mapping, Sequence
+import json
+import os
+from pathlib import Path
+import tempfile
+
+from static_assets import StaticAssetPackError, resolve_pack_path, validate_static_pack
+
+
+class _Parser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        raise StaticAssetPackError([f"command line: {message}"])
+
+
+def _failure(message: str) -> dict[str, object]:
+    return {
+        "version": 1,
+        "kind": "static-asset-pack-validation",
+        "ok": False,
+        "pack_id": None,
+        "checked_assets": [],
+        "errors": [message],
+        "warnings": [],
+    }
+
+
+def _atomic_json(path: Path, payload: Mapping[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+    )
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def _print(payload: Mapping[str, object]) -> None:
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+def _write_report(path: Path | None, payload: dict[str, object], code: int) -> int:
+    if path is not None:
+        try:
+            _atomic_json(path, payload)
+        except OSError as exc:
+            payload = _failure(f"operational failure: cannot write report: {exc}")
+            code = 3
+    _print(payload)
+    return code
+
+
+def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
+    parser = _Parser(description=__doc__)
+    parser.add_argument("--pack", type=Path, required=True)
+    parser.add_argument("--root", type=Path)
+    parser.add_argument("--report", default="qa/static-pack-report.json")
+    parser.add_argument("--contact-sheet", default="qa/static-pack-contact.png")
+    return parser.parse_args(argv)
+
+
+def _source_paths(document: Mapping[str, object], root: Path) -> set[Path]:
+    paths: set[Path] = set()
+    assets = document.get("assets")
+    if not isinstance(assets, list):
+        return paths
+    for asset in assets:
+        if not isinstance(asset, Mapping):
+            continue
+        source = asset.get("source")
+        if not isinstance(source, Mapping):
+            continue
+        value = source.get("path")
+        if not isinstance(value, str):
+            continue
+        try:
+            paths.add(resolve_pack_path(root, value))
+        except StaticAssetPackError:
+            continue
+    return paths
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    try:
+        args = _parse(argv)
+    except StaticAssetPackError as exc:
+        return _write_report(None, _failure("; ".join(exc.issues)), 1)
+
+    pack_path = args.pack.expanduser().resolve()
+    root = args.root.expanduser().resolve() if args.root else pack_path.parent
+    report_path: Path | None = None
+    try:
+        report_path = resolve_pack_path(root, args.report)
+        contact_path = resolve_pack_path(root, args.contact_sheet)
+        if report_path == contact_path:
+            raise StaticAssetPackError(["report and proof output paths must be distinct"])
+        if not pack_path.is_relative_to(root):
+            raise StaticAssetPackError(["pack document must be inside pack root"])
+        if pack_path in {report_path, contact_path}:
+            raise StaticAssetPackError(["output paths must not overwrite the pack document"])
+    except StaticAssetPackError as exc:
+        return _write_report(report_path, _failure("; ".join(exc.issues)), 1)
+
+    try:
+        raw_document = pack_path.read_text(encoding="utf-8-sig")
+    except OSError as exc:
+        return _write_report(report_path, _failure(f"operational failure: {exc}"), 3)
+    except UnicodeError as exc:
+        return _write_report(report_path, _failure(f"invalid pack document: {exc}"), 1)
+    try:
+        document = json.loads(raw_document)
+    except (json.JSONDecodeError, UnicodeError) as exc:
+        return _write_report(report_path, _failure(f"invalid pack document: {exc}"), 1)
+    if not isinstance(document, Mapping):
+        return _write_report(
+            report_path,
+            _failure("pack document root must be an object"),
+            1,
+        )
+    if report_path in _source_paths(document, root):
+        return _write_report(
+            None,
+            _failure("report output path must not overwrite an asset input"),
+            1,
+        )
+
+    try:
+        report = validate_static_pack(
+            document,
+            root=root,
+            contact_sheet=contact_path,
+        )
+    except StaticAssetPackError as exc:
+        return _write_report(report_path, _failure("; ".join(exc.issues)), 1)
+    except (OSError, RuntimeError) as exc:
+        return _write_report(report_path, _failure(f"operational failure: {exc}"), 3)
+    return _write_report(report_path, report, 0)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

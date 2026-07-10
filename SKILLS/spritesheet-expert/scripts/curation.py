@@ -48,6 +48,13 @@ from typing import Any
 
 from PIL import Image
 
+from spritecore.image_ops import (
+    ArtMode,
+    ImagePolicyError,
+    ResizePolicy,
+    inspect_transform_invariants,
+)
+
 CURATION_FILENAME = "curation.json"
 SCHEMA_VERSION = 1
 IDENTITY = {"rotate": 0.0, "scale": 1.0, "dx": 0, "dy": 0, "shx": 0.0, "shy": 0.0, "flipX": 0}
@@ -159,6 +166,8 @@ def apply_transform(
     frame: Image.Image,
     transform: dict[str, float] | None,
     cell_size: tuple[int, int],
+    *,
+    policy: ResizePolicy | None = None,
 ) -> Image.Image:
     """Apply scale/shear/rotate (about center) + translate, into a fresh cell.
 
@@ -169,6 +178,7 @@ def apply_transform(
     faithful to the bake.
     """
     transform = normalize_transform(transform) if transform else dict(IDENTITY)
+    policy = policy or ResizePolicy(mode=ArtMode.ILLUSTRATED)
     if is_identity(transform) and frame.size == cell_size:
         return frame.convert("RGBA")
 
@@ -185,7 +195,21 @@ def apply_transform(
     cout_x, cout_y = cw / 2 + transform["dx"], ch / 2 + transform["dy"]
     c = -(ia * cout_x + ib * cout_y) + cin_x
     f = -(id_ * cout_x + ie * cout_y) + cin_y
-    return src.transform((cw, ch), Image.AFFINE, (ia, ib, c, id_, ie, f), resample=Image.BICUBIC)
+    resample = (
+        Image.Resampling.NEAREST
+        if policy.mode is ArtMode.PIXEL
+        else Image.Resampling.BICUBIC
+    )
+    transformed = src.transform(
+        (cw, ch), Image.AFFINE, (ia, ib, c, id_, ie, f), resample=resample
+    )
+    if policy.mode is ArtMode.PIXEL:
+        invariants = inspect_transform_invariants(src, transformed)
+        if not invariants.ok:
+            raise ImagePolicyError(
+                "pixel curation transform violated palette or alpha invariants"
+            )
+    return transformed
 
 
 def empty_curation() -> dict[str, Any]:

@@ -40,10 +40,21 @@ from PIL import Image, ImageDraw, ImageFont
 from extract_sprite_row_frames import DEFAULT_BEN2_MODEL, DEFAULT_REMBG_MODEL, default_background_model, remove_background
 from runio import acquire_run_dir_lock, atomic_save_image, atomic_write_text
 from segmentation import projection_spans
+from spritecore.contracts import ContractError, normalize_contract
+from spritecore.models import is_state_slug
+from spritecore.paths import PathSafetyError, create_run_marker, remove_known_outputs
 
 ALPHA_THRESHOLD = 16  # a pixel counts as content above this alpha
 MIN_GUTTER = 1        # a fully-empty line of >= this many px separates frames
 BACKGROUND_REMOVAL_METHODS = {"none", "auto", "chroma", "matte", "rembg", "ben2"}
+UNPACK_KNOWN_OUTPUTS = (
+    "frames",
+    "qa",
+    "sprite-request.json",
+    "unpack-source.json",
+    "source-provenance.json",
+    "manifest.json",
+)
 
 
 def parse_hex_color(value: str) -> tuple[int, int, int]:
@@ -205,11 +216,13 @@ def write_segmentation_report(
     background_config: dict[str, Any],
     expected_names: list[str] | None,
     extra_warnings: list[str] | None = None,
+    diagnostic: bool = False,
 ) -> tuple[str, list[str]]:
     overlay = make_segmentation_overlay(atlas, states, out_dir, layout_source, background_method)
     warnings = segmentation_warnings(states, expected_names, layout_source)
     if extra_warnings:
         warnings.extend(extra_warnings)
+    trusted_layout = layout_source in {"authored-boxes", "grid-explicit", "manifest"}
     report = {
         "ok": not warnings,
         "engine": "sprite-sheet-segmentation",
@@ -218,6 +231,8 @@ def write_segmentation_report(
         "background_removal": background_config,
         "cell": {"width": cell[0], "height": cell[1]},
         "overlay": overlay,
+        "diagnostic": diagnostic,
+        "production_eligible": trusted_layout and not warnings and not diagnostic,
         "warnings": warnings,
         "rows": segmentation_report_rows(states),
     }
@@ -477,6 +492,9 @@ def write_run(
     layout_source: str,
     provenance: dict[str, Any],
 ) -> dict[str, Any]:
+    invalid_states = [state.get("name") for state in states if not is_state_slug(state.get("name"))]
+    if invalid_states:
+        raise SystemExit(f"invalid state ids in imported layout: {invalid_states}")
     cell_w, cell_h = cell
     frames_root = out_dir / "frames"
     frames_root.mkdir(parents=True, exist_ok=True)
@@ -532,6 +550,10 @@ def write_run(
         request["background_removal"] = provenance["background_removal"]
     if isinstance(provenance.get("asset_catalog"), dict):
         request["asset_catalog"] = provenance["asset_catalog"]
+    try:
+        request = normalize_contract(request, expected_kind="sprite-request").to_dict()
+    except ContractError as exc:
+        raise SystemExit(str(exc)) from exc
     atomic_write_text(out_dir / "sprite-request.json", json.dumps(request, ensure_ascii=False, indent=2) + "\n")
     atomic_write_text(
         frames_root / "frames-manifest.json",
@@ -554,6 +576,8 @@ def import_pngs(out_dir: Path, png_paths: list[Path], state_name: str, labels: l
     Each PNG becomes one frame so they can be compared side by side and given a
     per-item transform in the curator. Originals are copied, not modified.
     """
+    if not is_state_slug(state_name):
+        raise SystemExit(f"invalid state id {state_name!r}; use a 1-64 character lowercase kebab slug")
     imgs = [Image.open(p).convert("RGBA") for p in png_paths]
     cell_w = max(i.width for i in imgs)
     cell_h = max(i.height for i in imgs)
@@ -583,6 +607,10 @@ def import_pngs(out_dir: Path, png_paths: list[Path], state_name: str, labels: l
     }
     if iso:
         request["iso"] = iso  # ground-grid geometry for the curator overlay
+    try:
+        request = normalize_contract(request, expected_kind="sprite-request").to_dict()
+    except ContractError as exc:
+        raise SystemExit(str(exc)) from exc
     atomic_write_text(out_dir / "sprite-request.json", json.dumps(request, ensure_ascii=False, indent=2) + "\n")
     atomic_write_text(
         out_dir / "frames" / "frames-manifest.json",
@@ -646,6 +674,11 @@ def main() -> int:
     parser.add_argument("--asset-catalog-file", type=Path, help="JSON asset_catalog with items metadata for runtime naming/pivots/categories")
     parser.add_argument("--auto", action="store_true", help="force alpha auto-detect even if a manifest is given")
     parser.add_argument(
+        "--diagnostic",
+        action="store_true",
+        help="allow untrusted/failed segmentation for review; its report cannot satisfy production validation",
+    )
+    parser.add_argument(
         "--background-removal",
         choices=sorted(BACKGROUND_REMOVAL_METHODS),
         default=None,
@@ -670,6 +703,19 @@ def main() -> int:
     if args.fringe_key_threshold < args.key_threshold:
         raise SystemExit("--fringe-key-threshold must be greater than or equal to --key-threshold")
 
+    for attribute in ("atlas", "manifest", "boxes_file", "asset_labels_file", "asset_catalog_file"):
+        source = getattr(args, attribute)
+        if source is None:
+            continue
+        resolved = source.expanduser().resolve()
+        if not resolved.is_file():
+            raise SystemExit(f"missing --{attribute.replace('_', '-')} file: {resolved}")
+        setattr(args, attribute, resolved)
+    if args.pngs_dir is not None:
+        args.pngs_dir = args.pngs_dir.expanduser().resolve()
+        if not args.pngs_dir.is_dir():
+            raise SystemExit(f"missing --pngs-dir directory: {args.pngs_dir}")
+
     # default the run dir to a clearly-findable sibling next to the input.
     if args.out_dir:
         out_dir = args.out_dir.expanduser().resolve()
@@ -692,8 +738,10 @@ def main() -> int:
     if out_dir.exists() and any(out_dir.iterdir()) and not args.force:
         raise SystemExit(f"out-dir not empty: {out_dir} (use --force)")
     try:
-        out_dir.mkdir(parents=True, exist_ok=True)
-    except OSError as exc:
+        if out_dir.exists() and any(out_dir.iterdir()) and args.force:
+            remove_known_outputs(out_dir, UNPACK_KNOWN_OUTPUTS)
+        create_run_marker(out_dir, run_id=out_dir.name)
+    except (OSError, PathSafetyError) as exc:
         raise SystemExit(f"cannot create run dir next to the input: {out_dir}\n  {exc}\n  pass --out-dir <writable path> to choose another location")
     acquire_run_dir_lock(out_dir, "unpack_atlas_run")
 
@@ -833,6 +881,7 @@ def main() -> int:
         background_config,
         expected_names,
         layout_warnings,
+        args.diagnostic,
     )
     provenance["segmentation_overlay"] = segmentation_overlay
     provenance["segmentation_warnings"] = segmentation_warnings
@@ -844,6 +893,12 @@ def main() -> int:
     result["segmentation_overlay"] = segmentation_overlay
     result["segmentation_warnings"] = segmentation_warnings
     print(json.dumps(result, ensure_ascii=False, indent=2))
+    if args.diagnostic:
+        return 0
+    if segmentation_warnings:
+        return 1
+    if layout_source in {"auto-detect", "projection-grid"}:
+        return 2
     return 0
 
 

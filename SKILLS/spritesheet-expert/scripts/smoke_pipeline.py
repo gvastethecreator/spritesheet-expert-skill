@@ -148,7 +148,15 @@ def main() -> int:
         assert not state_motion_phases("idle-down", 4)
         assert wants_motion_phase_guides({}, {"walk-down": {"frames": 8}}, False)
         assert not wants_motion_phase_guides({"motion_phase_guides": False}, {"walk-down": {"frames": 8}}, True)
-        prompt = row_prompt(request | {"motion_phase_guides": True}, "walk-down", {"frames": 8, "fps": 6, "loop": True, "action": "walk"})
+        prompt = row_prompt(
+            request
+            | {
+                "motion_phase_guides": True,
+                "animation_workflows": ["auto"],
+            },
+            "walk-down",
+            {"frames": 8, "fps": 6, "loop": True, "action": "walk"},
+        )
         assert "full-body locomotion row" in prompt
         assert "Never keep both feet leaning the same way" in prompt
         assert "clear silhouette and line of action" in prompt
@@ -275,6 +283,7 @@ def remove(data, session=None, alpha_matting=False, force_return_bytes=False, **
             "rembg",
             "--states",
             "idle",
+            "--diagnostic",
             env=rembg_env,
         )
         unpack_source = json.loads((irregular_import / "unpack-source.json").read_text(encoding="utf-8"))
@@ -288,7 +297,29 @@ def remove(data, session=None, alpha_matting=False, force_return_bytes=False, **
         assert segmentation_report["rows"][0]["frames"] == 2
 
         states_file = Path(tmp) / "states-bom.json"
-        states_file.write_bytes(b"\xef\xbb\xbf" + json.dumps({"terrain": {"frames": 4, "fps": 1, "loop": False, "action": "custom modular terrain tiles"}}).encode("utf-8"))
+        states_file.write_bytes(
+            b"\xef\xbb\xbf"
+            + json.dumps(
+                {
+                    "terrain": {
+                        "frames": 4,
+                        "fps": 1,
+                        "loop": False,
+                        "action": "custom modular terrain tiles",
+                        "asset_labels": [
+                            "grass-fill",
+                            "dirt-fill",
+                            "grass-edge",
+                            "grass-corner",
+                        ],
+                        "catalog": {
+                            "role": "terrain-tile",
+                            "collision_role": "solid",
+                        },
+                    }
+                }
+            ).encode("utf-8")
+        )
         custom_request_path = Path(tmp) / "custom-asset-request.json"
         run("preset_to_request.py", "custom-asset-atlas", "--out", str(custom_request_path), "--states-file", str(states_file))
         custom_request = json.loads(custom_request_path.read_text(encoding="utf-8"))

@@ -73,10 +73,27 @@ Record accepted source art before extraction:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "kind": "sprite-source-provenance",
+  "source_type": "imagegen",
   "art_engine": "imagegen",
-  "source_images": ["raw/idle.png", "raw/run.png"],
+  "fixture": false,
+  "verification_status": "verified",
+  "accepted_sources": [
+    {
+      "path": "raw/idle.png",
+      "sha256": "<64 lowercase hex characters>",
+      "size_bytes": 12345,
+      "states": ["idle"]
+    },
+    {
+      "path": "raw/run.png",
+      "sha256": "<64 lowercase hex characters>",
+      "size_bytes": 23456,
+      "states": ["run"]
+    }
+  ],
+  "state_coverage": ["idle", "run"],
   "notes": "selected imagegen row strips copied into this run"
 }
 ```
@@ -98,6 +115,8 @@ For smoke fixtures only:
 ```bash
 python scripts/check_generation_provenance.py --run-dir /abs/run --allow-fixture
 ```
+
+Do not invent hashes or reuse this example literally. The executable source-intake command computes provenance from accepted files; legacy v1 provenance loads only as `legacy-unverified` and cannot satisfy production QA.
 
 ## Style Presets
 

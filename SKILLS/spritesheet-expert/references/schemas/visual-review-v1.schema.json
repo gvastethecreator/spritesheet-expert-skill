@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spritesheet-expert.local/schemas/visual-review-v1.schema.json",
+  "title": "Spritesheet Expert visual review v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "kind",
+    "reviewer_kind",
+    "scope",
+    "stage",
+    "status",
+    "reviewed_artifacts",
+    "rubric",
+    "failures",
+    "waivers",
+    "reviewed_at",
+    "input_fingerprint"
+  ],
+  "properties": {
+    "version": {"const": 1},
+    "kind": {"const": "sprite-visual-review"},
+    "reviewer_kind": {"enum": ["human", "vision-model"]},
+    "scope": {"$ref": "#/$defs/slug"},
+    "stage": {"$ref": "#/$defs/slug"},
+    "status": {"enum": ["pass", "fail"]},
+    "reviewed_artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/artifact"}
+    },
+    "rubric": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/rubric_answer"}
+    },
+    "failures": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/failure"}
+    },
+    "waivers": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/waiver"}
+    },
+    "reviewed_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "input_fingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"status": {"const": "pass"}},
+        "required": ["status"]
+      },
+      "then": {"properties": {"failures": {"maxItems": 0}}},
+      "else": {"properties": {"failures": {"minItems": 1}}}
+    }
+  ],
+  "$defs": {
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "maxLength": 64
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "concrete_note": {
+      "type": "string",
+      "minLength": 16,
+      "pattern": "\\S"
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "\\S"
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes"],
+      "properties": {
+        "path": {"$ref": "#/$defs/path"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 0}
+      }
+    },
+    "rubric_answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "answer", "score", "notes"],
+      "properties": {
+        "id": {"$ref": "#/$defs/slug"},
+        "answer": {"enum": ["pass", "fail", "not-applicable"]},
+        "score": {"type": "integer", "minimum": 0, "maximum": 5},
+        "notes": {"$ref": "#/$defs/concrete_note"}
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "rubric_id", "message"],
+      "properties": {
+        "id": {"$ref": "#/$defs/slug"},
+        "rubric_id": {"$ref": "#/$defs/slug"},
+        "message": {"$ref": "#/$defs/concrete_note"},
+        "artifact_path": {"$ref": "#/$defs/path"}
+      }
+    },
+    "waiver": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["failure_id", "owner", "reason", "expires_at"],
+      "properties": {
+        "failure_id": {"$ref": "#/$defs/slug"},
+        "owner": {"$ref": "#/$defs/owner"},
+        "reason": {"$ref": "#/$defs/concrete_note"},
+        "expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        }
+      }
+    }
+  }
+}

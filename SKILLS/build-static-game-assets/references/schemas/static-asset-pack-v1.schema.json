@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.openai.local/build-static-game-assets/static-asset-pack-v1.schema.json",
+  "title": "Static game asset pack v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "pack_id", "style_fingerprint", "licenses", "assets"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "static-game-asset-pack"},
+    "pack_id": {"$ref": "#/$defs/id"},
+    "style_fingerprint": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "licenses": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/license"}
+    },
+    "assets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/asset"}
+    }
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$", "maxLength": 64},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "license": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "reference"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "status": {"enum": ["user-owned", "generated", "licensed", "fixture"]},
+        "reference": {"type": "string", "minLength": 1}
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "role", "source", "target", "pivot", "transparency",
+        "crop_policy", "scale_class", "license_ref"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "role": {"enum": ["prop", "item", "pickup", "icon", "cursor", "badge", "portrait", "key-art"]},
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256"],
+          "properties": {
+            "path": {"type": "string", "minLength": 1},
+            "sha256": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        "target": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["width", "height"],
+          "properties": {
+            "width": {"type": "integer", "minimum": 1},
+            "height": {"type": "integer", "minimum": 1}
+          }
+        },
+        "pivot": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["x", "y"],
+          "properties": {
+            "x": {"type": "number", "minimum": 0, "maximum": 1},
+            "y": {"type": "number", "minimum": 0, "maximum": 1}
+          }
+        },
+        "transparency": {"enum": ["required", "opaque", "either"]},
+        "crop_policy": {"enum": ["contain", "cover", "none"]},
+        "scale_class": {"enum": ["tiny", "small", "medium", "large", "hero"]},
+        "license_ref": {"$ref": "#/$defs/id"},
+        "variant_of": {"$ref": "#/$defs/id"},
+        "parent_sha256": {"$ref": "#/$defs/sha256"},
+        "axes": {"type": "object", "minProperties": 1},
+        "allowed_transforms": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"enum": ["recolor", "crop", "scale", "flip", "overlay"]}
+        }
+      },
+      "allOf": [
+        {
+          "if": {"required": ["variant_of"]},
+          "then": {"required": ["parent_sha256", "axes", "allowed_transforms"]},
+          "else": {
+            "not": {
+              "anyOf": [
+                {"required": ["parent_sha256"]},
+                {"required": ["axes"]},
+                {"required": ["allowed_transforms"]}
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

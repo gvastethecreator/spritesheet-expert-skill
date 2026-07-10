@@ -1,0 +1,4 @@
+interface:
+  display_name: "Asset Mockup Composer"
+  short_description: "Compose validated asset mockups and presentations"
+  default_prompt: "Use $compose-asset-mockups to build a hash-backed gameplay presentation from validated game assets."

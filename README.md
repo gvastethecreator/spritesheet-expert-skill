@@ -17,7 +17,13 @@ Spritesheet Expert turns a sprite request into a repeatable atlas pipeline: prom
 
 ## Quick Install
 
-Download this repo or ask Codex to install `spritesheet-expert` in your workspace.
+Install with the Skills CLI:
+
+```powershell
+npx skills add gvastethecreator/spritesheet-expert-skill
+```
+
+Or download this repo and ask Codex to install `spritesheet-expert` in your workspace.
 
 ## Useful Commands
 
@@ -33,6 +39,13 @@ Validate the public skill package:
 
 ```powershell
 npm run validate
+```
+
+Run the complete contract and integration suite, or the full release gate:
+
+```powershell
+npm test
+npm run check
 ```
 
 ## What's Inside
