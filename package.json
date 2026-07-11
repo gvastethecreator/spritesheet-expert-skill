@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "check": "npm run validate && npm test && npm run smoke",
+    "pretest": "node -e \"require('node:fs').mkdirSync('.scratch', { recursive: true })\"",
     "test": "python -m pytest -p no:cacheprovider --basetemp .scratch/pytest",
     "validate": "node scripts/validate-skill-pack.mjs",
     "smoke": "python ./SKILLS/spritesheet-expert/scripts/smoke_pipeline.py"
