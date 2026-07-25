@@ -1,0 +1,859 @@
+{
+  "ok": true,
+  "kind": "colored-limb-motion-report",
+  "profile": "sideview-walk-6",
+  "frame_count": 6,
+  "thresholds": {
+    "min_limb_x_range": 0.055,
+    "min_active_transitions": 4,
+    "min_transition_distance": 0.012,
+    "max_step_ratio": 4.5,
+    "min_silhouette_delta": 0.035
+  },
+  "torso_x_range": 0.03019,
+  "head_width_drift": 0.03448,
+  "head_height_drift": 0.03659,
+  "silhouette_deltas": [
+    0.42901,
+    0.57584,
+    0.69062,
+    0.51678,
+    0.60751,
+    0.37942
+  ],
+  "trajectories": {
+    "red_arm": {
+      "relative_centroids": [
+        [
+          -0.10904,
+          -0.03149
+        ],
+        [
+          -0.07116,
+          -0.02608
+        ],
+        [
+          0.08208,
+          -0.03826
+        ],
+        [
+          0.08917,
+          -0.08952
+        ],
+        [
+          -0.05506,
+          -0.01476
+        ],
+        [
+          -0.11056,
+          -0.03463
+        ]
+      ],
+      "closed_loop_steps": [
+        0.03827,
+        0.15372,
+        0.05175,
+        0.16245,
+        0.05895,
+        0.00348
+      ],
+      "total_travel": 0.46862,
+      "x_range": 0.19973,
+      "active_transitions": 5,
+      "max_to_median_step_ratio": 2.93514,
+      "orientation_span_degrees": 91.448
+    },
+    "blue_arm": {
+      "relative_centroids": [
+        [
+          0.15191,
+          -0.02021
+        ],
+        [
+          0.10657,
+          0.02081
+        ],
+        [
+          -0.09856,
+          0.01903
+        ],
+        [
+          -0.11252,
+          -0.03301
+        ],
+        [
+          0.10338,
+          0.03595
+        ],
+        [
+          0.15173,
+          -0.0227
+        ]
+      ],
+      "closed_loop_steps": [
+        0.06115,
+        0.20514,
+        0.05388,
+        0.22665,
+        0.07601,
+        0.0025
+      ],
+      "total_travel": 0.62533,
+      "x_range": 0.26444,
+      "active_transitions": 5,
+      "max_to_median_step_ratio": 3.30496,
+      "orientation_span_degrees": 88.253
+    },
+    "orange_leg": {
+      "relative_centroids": [
+        [
+          0.11507,
+          0.31767
+        ],
+        [
+          0.08616,
+          0.31541
+        ],
+        [
+          -0.01375,
+          0.31783
+        ],
+        [
+          -0.12659,
+          0.29369
+        ],
+        [
+          -0.13652,
+          0.30153
+        ],
+        [
+          0.02802,
+          0.2714
+        ]
+      ],
+      "closed_loop_steps": [
+        0.02899,
+        0.09994,
+        0.1154,
+        0.01265,
+        0.16728,
+        0.09858
+      ],
+      "total_travel": 0.52284,
+      "x_range": 0.25159,
+      "active_transitions": 6,
+      "max_to_median_step_ratio": 1.68516,
+      "orientation_span_degrees": 60.468
+    },
+    "green_leg": {
+      "relative_centroids": [
+        [
+          -0.1289,
+          0.32211
+        ],
+        [
+          -0.13371,
+          0.31245
+        ],
+        [
+          0.01442,
+          0.2898
+        ],
+        [
+          0.14081,
+          0.29226
+        ],
+        [
+          0.10092,
+          0.30496
+        ],
+        [
+          -0.08821,
+          0.3296
+        ]
+      ],
+      "closed_loop_steps": [
+        0.01078,
+        0.14985,
+        0.12641,
+        0.04186,
+        0.19073,
+        0.04138
+      ],
+      "total_travel": 0.56101,
+      "x_range": 0.27452,
+      "active_transitions": 5,
+      "max_to_median_step_ratio": 2.26695,
+      "orientation_span_degrees": 65.774
+    }
+  },
+  "phase_checks": [
+    {
+      "frame": 1,
+      "expected_contacts": [
+        "green_leg",
+        "orange_leg"
+      ],
+      "observed_contacts": [
+        "green_leg",
+        "orange_leg"
+      ],
+      "clearance_px": {
+        "orange_leg": 4,
+        "green_leg": 4
+      },
+      "errors": []
+    },
+    {
+      "frame": 2,
+      "expected_contacts": [
+        "green_leg",
+        "orange_leg"
+      ],
+      "observed_contacts": [
+        "green_leg",
+        "orange_leg"
+      ],
+      "clearance_px": {
+        "orange_leg": 4,
+        "green_leg": 4
+      },
+      "errors": []
+    },
+    {
+      "frame": 3,
+      "expected_contacts": [
+        "orange_leg"
+      ],
+      "observed_contacts": [
+        "orange_leg"
+      ],
+      "clearance_px": {
+        "orange_leg": 4,
+        "green_leg": 59
+      },
+      "errors": []
+    },
+    {
+      "frame": 4,
+      "expected_contacts": [
+        "green_leg",
+        "orange_leg"
+      ],
+      "observed_contacts": [
+        "green_leg",
+        "orange_leg"
+      ],
+      "clearance_px": {
+        "orange_leg": 4,
+        "green_leg": 11
+      },
+      "errors": []
+    },
+    {
+      "frame": 5,
+      "expected_contacts": [
+        "green_leg",
+        "orange_leg"
+      ],
+      "observed_contacts": [
+        "green_leg",
+        "orange_leg"
+      ],
+      "clearance_px": {
+        "orange_leg": 4,
+        "green_leg": 4
+      },
+      "errors": []
+    },
+    {
+      "frame": 6,
+      "expected_contacts": [
+        "green_leg"
+      ],
+      "observed_contacts": [
+        "green_leg"
+      ],
+      "clearance_px": {
+        "orange_leg": 75,
+        "green_leg": 4
+      },
+      "errors": []
+    }
+  ],
+  "frames": [
+    {
+      "frame": 1,
+      "path": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-006-articulated-six-frame\\selected\\frame-01.png",
+      "size": [
+        1536,
+        1024
+      ],
+      "baseline_y": 915,
+      "torso": {
+        "count": 32784,
+        "bbox": [
+          454,
+          32,
+          1019,
+          912
+        ],
+        "centroid": [
+          719.005,
+          365.191
+        ],
+        "angle_degrees": -83.068
+      },
+      "head": {
+        "count": 12688,
+        "bbox": [
+          681,
+          33,
+          800,
+          198
+        ],
+        "centroid": [
+          737.156,
+          103.931
+        ],
+        "angle_degrees": 88.9
+      },
+      "limbs": {
+        "red_arm": {
+          "count": 17463,
+          "bbox": [
+            505,
+            184,
+            1018,
+            912
+          ],
+          "centroid": [
+            607.346,
+            332.945
+          ],
+          "angle_degrees": -63.095
+        },
+        "blue_arm": {
+          "count": 9968,
+          "bbox": [
+            516,
+            207,
+            1019,
+            877
+          ],
+          "centroid": [
+            874.565,
+            344.498
+          ],
+          "angle_degrees": 26.452
+        },
+        "orange_leg": {
+          "count": 28220,
+          "bbox": [
+            705,
+            395,
+            1017,
+            912
+          ],
+          "centroid": [
+            836.837,
+            690.483
+          ],
+          "angle_degrees": 62.157
+        },
+        "green_leg": {
+          "count": 24836,
+          "bbox": [
+            456,
+            512,
+            716,
+            912
+          ],
+          "centroid": [
+            587.011,
+            695.027
+          ],
+          "angle_degrees": -60.297
+        }
+      }
+    },
+    {
+      "frame": 2,
+      "path": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-006-articulated-six-frame\\selected\\frame-02.png",
+      "size": [
+        1536,
+        1024
+      ],
+      "baseline_y": 915,
+      "torso": {
+        "count": 32273,
+        "bbox": [
+          446,
+          37,
+          948,
+          912
+        ],
+        "centroid": [
+          720.893,
+          379.787
+        ],
+        "angle_degrees": -82.734
+      },
+      "head": {
+        "count": 13144,
+        "bbox": [
+          685,
+          38,
+          804,
+          208
+        ],
+        "centroid": [
+          740.392,
+          111.05
+        ],
+        "angle_degrees": -88.534
+      },
+      "limbs": {
+        "red_arm": {
+          "count": 16437,
+          "bbox": [
+            601,
+            195,
+            948,
+            912
+          ],
+          "centroid": [
+            648.027,
+            353.083
+          ],
+          "angle_degrees": -82.523
+        },
+        "blue_arm": {
+          "count": 7987,
+          "bbox": [
+            715,
+            218,
+            913,
+            890
+          ],
+          "centroid": [
+            830.016,
+            401.096
+          ],
+          "angle_degrees": 58.251
+        },
+        "orange_leg": {
+          "count": 25331,
+          "bbox": [
+            705,
+            507,
+            947,
+            912
+          ],
+          "centroid": [
+            809.125,
+            702.765
+          ],
+          "angle_degrees": 72.881
+        },
+        "green_leg": {
+          "count": 24197,
+          "bbox": [
+            447,
+            521,
+            715,
+            912
+          ],
+          "centroid": [
+            583.972,
+            699.74
+          ],
+          "angle_degrees": -56.774
+        }
+      }
+    },
+    {
+      "frame": 3,
+      "path": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-006-articulated-six-frame\\selected\\frame-03.png",
+      "size": [
+        1536,
+        1024
+      ],
+      "baseline_y": 915,
+      "torso": {
+        "count": 22973,
+        "bbox": [
+          567,
+          36,
+          985,
+          910
+        ],
+        "centroid": [
+          721.586,
+          361.866
+        ],
+        "angle_degrees": -89.021
+      },
+      "head": {
+        "count": 12973,
+        "bbox": [
+          695,
+          38,
+          814,
+          203
+        ],
+        "centroid": [
+          750.522,
+          109.801
+        ],
+        "angle_degrees": -88.629
+      },
+      "limbs": {
+        "red_arm": {
+          "count": 17221,
+          "bbox": [
+            567,
+            203,
+            984,
+            912
+          ],
+          "centroid": [
+            805.633,
+            322.686
+          ],
+          "angle_degrees": 38.326
+        },
+        "blue_arm": {
+          "count": 10055,
+          "bbox": [
+            568,
+            235,
+            984,
+            911
+          ],
+          "centroid": [
+            620.657,
+            381.354
+          ],
+          "angle_degrees": -76.911
+        },
+        "orange_leg": {
+          "count": 25076,
+          "bbox": [
+            572,
+            237,
+            803,
+            912
+          ],
+          "centroid": [
+            707.506,
+            687.324
+          ],
+          "angle_degrees": 89.014
+        },
+        "green_leg": {
+          "count": 17666,
+          "bbox": [
+            593,
+            493,
+            835,
+            857
+          ],
+          "centroid": [
+            736.351,
+            658.624
+          ],
+          "angle_degrees": -54.487
+        }
+      }
+    },
+    {
+      "frame": 4,
+      "path": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-006-articulated-six-frame\\selected\\frame-04.png",
+      "size": [
+        1536,
+        1024
+      ],
+      "baseline_y": 915,
+      "torso": {
+        "count": 29897,
+        "bbox": [
+          448,
+          33,
+          1033,
+          912
+        ],
+        "centroid": [
+          709.703,
+          396.568
+        ],
+        "angle_degrees": 87.518
+      },
+      "head": {
+        "count": 12936,
+        "bbox": [
+          680,
+          35,
+          800,
+          202
+        ],
+        "centroid": [
+          736.582,
+          106.41
+        ],
+        "angle_degrees": 88.72
+      },
+      "limbs": {
+        "red_arm": {
+          "count": 18570,
+          "bbox": [
+            450,
+            197,
+            977,
+            911
+          ],
+          "centroid": [
+            801.01,
+            304.897
+          ],
+          "angle_degrees": 25.457
+        },
+        "blue_arm": {
+          "count": 10904,
+          "bbox": [
+            449,
+            195,
+            668,
+            844
+          ],
+          "centroid": [
+            594.481,
+            362.762
+          ],
+          "angle_degrees": -67.892
+        },
+        "orange_leg": {
+          "count": 24748,
+          "bbox": [
+            450,
+            467,
+            716,
+            912
+          ],
+          "centroid": [
+            580.073,
+            697.31
+          ],
+          "angle_degrees": -59.769
+        },
+        "green_leg": {
+          "count": 26350,
+          "bbox": [
+            720,
+            498,
+            1032,
+            905
+          ],
+          "centroid": [
+            853.892,
+            695.847
+          ],
+          "angle_degrees": 59.739
+        }
+      }
+    },
+    {
+      "frame": 5,
+      "path": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-006-articulated-six-frame\\selected\\frame-05.png",
+      "size": [
+        1536,
+        1024
+      ],
+      "baseline_y": 915,
+      "torso": {
+        "count": 26566,
+        "bbox": [
+          471,
+          70,
+          983,
+          912
+        ],
+        "centroid": [
+          740.615,
+          401.241
+        ],
+        "angle_degrees": -88.211
+      },
+      "head": {
+        "count": 12372,
+        "bbox": [
+          695,
+          71,
+          811,
+          235
+        ],
+        "centroid": [
+          748.95,
+          141.608
+        ],
+        "angle_degrees": -88.98
+      },
+      "limbs": {
+        "red_arm": {
+          "count": 16092,
+          "bbox": [
+            472,
+            229,
+            735,
+            912
+          ],
+          "centroid": [
+            684.232,
+            386.128
+          ],
+          "angle_degrees": -86.204
+        },
+        "blue_arm": {
+          "count": 7192,
+          "bbox": [
+            472,
+            321,
+            931,
+            905
+          ],
+          "centroid": [
+            846.481,
+            438.057
+          ],
+          "angle_degrees": 45.671
+        },
+        "orange_leg": {
+          "count": 21864,
+          "bbox": [
+            472,
+            543,
+            731,
+            912
+          ],
+          "centroid": [
+            600.814,
+            710.004
+          ],
+          "angle_degrees": -57.374
+        },
+        "green_leg": {
+          "count": 22928,
+          "bbox": [
+            736,
+            520,
+            981,
+            912
+          ],
+          "centroid": [
+            843.96,
+            713.515
+          ],
+          "angle_degrees": 71.319
+        }
+      }
+    },
+    {
+      "frame": 6,
+      "path": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-006-articulated-six-frame\\selected\\frame-06.png",
+      "size": [
+        1536,
+        1024
+      ],
+      "baseline_y": 915,
+      "torso": {
+        "count": 33299,
+        "bbox": [
+          506,
+          32,
+          1004,
+          912
+        ],
+        "centroid": [
+          717.75,
+          365.59
+        ],
+        "angle_degrees": -82.666
+      },
+      "head": {
+        "count": 12716,
+        "bbox": [
+          681,
+          33,
+          800,
+          198
+        ],
+        "centroid": [
+          736.824,
+          104.313
+        ],
+        "angle_degrees": 89.215
+      },
+      "limbs": {
+        "red_arm": {
+          "count": 17418,
+          "bbox": [
+            508,
+            184,
+            832,
+            841
+          ],
+          "centroid": [
+            604.536,
+            330.131
+          ],
+          "angle_degrees": -63.792
+        },
+        "blue_arm": {
+          "count": 9985,
+          "bbox": [
+            705,
+            207,
+            1003,
+            798
+          ],
+          "centroid": [
+            873.125,
+            342.343
+          ],
+          "angle_degrees": 23.855
+        },
+        "orange_leg": {
+          "count": 21403,
+          "bbox": [
+            646,
+            492,
+            833,
+            841
+          ],
+          "centroid": [
+            746.438,
+            643.505
+          ],
+          "angle_degrees": -72.168
+        },
+        "green_leg": {
+          "count": 22466,
+          "bbox": [
+            558,
+            513,
+            714,
+            912
+          ],
+          "centroid": [
+            627.424,
+            703.097
+          ],
+          "angle_degrees": -77.865
+        }
+      }
+    }
+  ],
+  "errors": [],
+  "warnings": [],
+  "visual_review_required": true
+}

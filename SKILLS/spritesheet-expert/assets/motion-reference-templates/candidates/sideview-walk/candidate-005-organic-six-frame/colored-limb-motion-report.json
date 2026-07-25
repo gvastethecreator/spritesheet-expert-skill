@@ -1,0 +1,785 @@
+{
+  "ok": false,
+  "kind": "colored-limb-motion-report",
+  "profile": "sideview-walk-6",
+  "frame_count": 6,
+  "thresholds": {
+    "min_limb_x_range": 0.055,
+    "min_active_transitions": 4,
+    "min_transition_distance": 0.012,
+    "max_step_ratio": 4.5,
+    "min_silhouette_delta": 0.035
+  },
+  "torso_x_range": 0.03554,
+  "silhouette_deltas": [
+    0.31764,
+    0.40943,
+    0.30781,
+    0.34059,
+    0.45,
+    0.39908
+  ],
+  "trajectories": {
+    "red_arm": {
+      "relative_centroids": [
+        [
+          -0.08493,
+          0.00477
+        ],
+        [
+          -0.08333,
+          0.00817
+        ],
+        [
+          0.11315,
+          0.04554
+        ],
+        [
+          0.11176,
+          0.04011
+        ],
+        [
+          0.11236,
+          0.04418
+        ],
+        [
+          -0.0901,
+          0.00031
+        ]
+      ],
+      "closed_loop_steps": [
+        0.00376,
+        0.2,
+        0.00561,
+        0.00412,
+        0.20715,
+        0.00683
+      ],
+      "total_travel": 0.42746,
+      "x_range": 0.20324,
+      "active_transitions": 2,
+      "max_to_median_step_ratio": 33.32446,
+      "orientation_span_degrees": 66.063
+    },
+    "blue_arm": {
+      "relative_centroids": [
+        [
+          0.11382,
+          0.04913
+        ],
+        [
+          0.10652,
+          0.0581
+        ],
+        [
+          -0.08624,
+          0.00171
+        ],
+        [
+          -0.08427,
+          0.00027
+        ],
+        [
+          -0.09012,
+          -0.00421
+        ],
+        [
+          0.12106,
+          0.03323
+        ]
+      ],
+      "closed_loop_steps": [
+        0.01156,
+        0.20083,
+        0.00244,
+        0.00736,
+        0.21447,
+        0.01748
+      ],
+      "total_travel": 0.45414,
+      "x_range": 0.21118,
+      "active_transitions": 3,
+      "max_to_median_step_ratio": 14.77147,
+      "orientation_span_degrees": 73.42
+    },
+    "orange_leg": {
+      "relative_centroids": [
+        [
+          0.06786,
+          0.29859
+        ],
+        [
+          0.05362,
+          0.28098
+        ],
+        [
+          -0.08554,
+          0.31257
+        ],
+        [
+          -0.09571,
+          0.31214
+        ],
+        [
+          -0.11289,
+          0.30626
+        ],
+        [
+          0.05801,
+          0.29733
+        ]
+      ],
+      "closed_loop_steps": [
+        0.02265,
+        0.14269,
+        0.01018,
+        0.01817,
+        0.17114,
+        0.00993
+      ],
+      "total_travel": 0.37477,
+      "x_range": 0.18076,
+      "active_transitions": 4,
+      "max_to_median_step_ratio": 8.38436,
+      "orientation_span_degrees": 52.635
+    },
+    "green_leg": {
+      "relative_centroids": [
+        [
+          -0.1024,
+          0.31766
+        ],
+        [
+          -0.11335,
+          0.30012
+        ],
+        [
+          0.03064,
+          0.26987
+        ],
+        [
+          0.07282,
+          0.29703
+        ],
+        [
+          0.07028,
+          0.29639
+        ],
+        [
+          -0.05533,
+          0.32751
+        ]
+      ],
+      "closed_loop_steps": [
+        0.02068,
+        0.14714,
+        0.05016,
+        0.00262,
+        0.1294,
+        0.0481
+      ],
+      "total_travel": 0.3981,
+      "x_range": 0.18617,
+      "active_transitions": 5,
+      "max_to_median_step_ratio": 2.99486,
+      "orientation_span_degrees": 54.042
+    }
+  },
+  "phase_checks": [
+    {
+      "frame": 1,
+      "expected_contacts": [
+        "green_leg",
+        "orange_leg"
+      ],
+      "observed_contacts": [
+        "green_leg",
+        "orange_leg"
+      ],
+      "clearance_px": {
+        "orange_leg": 4,
+        "green_leg": 4
+      },
+      "errors": []
+    },
+    {
+      "frame": 2,
+      "expected_contacts": [
+        "green_leg",
+        "orange_leg"
+      ],
+      "observed_contacts": [
+        "green_leg",
+        "orange_leg"
+      ],
+      "clearance_px": {
+        "orange_leg": 4,
+        "green_leg": 4
+      },
+      "errors": []
+    },
+    {
+      "frame": 3,
+      "expected_contacts": [
+        "orange_leg"
+      ],
+      "observed_contacts": [
+        "orange_leg"
+      ],
+      "clearance_px": {
+        "orange_leg": 4,
+        "green_leg": 24
+      },
+      "errors": [
+        "green_leg clearance 24px is below 44px"
+      ]
+    },
+    {
+      "frame": 4,
+      "expected_contacts": [
+        "green_leg",
+        "orange_leg"
+      ],
+      "observed_contacts": [
+        "green_leg",
+        "orange_leg"
+      ],
+      "clearance_px": {
+        "orange_leg": 4,
+        "green_leg": 4
+      },
+      "errors": []
+    },
+    {
+      "frame": 5,
+      "expected_contacts": [
+        "green_leg",
+        "orange_leg"
+      ],
+      "observed_contacts": [
+        "green_leg",
+        "orange_leg"
+      ],
+      "clearance_px": {
+        "orange_leg": 4,
+        "green_leg": 4
+      },
+      "errors": []
+    },
+    {
+      "frame": 6,
+      "expected_contacts": [
+        "green_leg"
+      ],
+      "observed_contacts": [
+        "green_leg"
+      ],
+      "clearance_px": {
+        "orange_leg": 17,
+        "green_leg": 4
+      },
+      "errors": [
+        "orange_leg clearance 17px is below 44px"
+      ]
+    }
+  ],
+  "frames": [
+    {
+      "frame": 1,
+      "path": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-005-organic-six-frame\\selected\\frame-01.png",
+      "size": [
+        1254,
+        1254
+      ],
+      "baseline_y": 1077,
+      "torso": {
+        "count": 36073,
+        "bbox": [
+          356,
+          81,
+          898,
+          1074
+        ],
+        "centroid": [
+          627.045,
+          429.322
+        ],
+        "angle_degrees": -87.075
+      },
+      "limbs": {
+        "red_arm": {
+          "count": 17647,
+          "bbox": [
+            426,
+            259,
+            611,
+            650
+          ],
+          "centroid": [
+            520.541,
+            435.304
+          ],
+          "angle_degrees": -68.458
+        },
+        "blue_arm": {
+          "count": 9553,
+          "bbox": [
+            674,
+            360,
+            871,
+            605
+          ],
+          "centroid": [
+            769.772,
+            490.937
+          ],
+          "angle_degrees": 45.387
+        },
+        "orange_leg": {
+          "count": 35957,
+          "bbox": [
+            594,
+            385,
+            897,
+            1074
+          ],
+          "centroid": [
+            712.144,
+            803.758
+          ],
+          "angle_degrees": 69.207
+        },
+        "green_leg": {
+          "count": 28392,
+          "bbox": [
+            358,
+            592,
+            624,
+            1074
+          ],
+          "centroid": [
+            498.634,
+            827.669
+          ],
+          "angle_degrees": -62.17
+        }
+      }
+    },
+    {
+      "frame": 2,
+      "path": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-005-organic-six-frame\\selected\\frame-02.png",
+      "size": [
+        1254,
+        1254
+      ],
+      "baseline_y": 1077,
+      "torso": {
+        "count": 36825,
+        "bbox": [
+          356,
+          113,
+          871,
+          1074
+        ],
+        "centroid": [
+          647.484,
+          461.19
+        ],
+        "angle_degrees": -83.825
+      },
+      "limbs": {
+        "red_arm": {
+          "count": 18041,
+          "bbox": [
+            446,
+            294,
+            635,
+            687
+          ],
+          "centroid": [
+            542.992,
+            471.43
+          ],
+          "angle_degrees": -67.888
+        },
+        "blue_arm": {
+          "count": 9538,
+          "bbox": [
+            707,
+            393,
+            869,
+            657
+          ],
+          "centroid": [
+            781.058,
+            534.043
+          ],
+          "angle_degrees": 52.972
+        },
+        "orange_leg": {
+          "count": 33329,
+          "bbox": [
+            615,
+            583,
+            850,
+            1074
+          ],
+          "centroid": [
+            714.718,
+            813.537
+          ],
+          "angle_degrees": 76.975
+        },
+        "green_leg": {
+          "count": 27282,
+          "bbox": [
+            358,
+            622,
+            638,
+            1074
+          ],
+          "centroid": [
+            505.342,
+            837.542
+          ],
+          "angle_degrees": -58.211
+        }
+      }
+    },
+    {
+      "frame": 3,
+      "path": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-005-organic-six-frame\\selected\\frame-03.png",
+      "size": [
+        1254,
+        1254
+      ],
+      "baseline_y": 1077,
+      "torso": {
+        "count": 39813,
+        "bbox": [
+          412,
+          84,
+          875,
+          1074
+        ],
+        "centroid": [
+          626.987,
+          446.589
+        ],
+        "angle_degrees": -84.489
+      },
+      "limbs": {
+        "red_arm": {
+          "count": 10634,
+          "bbox": [
+            688,
+            356,
+            873,
+            627
+          ],
+          "centroid": [
+            768.875,
+            503.692
+          ],
+          "angle_degrees": 48.017
+        },
+        "blue_arm": {
+          "count": 18752,
+          "bbox": [
+            418,
+            268,
+            613,
+            1018
+          ],
+          "centroid": [
+            518.844,
+            448.733
+          ],
+          "angle_degrees": -68.002
+        },
+        "orange_leg": {
+          "count": 28385,
+          "bbox": [
+            414,
+            595,
+            863,
+            1074
+          ],
+          "centroid": [
+            519.724,
+            838.551
+          ],
+          "angle_degrees": -70.105
+        },
+        "green_leg": {
+          "count": 32004,
+          "bbox": [
+            554,
+            580,
+            765,
+            1054
+          ],
+          "centroid": [
+            665.413,
+            785.011
+          ],
+          "angle_degrees": -81.759
+        }
+      }
+    },
+    {
+      "frame": 4,
+      "path": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-005-organic-six-frame\\selected\\frame-04.png",
+      "size": [
+        1254,
+        1254
+      ],
+      "baseline_y": 1077,
+      "torso": {
+        "count": 36975,
+        "bbox": [
+          374,
+          84,
+          908,
+          1074
+        ],
+        "centroid": [
+          625.23,
+          435.899
+        ],
+        "angle_degrees": -88.251
+      },
+      "limbs": {
+        "red_arm": {
+          "count": 9859,
+          "bbox": [
+            683,
+            342,
+            870,
+            605
+          ],
+          "centroid": [
+            765.374,
+            486.192
+          ],
+          "angle_degrees": 46.546
+        },
+        "blue_arm": {
+          "count": 17808,
+          "bbox": [
+            425,
+            262,
+            609,
+            688
+          ],
+          "centroid": [
+            519.558,
+            436.238
+          ],
+          "angle_degrees": -68.598
+        },
+        "orange_leg": {
+          "count": 27979,
+          "bbox": [
+            376,
+            262,
+            622,
+            1074
+          ],
+          "centroid": [
+            505.215,
+            827.325
+          ],
+          "angle_degrees": -65.076
+        },
+        "green_leg": {
+          "count": 33562,
+          "bbox": [
+            599,
+            558,
+            906,
+            1074
+          ],
+          "centroid": [
+            716.548,
+            808.374
+          ],
+          "angle_degrees": 67.747
+        }
+      }
+    },
+    {
+      "frame": 5,
+      "path": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-005-organic-six-frame\\selected\\frame-05.png",
+      "size": [
+        1254,
+        1254
+      ],
+      "baseline_y": 1077,
+      "torso": {
+        "count": 40736,
+        "bbox": [
+          344,
+          85,
+          882,
+          1074
+        ],
+        "centroid": [
+          640.005,
+          447.074
+        ],
+        "angle_degrees": -84.238
+      },
+      "limbs": {
+        "red_arm": {
+          "count": 10038,
+          "bbox": [
+            699,
+            355,
+            880,
+            624
+          ],
+          "centroid": [
+            780.902,
+            502.474
+          ],
+          "angle_degrees": 48.713
+        },
+        "blue_arm": {
+          "count": 18842,
+          "bbox": [
+            415,
+            269,
+            629,
+            655
+          ],
+          "centroid": [
+            527.001,
+            441.798
+          ],
+          "angle_degrees": -64.201
+        },
+        "orange_leg": {
+          "count": 29204,
+          "bbox": [
+            346,
+            604,
+            870,
+            1074
+          ],
+          "centroid": [
+            498.435,
+            831.12
+          ],
+          "angle_degrees": -58.158
+        },
+        "green_leg": {
+          "count": 32651,
+          "bbox": [
+            614,
+            584,
+            873,
+            1074
+          ],
+          "centroid": [
+            728.137,
+            818.747
+          ],
+          "angle_degrees": 73.016
+        }
+      }
+    },
+    {
+      "frame": 6,
+      "path": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-005-organic-six-frame\\selected\\frame-06.png",
+      "size": [
+        1254,
+        1254
+      ],
+      "baseline_y": 1077,
+      "torso": {
+        "count": 39375,
+        "bbox": [
+          389,
+          82,
+          875,
+          1074
+        ],
+        "centroid": [
+          602.922,
+          439.659
+        ],
+        "angle_degrees": -89.254
+      },
+      "limbs": {
+        "red_arm": {
+          "count": 18558,
+          "bbox": [
+            390,
+            262,
+            584,
+            658
+          ],
+          "centroid": [
+            489.942,
+            440.042
+          ],
+          "angle_degrees": -67.392
+        },
+        "blue_arm": {
+          "count": 11233,
+          "bbox": [
+            661,
+            334,
+            873,
+            600
+          ],
+          "centroid": [
+            754.732,
+            481.324
+          ],
+          "angle_degrees": 42.379
+        },
+        "orange_leg": {
+          "count": 31581,
+          "bbox": [
+            565,
+            585,
+            839,
+            1061
+          ],
+          "centroid": [
+            675.668,
+            812.509
+          ],
+          "angle_degrees": 70.448
+        },
+        "green_leg": {
+          "count": 26977,
+          "bbox": [
+            474,
+            592,
+            608,
+            1074
+          ],
+          "centroid": [
+            533.544,
+            850.362
+          ],
+          "angle_degrees": -83.943
+        }
+      }
+    }
+  ],
+  "errors": [
+    "red_arm: only 2 active transitions; expected at least 4",
+    "red_arm: max/median step ratio 33.32 suggests a teleport or recolor jump",
+    "blue_arm: only 3 active transitions; expected at least 4",
+    "blue_arm: max/median step ratio 14.77 suggests a teleport or recolor jump",
+    "orange_leg: max/median step ratio 8.38 suggests a teleport or recolor jump",
+    "frame 3: green_leg clearance 24px is below 44px",
+    "frame 6: orange_leg clearance 17px is below 44px"
+  ],
+  "warnings": [],
+  "visual_review_required": true
+}

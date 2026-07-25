@@ -21,7 +21,15 @@ style after one source.
 - explicit `animation_workflows` on the request or row, when provided.
 
 The script writes active workflows to `references/art-direction.json` and adds
-their phase requirements to `prompts/<state>.txt`.
+their phase requirements to `prompts/<state>.txt`. Locomotion rows additionally
+write `prompts/motion-references/<state>.txt` and
+`references/motion-reference-contracts/<state>.json`. The preparer first reuses
+an approved hash-pinned master from `assets/motion-reference-templates/`,
+deriving 4/6-frame and mirrored variants without redrawing anatomy. Only a
+template cache miss calls Image Gen; promote accepted results so later runs do
+not regenerate them. Every materialized reference must pass
+`check_motion_references.py` before character-row generation. Deterministic
+layout guides provide slot geometry only; they are not motion or anatomy proof.
 
 If the inferred workflow is wrong, fix the request before generation by making
 the row/action text more explicit or by setting `animation_workflows` directly.

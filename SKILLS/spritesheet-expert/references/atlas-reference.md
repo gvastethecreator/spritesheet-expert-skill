@@ -196,7 +196,9 @@ request:
 ## Core Scripts
 
 - `scripts/preset_to_request.py`: convert `references/presets.json` preset into request JSON.
-- `scripts/prepare_sprite_run.py`: write `sprite-request.json`, compact-grid/strip raw layout metadata, `references/art-direction.json`, `references/layout-guides/*.png`, `prompts/*.txt`, `raw/`, `frames/`.
+- `scripts/prepare_sprite_run.py`: write `sprite-request.json`, compact-grid/strip raw layout metadata, geometry-only `references/layout-guides/*.png`, `references/art-direction.json`, locomotion Image Gen prompts/contracts, `prompts/*.txt`, `raw/`, `frames/`.
+- `scripts/prepare_motion_template_library.py`: regenerate the five canonical view prompts from the template catalog; it does not draw or approve bitmap art.
+- `scripts/check_motion_references.py`: fail closed before locomotion row generation unless every required neutral mannequin is a valid 512px-or-larger image with adjacent `art_engine=imagegen` provenance.
 - `scripts/promote_identity_anchor.py`: turn the first accepted generated idle/neutral frame into `references/identity-anchor.png`.
 - `scripts/extract_sprite_row_frames.py`: remove chroma/rembg/BEN2 background, extract compact raw grids, connected components, projection-repaired strips, normalize sprite pose scale/baseline, write transparent cell frames.
 - `scripts/register_sprite_frames.py`: align extracted/imported frames to a stable runtime pivot before atlas composition; use after unpacking whole-sheet candidates whose sprites drift inside cells.

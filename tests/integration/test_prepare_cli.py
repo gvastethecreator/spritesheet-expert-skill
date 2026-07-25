@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -269,3 +271,161 @@ def test_prepare_rejects_temporal_workflow_on_static_semantics(tmp_path: Path) -
 
     assert result.returncode != 0
     assert "static frame_semantics" in (result.stdout + result.stderr)
+
+
+def test_prepare_emits_imagegen_motion_reference_contract_without_drawing_stick_figures(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "walk-reference"
+    request = {
+        "asset_kind": "sprite",
+        "states": {
+            "walk": {
+                "frames": 8,
+                "fps": 10,
+                "loop": True,
+                "action": "side-view walk cycle facing right",
+            }
+        },
+    }
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(PREPARE),
+            "--out-dir",
+            str(run_dir),
+            "--character-id",
+            "hero",
+            "--request-json",
+            json.dumps(request),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    contract = json.loads(
+        (run_dir / "references" / "motion-reference-contracts" / "walk.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    plan = json.loads(
+        (run_dir / "references" / "motion-reference-plan.json").read_text(encoding="utf-8")
+    )
+    motion_prompt = (run_dir / "prompts" / "motion-references" / "walk.txt").read_text(
+        encoding="utf-8"
+    )
+    row_prompt = (run_dir / "prompts" / "walk.txt").read_text(encoding="utf-8")
+
+    assert contract["art_engine"] == "imagegen"
+    assert contract["required_before_row_generation"] is True
+    assert contract["expected_output"] == "references/motion-references/walk.png"
+    assert [phase["name"] for phase in contract["phase_sequence"]] == [
+        "contact",
+        "down",
+        "passing",
+        "up",
+        "opposite_contact",
+        "opposite_down",
+        "opposite_passing",
+        "opposite_up",
+    ]
+    assert plan["rows"]["walk"] == contract
+    assert "anatomical_left_arm: flat coral red" in motion_prompt
+    assert "anatomical_right_leg: flat leaf green" in motion_prompt
+    assert "scientific-educational" in motion_prompt
+    assert "references/motion-references/walk.png" in row_prompt
+    assert "not an identity or style reference" in row_prompt
+
+    with Image.open(run_dir / "references" / "layout-guides" / "walk.png") as guide:
+        colors = set(guide.convert("RGB").get_flattened_data())
+    assert (239, 68, 68) not in colors
+    assert (37, 99, 235) not in colors
+
+
+def test_prepare_reuses_approved_eight_frame_template_for_four_frame_left_walk(
+    tmp_path: Path,
+) -> None:
+    template_root = tmp_path / "templates"
+    template_root.mkdir()
+    master_path = template_root / "side-right.png"
+    master = Image.new("RGB", (1024, 512), "white")
+    for index in range(8):
+        column = index % 4
+        row = index // 4
+        color = (20 + index * 20, 40 + index * 10, 60 + index * 5)
+        Image.new("RGB", (256, 256), color).save(template_root / f"cell-{index}.png")
+        master.paste(color, (column * 256, row * 256, (column + 1) * 256, (row + 1) * 256))
+    master.save(master_path)
+    digest = hashlib.sha256(master_path.read_bytes()).hexdigest()
+    (template_root / "manifest.json").write_text(
+        json.dumps(
+            {
+                "templates": {
+                    "side-right": {
+                        "status": "approved",
+                        "view": "side",
+                        "facing": "right",
+                        "frames": 8,
+                        "grid": {"columns": 4, "rows": 2},
+                        "asset": "side-right.png",
+                        "sha256": digest,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    run_dir = tmp_path / "run"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(PREPARE),
+            "--out-dir",
+            str(run_dir),
+            "--character-id",
+            "hero",
+            "--motion-template-root",
+            str(template_root),
+            "--request-json",
+            json.dumps(
+                {
+                    "states": {
+                        "walk-left": {
+                            "frames": 4,
+                            "fps": 8,
+                            "loop": True,
+                            "action": "side-view walk left",
+                        }
+                    }
+                }
+            ),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    contract = json.loads(
+        (run_dir / "references" / "motion-reference-contracts" / "walk-left.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert contract["source"] == {
+        "mode": "approved-template",
+        "template_id": "side-right",
+        "mirrored": True,
+        "derived_frames": [0, 2, 4, 6],
+    }
+    output_path = run_dir / "references" / "motion-references" / "walk-left.png"
+    with Image.open(output_path) as output:
+        assert output.size == (512, 512)
+    provenance = json.loads(output_path.with_suffix(".provenance.json").read_text(encoding="utf-8"))
+    assert provenance["art_engine"] == "imagegen"
+    assert provenance["selected_source"] == "template:side-right"

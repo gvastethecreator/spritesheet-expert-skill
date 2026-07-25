@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "workflow": "sideview-walk",
+  "candidate": "candidate-006-real-character-transfer",
+  "status": "rejected_after_contact_sheet_review",
+  "source_motion_candidate": "../candidate-006-articulated-six-frame",
+  "character": "adult woman courier with short dark curls, mustard jacket, navy shirt, teal trousers, off-white sneakers and burgundy satchel",
+  "generation_order": [1, 6, 4, 2, 3, 5],
+  "frames": [
+    {"frame": 1, "phase": "contact_a", "status": "rejected_background_artifact", "source": "frames/frame-01.png"},
+    {"frame": 2, "phase": "down_a", "status": "rejected_pose_collapse", "source": "frames/frame-02.png", "references": [1, 4]},
+    {"frame": 3, "phase": "pass_b", "status": "usable_pose_but_sequence_rejected", "source": "frames/frame-03.png", "references": [2, 4]},
+    {"frame": 4, "phase": "contact_b", "status": "rejected_arm_counter_swing", "source": "frames/frame-04.png", "references": [1, 6]},
+    {"frame": 5, "phase": "down_b", "status": "rejected_pose_collapse", "source": "frames/frame-05.png", "references": [4, 6]},
+    {"frame": 6, "phase": "pass_a", "status": "usable_pose_but_sequence_rejected", "source": "frames/frame-06.png", "references": [1]}
+  ]
+}

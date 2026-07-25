@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "workflow": "idle-breath",
+  "asset_kind": "sprite",
+  "output_kind": "four-frame-loop",
+  "views": ["side", "front", "back"],
+  "frame_count": 4,
+  "generation_order": [1, 3, 2, 4],
+  "required_templates": ["directional-idle-anchor"],
+  "candidate_policy": "torso rhythm before secondary motion",
+  "review_artifacts": ["onion-skin", "playback", "identity-report.json"],
+  "hard_gates": ["feet-lock", "bbox-lock", "breath-rhythm", "secondary-delay", "loop-seam"],
+  "promotion": "subtle living motion without whole-body bob or scale drift"
+}

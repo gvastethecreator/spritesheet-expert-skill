@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "workflow": "vfx-sequence",
+  "asset_kind": "vfx",
+  "output_kind": "effect-sequence",
+  "views": ["screen-space", "world-space"],
+  "frame_count": 8,
+  "generation_order": [1, 4, 8, 2, 3, 5, 6, 7],
+  "required_templates": ["emitter-anchor", "peak-key", "decay-key"],
+  "candidate_policy": "buildup-peak-decay before inbetweens",
+  "review_artifacts": ["checker-playback", "dark-playback", "light-playback", "alpha-report.json"],
+  "hard_gates": ["emitter-lock", "peak-readability", "decay", "alpha-clean", "no-chroma-core", "loop-or-terminal-closure"],
+  "promotion": "effect reads at gameplay size without stealing focus or leaving alpha halos"
+}

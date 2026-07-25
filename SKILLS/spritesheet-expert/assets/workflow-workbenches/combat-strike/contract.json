@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "workflow": "combat-strike",
+  "asset_kind": "sprite",
+  "output_kind": "non-looping-action",
+  "views": ["side-right", "topdown-four-direction"],
+  "frame_count": 6,
+  "generation_order": [1, 3, 6, 2, 4, 5],
+  "required_templates": ["guard-anchor", "contact-key", "recovery-key"],
+  "candidate_policy": "startup-contact-recovery; quick and power strikes are separate candidates",
+  "review_artifacts": ["hit-frame-board", "range-overlay", "playback", "qa-verdict.json"],
+  "hard_gates": ["startup", "contact-silhouette", "motion-direction", "range-readability", "follow-through", "recovery", "weapon-handedness"],
+  "promotion": "contact is the strongest readable pose and recovery does not teleport"
+}

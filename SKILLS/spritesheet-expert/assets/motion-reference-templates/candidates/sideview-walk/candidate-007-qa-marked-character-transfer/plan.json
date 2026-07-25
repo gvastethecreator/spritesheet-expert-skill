@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "workflow": "sideview-walk",
+  "candidate": "candidate-007-qa-marked-character-transfer",
+  "status": "workbench_review_complete_candidate_not_approved",
+  "source_motion_candidate": "../candidate-006-articulated-six-frame",
+  "source_identity_candidate": "../candidate-006-real-character-transfer/frames/frame-03.png",
+  "purpose": "test whether a readable real character can preserve accepted mechanics before a harder unmarked costume transfer",
+  "character": "same adult woman courier, simplified fitted silhouette, no satchel, with permanent side-tracking wrist and shoe accents",
+  "tracking_markers": {
+    "anatomical_left_arm": "coral wrist band",
+    "anatomical_right_arm": "blue wrist band",
+    "anatomical_left_leg": "orange shoe accent",
+    "anatomical_right_leg": "green shoe accent"
+  },
+  "generation_order": [1, 6, 4, 2, 3, 5],
+  "hard_gates": [
+    "markers remain attached to the same anatomical side",
+    "pose silhouette agrees with the mechanics control",
+    "arms visibly counter-swing and reverse between opposite contacts",
+    "contacts and passing-foot clearance remain readable",
+    "head, torso, root, scale, framing and background remain stable",
+    "no generated ground line or shadow"
+  ],
+  "frames": [
+    {"frame": 1, "phase": "contact_a", "status": "selected", "source": "frames/frame-01.png", "references": ["identity", "mechanics-1"]},
+    {"frame": 2, "phase": "down_a", "status": "selected_after_intermediate_arm_correction", "source": "frames/frame-02.png", "references": [1, 3, "mechanics-2"]},
+    {"frame": 3, "phase": "pass_a", "status": "selected_after_stride_collapse_correction", "source": "frames/frame-03.png", "references": [2, 4, "mechanics-3"]},
+    {"frame": 4, "phase": "contact_b", "status": "selected", "source": "frames/frame-04.png", "references": [1, 6, "mechanics-4"]},
+    {"frame": 5, "phase": "down_b", "status": "selected_after_contact_and_intermediate_arm_corrections_requires_registration_profile", "source": "frames/frame-05.png", "references": [4, 6, "mechanics-5"]},
+    {"frame": 6, "phase": "pass_b", "status": "selected_after_contact_collapse_correction", "source": "frames/frame-06.png", "references": [1, "mechanics-6"]}
+  ]
+}

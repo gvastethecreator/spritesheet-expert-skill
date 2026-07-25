@@ -1,0 +1,120 @@
+{
+  "ok": true,
+  "kind": "imagegen-motion-sequence-review",
+  "frame_count": 6,
+  "columns": 3,
+  "rows": 2,
+  "cell_size": 512,
+  "sheet": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-007-qa-marked-character-transfer\\review-sheet.png",
+  "sheet_sha256": "2f5006c09d16aeb837a39395533f3ce869f8b00cd8ba55ea7aff606decbbfdfb",
+  "frames": [
+    {
+      "frame": 1,
+      "source": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-007-qa-marked-character-transfer\\frames\\frame-01.png",
+      "selected": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-007-qa-marked-character-transfer\\registered\\frame-01.png",
+      "source_baseline_y": 917,
+      "target_baseline_y": 917,
+      "translation_y": 0,
+      "subject_bbox": [
+        484,
+        45,
+        1031,
+        918
+      ],
+      "subject_width": 547,
+      "subject_height": 873,
+      "source_sha256": "dd45b1f70ef7168f005d9b76ee14510952a9138d34b3851576df1786ed1c4246",
+      "selected_sha256": "d7425a88c4723f2b8cc9fb26c98048434028f8b9b204b4142130caa975237e11"
+    },
+    {
+      "frame": 2,
+      "source": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-007-qa-marked-character-transfer\\frames\\frame-02.png",
+      "selected": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-007-qa-marked-character-transfer\\registered\\frame-02.png",
+      "source_baseline_y": 922,
+      "target_baseline_y": 917,
+      "translation_y": -5,
+      "subject_bbox": [
+        503,
+        54,
+        964,
+        918
+      ],
+      "subject_width": 461,
+      "subject_height": 864,
+      "source_sha256": "291a001a3d5b6c0e753e5b87ca569d80a64804f9847ad1e556eaa6a7ed4b4649",
+      "selected_sha256": "81d6c81fef2da489080a7963ed0b0c9feef5902f4d36ec50bd3ae9c63a59b337"
+    },
+    {
+      "frame": 3,
+      "source": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-007-qa-marked-character-transfer\\frames\\frame-03.png",
+      "selected": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-007-qa-marked-character-transfer\\registered\\frame-03.png",
+      "source_baseline_y": 920,
+      "target_baseline_y": 917,
+      "translation_y": -3,
+      "subject_bbox": [
+        570,
+        48,
+        1022,
+        918
+      ],
+      "subject_width": 452,
+      "subject_height": 870,
+      "source_sha256": "568c6ba3484884825c8e7622a8091341b270d38b68e1f224b395c272c90b8449",
+      "selected_sha256": "f40cc249abaf4b8b368796f312c51e84b28f5b340edfa81f0fc3ad3c18f02cb6"
+    },
+    {
+      "frame": 4,
+      "source": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-007-qa-marked-character-transfer\\frames\\frame-04.png",
+      "selected": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-007-qa-marked-character-transfer\\registered\\frame-04.png",
+      "source_baseline_y": 918,
+      "target_baseline_y": 917,
+      "translation_y": -1,
+      "subject_bbox": [
+        484,
+        44,
+        1028,
+        918
+      ],
+      "subject_width": 544,
+      "subject_height": 874,
+      "source_sha256": "63cf520624a914349644aef459db774a032febc7bc9e635a2bbf6a8d0edf7595",
+      "selected_sha256": "d266cfa20a2a3f377b72e2fdbf2613f7d1344ff99197b937d87b87bc07036ef9"
+    },
+    {
+      "frame": 5,
+      "source": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-007-qa-marked-character-transfer\\frames\\frame-05.png",
+      "selected": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-007-qa-marked-character-transfer\\registered\\frame-05.png",
+      "source_baseline_y": 914,
+      "target_baseline_y": 917,
+      "translation_y": 3,
+      "subject_bbox": [
+        525,
+        127,
+        1000,
+        918
+      ],
+      "subject_width": 475,
+      "subject_height": 791,
+      "source_sha256": "b3471e63df04ecfd6fe9c031e1a1c36c479ac1b993b33f36bf65c6499dabb8b8",
+      "selected_sha256": "0a472c1d8d7a591109064765e6791cf4a26fcb385ceb34a154ce403610f3a8f4"
+    },
+    {
+      "frame": 6,
+      "source": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-007-qa-marked-character-transfer\\frames\\frame-06.png",
+      "selected": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-007-qa-marked-character-transfer\\registered\\frame-06.png",
+      "source_baseline_y": 929,
+      "target_baseline_y": 917,
+      "translation_y": -12,
+      "subject_bbox": [
+        531,
+        31,
+        999,
+        918
+      ],
+      "subject_width": 468,
+      "subject_height": 887,
+      "source_sha256": "dcaeb85b48b0a92e25a657b87708be38f4108e718d29484c9c303c621d922d8b",
+      "selected_sha256": "89701730dab39e59daf9ca97fcfe48b4196a7237faaac8daa8ed7cace6efc980"
+    }
+  ]
+}

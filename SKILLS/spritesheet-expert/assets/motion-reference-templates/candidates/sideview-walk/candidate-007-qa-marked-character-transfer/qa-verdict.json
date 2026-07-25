@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "workflow": "sideview-walk",
+  "candidate": "candidate-007-qa-marked-character-transfer",
+  "verdict": "candidate_not_approved",
+  "reviewed_artifacts": [
+    "frames/frame-01.png",
+    "frames/frame-02.png",
+    "frames/frame-03.png",
+    "frames/frame-04.png",
+    "frames/frame-05.png",
+    "frames/frame-06.png",
+    "review-sheet.png",
+    "review-report.json",
+    "alignment-profile.json"
+  ],
+  "gates": [
+    {"gate": "six required phases are readable", "status": "pass"},
+    {"gate": "colored anatomical markers retain identity", "status": "pass"},
+    {"gate": "opposite contacts show counter-swing", "status": "pass"},
+    {"gate": "intermediate arms change position instead of only color", "status": "pass_after_imagegen_correction", "frames": [2, 5]},
+    {"gate": "feet share a stable registration baseline", "status": "pass_after_automatic_registration"},
+    {"gate": "character scale remains stable", "status": "pass_with_non_destructive_profile", "frames": [5]},
+    {"gate": "opposite passing poses have comparable foot clearance", "status": "fail", "frames": [3, 6], "reason": "Frame 6 still reads as a high-knee march compared with frame 3."},
+    {"gate": "loop is production-ready", "status": "fail", "reason": "The passing-pose asymmetry must be corrected in the mechanics control and then regenerated in the character transfer."}
+  ],
+  "next_action": "Correct mechanics frame 6 first; regenerate character frame 6 from corrected mechanics plus frames 5 and 1; repeat onion-skin and playback review."
+}

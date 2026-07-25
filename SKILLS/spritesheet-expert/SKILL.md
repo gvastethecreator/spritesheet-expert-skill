@@ -47,7 +47,9 @@ codex-handoff/
   logs/    # stdout/stderr tails from codex exec or adapters
 ```
 
-The app or runner may write a job JSON that points to `sprite-request.json`, `prompts/<state>.txt`, `references/layout-guides/<state>.png`, optional `references/identity-anchor.png`, and the expected output row. Codex, a manual operator, or a future provider should return a real image file to `outbox/` using the job id prefix. The runner then copies the accepted result into `raw/<state>.png` before extraction.
+The app or runner may write a job JSON that points to `sprite-request.json`, `prompts/<state>.txt`, `references/layout-guides/<state>.png`, optional `references/identity-anchor.png`, and the expected output row. Locomotion jobs must also point to the accepted `references/motion-references/<state>.png`. Codex, a manual operator, or a future provider should return a real image file to `outbox/` using the job id prefix. The runner then copies the accepted result into `raw/<state>.png` before extraction.
+
+Locomotion uses an approved reusable Image Gen template first. The canonical library lives at `assets/motion-reference-templates/`: five 8-frame masters cover side, front, back, three-quarter-front, and three-quarter-back views; left-facing variants are mirrored and 4/6-frame variants select protected phases from the 8-frame master. If no approved/hash-matching template exists, generate the neutral color-coded mannequin once from `prompts/motion-references/<state>.txt`, review it, and promote it into the library instead of regenerating it per character. Every run copy has adjacent provenance with `art_engine: "imagegen"`, matching `state`, and `selected_source`. Run `scripts/check_motion_references.py --run-dir /abs/run`; only after it passes may the runner submit the final character-row job. Never send the deterministic layout guide as a substitute motion/anatomy reference.
 
 Returned final row files should be named like `<jobId>-<state>.png|webp|jpg`. Do not place contact sheets, comparison sheets, preview grids, temp candidates, QA JSON, debug images, staging files, or work-in-progress files in the outbox root as final import candidates.
 
@@ -80,9 +82,11 @@ Completion criterion: atlas contract names asset kind, extraction mode, backgrou
    - Use `scripts/preset_to_request.py` and `scripts/prepare_sprite_run.py` for deterministic request/layout/art-direction setup.
    - Check `references/art-direction.json` after preparation. Wrong profiles or workflows mean fix the request before generation.
    - Animated body rows use compact raw grids by default (`raw_layout.kind: compact-grid`) and are assembled into runtime rows only after extraction/QA. Do not force imagegen to draw long raw `1xN` character strips unless the request explicitly opts into `raw_layout_policy: "legacy-strip"` for a low-risk/import compatibility run.
+   - Locomotion rows also produce `prompts/motion-references/<state>.txt`, a machine-readable contract, and a target under `references/motion-references/`. `prepare_sprite_run.py` materializes an approved template automatically when available; generation is only the cache miss path. The mannequin's fixed anatomical colors prove left/right limb continuity; they are motion evidence only and must not leak into character identity or style.
 
 3. Generate or import real row art.
    - Use `$imagegen` for generated user-facing art. Never substitute procedural drawings, placeholder drawings, SVGs, or PIL sheets for representative art.
+   - Before a locomotion row, run `scripts/check_motion_references.py --run-dir /abs/run`. A missing reference, undersized image, missing sidecar, or provenance other than `art_engine=imagegen` blocks row generation.
    - Write or preserve `source-provenance.json` with `art_engine: "imagegen"` and selected source paths before extraction. For existing user sheets, record imported/user-provided provenance and keep it separate from generated-art claims.
 
 4. Extract, curate, compose, preview, and QA.
