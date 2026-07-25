@@ -1,0 +1,37 @@
+Use case: scientific-educational
+Asset type: isolated motion-reference keyframe for a game walk cycle
+Primary request: Create only frame 1 of a six-frame in-place walk cycle: left-foot contact, strict side view facing right.
+
+Subject and construction:
+- One neutral, genderless, featureless minimalist 2D mannequin.
+- Warm-light-gray oval head; charcoal-gray tapered torso and pelvis.
+- Coral-red anatomical left arm; clear-blue anatomical right arm.
+- Amber-orange anatomical left leg; leaf-green anatomical right leg.
+- Capsule upper/lower limbs, small near-black circular joints, simple wedge feet.
+- Stable adult proportions, slender but not stick-like; crisp flat fills and one thin dark outline.
+
+Pose:
+- Orange anatomical left leg reaches moderately forward; left heel contacts the baseline and toes lift slightly.
+- Green anatomical right leg extends moderately behind; ball/toes contact the baseline.
+- Blue anatomical right arm swings forward.
+- Red anatomical left arm swings backward.
+- Torso stays upright with a subtle natural counter-rotation; pelvis is centered over the stride.
+- This is a relaxed ordinary walk contact pose, not a run, march, lunge, split, or fashion pose.
+
+Registration lock:
+- Square canvas.
+- Strict orthographic side view, always facing camera-right.
+- In-place animation: pelvis/root centered at exactly 50% of canvas width.
+- Shared horizontal foot baseline at 86% of canvas height.
+- Top of head near 14% of canvas height.
+- Full body occupies about 72% of canvas height with generous unchanged padding.
+- One thin light-gray registration baseline may span the complete canvas width; no other guide or ground plane.
+
+Backdrop and constraints:
+- Perfectly uniform off-white background.
+- Exactly one full-body mannequin, fully visible, no crop.
+- No text, labels, numbers, arrows, border, grid, scenery, cast shadow, contact shadow, reflection, gradient, texture, lighting effect, 3D rendering, clothing, hair, face, gender traits, muscles, accessories, watermark, or extra objects.
+- Do not swap anatomical colors, merge limbs, hide a leg, float either contacting foot, or change the side-view camera.
+- Mechanical clarity and reusable registration matter more than polish.
+
+Output only the single isolated frame image.

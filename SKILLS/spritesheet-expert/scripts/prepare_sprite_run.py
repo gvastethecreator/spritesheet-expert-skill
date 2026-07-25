@@ -10,6 +10,7 @@ these files instead of hand-copying frame counts into ad hoc prompts.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import re
@@ -122,6 +123,9 @@ ART_PROFILE_AUTO = "auto"
 PREPARE_KNOWN_OUTPUTS = (
     "prompts",
     "references/layout-guides",
+    "references/motion-reference-contracts",
+    "references/motion-references",
+    "references/motion-reference-plan.json",
     "references/art-direction.json",
     "frames",
     "qa",
@@ -712,6 +716,28 @@ RUN_PHASE_INDICES_BY_FRAME_COUNT = {
     8: list(range(8)),
 }
 
+RUN_PHASE_ANATOMY = [
+    "LEFT/ORANGE leg reaches forward with heel contacting; RIGHT/GREEN leg extends behind on toes; RIGHT/BLUE arm swings forward and LEFT/RED arm swings back",
+    "LEFT/ORANGE leg is the bent planted support under the pelvis; RIGHT/GREEN toes leave the ground behind; arms retain the same cross-lateral direction",
+    "LEFT/ORANGE leg is nearly vertical and planted; RIGHT/GREEN bent foot passes low beneath the pelvis; both arms pass close to neutral",
+    "LEFT/ORANGE leg extends behind on toes; RIGHT/GREEN knee swings only slightly forward with the foot low; LEFT/RED arm is forward and RIGHT/BLUE arm is back",
+    "RIGHT/GREEN leg reaches forward with heel contacting; LEFT/ORANGE leg extends behind on toes; LEFT/RED arm swings forward and RIGHT/BLUE arm swings back",
+    "RIGHT/GREEN leg is the bent planted support under the pelvis; LEFT/ORANGE toes leave the ground behind; arms retain the same cross-lateral direction",
+    "RIGHT/GREEN leg is nearly vertical and planted; LEFT/ORANGE bent foot passes low beneath the pelvis; both arms pass close to neutral",
+    "RIGHT/GREEN leg extends behind on toes; LEFT/ORANGE knee swings only slightly forward with the foot low; RIGHT/BLUE arm is forward and LEFT/RED arm is back",
+]
+
+MOTION_REFERENCE_PALETTE = {
+    "head": "flat warm light gray",
+    "torso_pelvis": "flat neutral charcoal gray",
+    "anatomical_left_arm": "flat coral red",
+    "anatomical_right_arm": "flat clear blue",
+    "anatomical_left_leg": "flat amber orange",
+    "anatomical_right_leg": "flat leaf green",
+    "joints": "small flat near-black circles",
+}
+DEFAULT_MOTION_TEMPLATE_ROOT = Path(__file__).resolve().parents[1] / "assets" / "motion-reference-templates"
+
 
 def parse_hex_color(value: str) -> tuple[int, int, int]:
     if not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
@@ -867,6 +893,8 @@ def is_locomotion_state(state: str, entry: dict[str, Any] | None = None) -> bool
     if "locomotion" in workflow_text:
         return True
     if re.search(r"(^|-)(walk|walking|run|running|move|moving|advance|retreat|dash|dashing)(-|$)", state.lower()):
+        return True
+    if any(token.endswith(("walk", "walking", "run", "running")) for token in tokens):
         return True
     return bool(tokens & {"walk", "walking", "run", "running", "move", "moving", "advance", "retreat", "dash", "dashing"})
 
@@ -1514,88 +1542,6 @@ def directional_requirements(state: str) -> list[str]:
     return requirements
 
 
-def mirrored_x(center_x: int, x: int, facing: str) -> int:
-    if facing == "left":
-        return center_x - (x - center_x)
-    return x
-
-
-def leg_points(root: tuple[int, int], pose: str, facing: str, scale: float) -> tuple[tuple[int, int], tuple[int, int]]:
-    root_x, root_y = root
-    forward = round(34 * scale)
-    back = round(32 * scale)
-    down = round(54 * scale)
-    bend = round(24 * scale)
-    lift = round(22 * scale)
-    if pose == "forward_straight":
-        knee = (root_x + round(forward * 0.45), root_y + round(down * 0.48))
-        foot = (root_x + forward, root_y + down)
-    elif pose == "back_extended":
-        knee = (root_x - round(back * 0.45), root_y + round(down * 0.48))
-        foot = (root_x - back, root_y + down)
-    elif pose == "under_bent":
-        knee = (root_x + round(bend * 0.2), root_y + round(down * 0.45))
-        foot = (root_x + round(bend * 0.55), root_y + round(down * 0.82))
-    elif pose == "back_bent":
-        knee = (root_x - round(bend * 0.65), root_y + round(down * 0.42))
-        foot = (root_x - round(bend * 0.2), root_y + round(down * 0.78))
-    elif pose == "passing_forward":
-        knee = (root_x + round(bend * 0.45), root_y + round(down * 0.35))
-        foot = (root_x + round(bend * 0.1), root_y + round(down * 0.63))
-    elif pose == "under_vertical":
-        knee = (root_x, root_y + round(down * 0.42))
-        foot = (root_x, root_y + round(down * 0.88))
-    elif pose == "forward_lifted":
-        knee = (root_x + round(forward * 0.45), root_y + round(down * 0.18))
-        foot = (root_x + round(forward * 0.7), root_y + round(down * 0.35))
-    elif pose == "back_lifted":
-        knee = (root_x - round(back * 0.45), root_y + round(down * 0.18))
-        foot = (root_x - round(back * 0.7), root_y + round(down * 0.35))
-    else:
-        knee = (root_x, root_y + round(down * 0.45))
-        foot = (root_x, root_y + down)
-    if facing == "left":
-        knee = (root_x - (knee[0] - root_x), knee[1])
-        foot = (root_x - (foot[0] - root_x), foot[1])
-    return knee, foot
-
-
-def draw_motion_phase(
-    draw: ImageDraw.ImageDraw,
-    slot_left: int,
-    slot_top: int,
-    cell_width: int,
-    cell_height: int,
-    phase: dict[str, Any],
-    facing: str,
-) -> None:
-    scale = min(cell_width / 192, cell_height / 208)
-    center_x = slot_left + cell_width // 2
-    hip_y = slot_top + round(cell_height * 0.52 + int(phase["body_y"]) * scale)
-    shoulder_y = hip_y - round(42 * scale)
-    head_y = shoulder_y - round(26 * scale)
-    hip = (center_x, hip_y)
-    shoulder = (center_x, shoulder_y)
-    head_bbox = (
-        center_x - round(11 * scale),
-        head_y - round(11 * scale),
-        center_x + round(11 * scale),
-        head_y + round(11 * scale),
-    )
-    draw.ellipse(head_bbox, outline="#6b7280", width=max(1, round(2 * scale)))
-    draw.line((shoulder, hip), fill="#6b7280", width=max(2, round(3 * scale)))
-    front_arm = (mirrored_x(center_x, center_x - round(26 * scale), facing), shoulder_y + round(30 * scale))
-    back_arm = (mirrored_x(center_x, center_x + round(26 * scale), facing), shoulder_y + round(18 * scale))
-    draw.line((shoulder, front_arm), fill="#94a3b8", width=max(1, round(2 * scale)))
-    draw.line((shoulder, back_arm), fill="#cbd5e1", width=max(1, round(2 * scale)))
-    front_knee, front_foot = leg_points(hip, str(phase["front_leg"]), facing, scale)
-    back_knee, back_foot = leg_points(hip, str(phase["back_leg"]), facing, scale)
-    draw.line((hip, front_knee, front_foot), fill="#ef4444", width=max(2, round(4 * scale)))
-    draw.line((hip, back_knee, back_foot), fill="#2563eb", width=max(2, round(4 * scale)))
-    ground_y = slot_top + round(cell_height * 0.52 + 54 * scale + int(phase["body_y"]) * scale)
-    draw.line((slot_left + round(34 * scale), ground_y, slot_left + cell_width - round(34 * scale), ground_y), fill="#cbd5e1", width=1)
-
-
 def jump_arc_offset(frame_index: int, frames: int, safe_height: int, peak_ratio: float) -> int:
     if frames <= 1:
         return 0
@@ -1732,7 +1678,6 @@ def draw_guide(
     frames: int,
     cell: dict[str, Any],
     request: dict[str, Any],
-    motion_phase_guides: bool = False,
     entry: dict[str, Any] | None = None,
     pose_geometry: dict[str, Any] | None = None,
     isometric_guides: bool = False,
@@ -1766,15 +1711,223 @@ def draw_guide(
             draw_pose_geometry(draw, left, top, index, frames, cell_width, cell_height, safe_margin_x, safe_margin_y, pose_geometry)
         if isometric_guides:
             draw_isometric_slot_guide(draw, request, entry, index, left, top, cell_width, cell_height, safe_margin_x, safe_margin_y)
-    if motion_phase_guides:
-        phases = state_motion_phases(state, frames, entry)
-        facing = "left" if state.endswith("left") else "right"
-        for index, phase in enumerate(phases):
-            column = index % columns
-            row = index // columns
-            draw_motion_phase(draw, column * cell_width, row * cell_height, cell_width, cell_height, phase, facing)
     path.parent.mkdir(parents=True, exist_ok=True)
     image.save(path)
+
+
+def motion_reference_contract(request: dict[str, Any], state: str, entry: dict[str, Any]) -> dict[str, Any] | None:
+    frames = int(entry["frames"])
+    phases = state_motion_phases(state, frames, entry)
+    if not phases or not request.get("motion_phase_guides"):
+        return None
+    columns, rows = raw_layout_grid(entry, frames)
+    view, facing = motion_reference_view(state, entry)
+    phase_indices = RUN_PHASE_INDICES_BY_FRAME_COUNT[frames]
+    return {
+        "version": 1,
+        "kind": "imagegen-motion-reference",
+        "state": state,
+        "required_before_row_generation": True,
+        "art_engine": "imagegen",
+        "role": "motion-and-anatomy-only",
+        "prompt": f"prompts/motion-references/{state}.txt",
+        "expected_output": f"references/motion-references/{state}.png",
+        "layout": {"columns": columns, "rows": rows, "order": "row-major", "frames": frames},
+        "view": view,
+        "facing": facing,
+        "palette": MOTION_REFERENCE_PALETTE,
+        "phase_sequence": [
+            {
+                "frame": index + 1,
+                "name": phase["name"],
+                "body_y": phase["body_y"],
+                "note": phase["note"],
+                "anatomy": RUN_PHASE_ANATOMY[phase_index],
+            }
+            for index, (phase_index, phase) in enumerate(zip(phase_indices, phases))
+        ],
+        "do_not_use_for": ["identity", "costume", "rendering-style", "palette", "character-proportions"],
+    }
+
+
+def motion_reference_prompt(request: dict[str, Any], state: str, entry: dict[str, Any]) -> str | None:
+    contract = motion_reference_contract(request, state, entry)
+    if contract is None:
+        return None
+    frames = int(entry["frames"])
+    columns = int(contract["layout"]["columns"])
+    rows = int(contract["layout"]["rows"])
+    phase_lines = "\n".join(
+        f"- Frame {item['frame']}: {item['name']} — {item['anatomy']}; {item['note']}."
+        for item in contract["phase_sequence"]
+    )
+    palette_lines = "\n".join(f"- {part}: {color}." for part, color in MOTION_REFERENCE_PALETTE.items())
+    view_instruction = {
+        "side": f"strict orthographic side view facing camera-{contract['facing']}",
+        "front": "strict orthographic front view walking toward the viewer",
+        "back": "strict orthographic back view walking away from the viewer",
+        "three-quarter-front": f"fixed 45-degree three-quarter-front view facing camera-{contract['facing']} and toward the viewer",
+        "three-quarter-back": f"fixed 45-degree three-quarter-back view facing camera-{contract['facing']} and away from the viewer",
+    }[str(contract["view"])]
+    return f"""Use case: scientific-educational
+Asset type: motion-reference image for a game spritesheet generator
+Primary request: Create a biomechanically correct {frames}-pose humanoid walk cycle in {view_instruction}.
+
+Subject:
+- One neutral, genderless, featureless 2D illustrated mannequin repeated in every slot.
+- Minimal flat graphic anatomy: oval head, simple tapered torso and pelvis, capsule upper/lower limbs, small circular joints, simple wedge feet.
+- Stable adult proportions and joint placement; identical body volume, line weight, and camera distance in all poses.
+
+Anatomical color key (the colors must remain attached to the same anatomical side in every frame, even when limbs overlap):
+{palette_lines}
+
+Motion and phase contract:
+{phase_lines}
+- Opposite arm and leg move together cross-laterally.
+- Show planted support, heel/toe roll, knee bend, pelvis rotation, shoulder counter-rotation, and a subtle head/pelvis vertical arc.
+- The two contact poses must use opposite support legs. Passing poses must visibly bring the swing foot beneath the pelvis.
+- Frame {frames} must flow cleanly back into frame 1 without a positional pop.
+- This is an ordinary relaxed walk, not running or marching: at least one foot touches the ground in every frame, feet stay low, knees never lift high, stride is moderate, and torso remains upright.
+
+Composition:
+- Exactly {frames} full-body poses in a strict {rows} by {columns} grid, row-major order.
+- One mannequin per invisible equal-sized slot, centered with generous padding and a shared ground baseline.
+- Keep the exact declared view in all frames. No camera orbit, perspective drift, projection change, cropping, or overlap between slots.
+- Crisp minimalist 2D instructional illustration on a uniform off-white background.
+- Flat fills plus one consistent thin dark outline. No internal texture or decorative rendering.
+
+Constraints:
+- This is a motion/anatomy reference, not character art. No clothing, hair, face, gender traits, muscles, skin texture, accessories, weapons, scenery, shadows, text, labels, numbers, arrows, borders, visible grid, watermark, or decorative effects.
+- No 3D render, photorealism, gradients, volumetric shading, cast shadows, glossy plastic, bevels, depth-of-field, or floor plane.
+- Do not stylize as a wooden artist mannequin, skeleton, stick figure, robot, toy, superhero, anime character, or realistic nude person.
+- Do not change limb colors between frames and do not merge both legs or both arms into one silhouette.
+- Reject duplicate poses, high-knee poses, same-side arm/leg swing, swapped limb colors, floating feet, or a planted foot that changes side unexpectedly.
+Output only the reference image."""
+
+
+def motion_reference_view(state: str, entry: dict[str, Any]) -> tuple[str, str]:
+    descriptor = request_descriptor({}, state, entry)
+    side = "left" if "left" in descriptor else "right"
+    if "front" in descriptor and side in descriptor:
+        return "three-quarter-front", side
+    if "back" in descriptor and side in descriptor:
+        return "three-quarter-back", side
+    if "front" in descriptor:
+        return "front", "center"
+    if "back" in descriptor:
+        return "back", "center"
+    return "side", side
+
+
+def load_motion_template_catalog(root: Path) -> dict[str, Any]:
+    catalog_path = root / "manifest.json"
+    if not catalog_path.is_file():
+        return {"templates": {}}
+    try:
+        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"cannot read motion template catalog {catalog_path}: {exc}") from exc
+    if not isinstance(catalog, dict) or not isinstance(catalog.get("templates"), dict):
+        raise SystemExit(f"motion template catalog must contain a templates object: {catalog_path}")
+    return catalog
+
+
+def choose_motion_template(
+    catalog: dict[str, Any], state: str, entry: dict[str, Any]
+) -> tuple[str, dict[str, Any], bool] | None:
+    view, facing = motion_reference_view(state, entry)
+    candidates: list[tuple[str, dict[str, Any], bool]] = []
+    for template_id, template in catalog.get("templates", {}).items():
+        if not isinstance(template, dict) or template.get("status") != "approved":
+            continue
+        if template.get("view") != view or int(template.get("frames", 0)) != 8:
+            continue
+        template_facing = str(template.get("facing", "center"))
+        if facing == template_facing:
+            candidates.append((str(template_id), template, False))
+        elif view in {"side", "three-quarter-front", "three-quarter-back"} and {facing, template_facing} == {"left", "right"}:
+            candidates.append((str(template_id), template, True))
+    return candidates[0] if candidates else None
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def materialize_motion_reference_template(
+    template_root: Path,
+    catalog: dict[str, Any],
+    run_dir: Path,
+    state: str,
+    entry: dict[str, Any],
+    contract: dict[str, Any],
+) -> dict[str, Any] | None:
+    selected = choose_motion_template(catalog, state, entry)
+    if selected is None:
+        return None
+    template_id, template, mirror = selected
+    source = (template_root / str(template.get("asset", ""))).resolve()
+    if template_root.resolve() not in source.parents or not source.is_file():
+        return None
+    expected_sha = str(template.get("sha256", ""))
+    actual_sha = sha256_file(source)
+    if not expected_sha or actual_sha != expected_sha:
+        raise SystemExit(f"motion template hash mismatch for {template_id}: {source}")
+
+    source_grid = template.get("grid", {})
+    source_columns = int(source_grid.get("columns", 4))
+    source_rows = int(source_grid.get("rows", 2))
+    phase_indices = RUN_PHASE_INDICES_BY_FRAME_COUNT.get(int(entry["frames"]))
+    if not phase_indices:
+        return None
+    target_columns = int(contract["layout"]["columns"])
+    target_rows = int(contract["layout"]["rows"])
+    with Image.open(source) as opened:
+        master = opened.convert("RGB")
+        if master.width % source_columns or master.height % source_rows:
+            raise SystemExit(f"motion template grid is not evenly divisible for {template_id}: {master.size}")
+        cell_width = master.width // source_columns
+        cell_height = master.height // source_rows
+        output = Image.new("RGB", (target_columns * cell_width, target_rows * cell_height), "#F4F4F2")
+        for output_index, phase_index in enumerate(phase_indices):
+            source_column = phase_index % source_columns
+            source_row = phase_index // source_columns
+            frame = master.crop(
+                (
+                    source_column * cell_width,
+                    source_row * cell_height,
+                    (source_column + 1) * cell_width,
+                    (source_row + 1) * cell_height,
+                )
+            )
+            if mirror:
+                frame = frame.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+            target_column = output_index % target_columns
+            target_row = output_index // target_columns
+            output.paste(frame, (target_column * cell_width, target_row * cell_height))
+
+    output_path = run_dir / str(contract["expected_output"])
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output.save(output_path)
+    provenance = {
+        "version": 1,
+        "kind": "motion-reference-provenance",
+        "art_engine": "imagegen",
+        "state": state,
+        "selected_source": f"template:{template_id}",
+        "template_asset": str(template.get("asset")),
+        "template_sha256": actual_sha,
+        "derived_frames": phase_indices,
+        "mirrored": mirror,
+    }
+    output_path.with_suffix(".provenance.json").write_text(
+        json.dumps(provenance, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    return {"template_id": template_id, "mirrored": mirror, "derived_frames": phase_indices}
 
 
 def row_prompt(request: dict[str, Any], state: str, entry: dict[str, Any]) -> str:
@@ -1844,9 +1997,11 @@ def row_prompt(request: dict[str, Any], state: str, entry: dict[str, Any]) -> st
         ]
         phase_prompt_text = (
             "\n\nMotion phase requirements:\n"
-            "- The layout guide includes simple stick-pose motion hints inside each slot. Use those hints only for body height, foot contact, and leg phase. Do not copy guide colors or guide lines into the artwork.\n"
+            f"- A separate Image Gen motion reference is required at `references/motion-references/{state}.png`. Use it for body mechanics, foot contact, anatomical side, counter-swing, and phase timing only.\n"
+            "- The color-coded neutral mannequin is not an identity or style reference. Transfer its pose logic to the accepted character anchor; never copy mannequin colors, featureless anatomy, or rendering style into the sprite.\n"
+            "- The deterministic layout guide is geometry-only. It does not provide anatomy or motion quality and must never substitute for the Image Gen motion reference.\n"
             "- Make the sequence loop as one continuous locomotion cycle, not eight unrelated poses.\n"
-            "- The motion phase guide and any multi-pose contact sheet override a single running/walking pose anchor for leg phase. Do not repeat one anchor's forward leg across every frame.\n"
+            "- The Image Gen motion reference and any approved multi-pose contact sheet override a single running/walking pose anchor for leg phase. Do not repeat one anchor's forward leg across every frame.\n"
             "- Opposite contact frames must visibly trade which leg reaches forward; passing frames must not look like duplicate contact frames.\n"
             "- If the character has tiny legs, exaggerated feet, or non-human limbs, still alternate contact side, body weight, and swing timing. Never keep both feet leaning the same way for every frame.\n"
             + "\n".join(phase_lines)
@@ -1928,7 +2083,8 @@ def row_prompt(request: dict[str, Any], state: str, entry: dict[str, Any]) -> st
         reference_contract = (
             "Use the attached accepted idle/direction anchor as the canonical character design for this row. "
             "If a state anchor is attached for a non-locomotion state, treat it as approved state vocabulary only. "
-            "Use the attached layout guide image only for frame count, slot spacing, centering, scale, baseline/airborne placement, and safe padding. "
+            "Use the attached layout guide image only for frame count, slot spacing, centering, scale, baseline/airborne placement, and safe padding; it is never an anatomy or motion-quality reference. "
+            "For locomotion, the separately attached Image Gen neutral-mannequin reference is authoritative for gait phase and body mechanics only. "
             "If an additional generated row strip is attached, use it only as a motion reference, never as a replacement identity source. "
             "Do not simply copy the still reference pose. Generate distinct animation poses that create a readable cycle or action."
         )
@@ -2019,7 +2175,7 @@ Layout requirements:
 - Exactly {frames} {slot_fill}s arranged as {layout_shape}.
 - Use row-major order: fill the first row left-to-right, then the next row left-to-right until all requested frames are present.
 - {layout_delivery_note}
-- The attached layout guide shows the {frames} frame boxes, inner safe area, optional orange pose scale/baseline boxes, and optional motion phase hints for this layout. Follow its slot count, spacing, centering, scale, padding, baseline/airborne placement, and phase timing.
+- The attached deterministic layout guide shows only frame geometry: boxes, inner safe area, and optional orange pose scale/baseline boxes. Follow its slot count, spacing, centering, scale, padding, and baseline/airborne placement.
 - Do not reproduce the layout guide itself: no visible boxes, guide lines, center marks, labels, stick figures, guide colors, or guide background may appear in the output.
 - Treat the image as {frames} equal-width invisible {runtime_size} frame slots. Fill every slot: each requested slot must contain exactly one {slot_fill}.
 - Spread the {frames} items evenly across the declared layout. Do not leave any requested slot blank or create large empty gaps between slots.
@@ -2054,7 +2210,17 @@ def main() -> int:
     parser.add_argument("--background-device", default=None, help="model-backed background removal device: auto, cpu, cuda, cuda:0, etc.")
     parser.add_argument("--alpha-matting", dest="alpha_matting", action="store_true", default=None)
     parser.add_argument("--no-alpha-matting", dest="alpha_matting", action="store_false")
-    parser.add_argument("--motion-phase-guides", action="store_true", help="draw simple per-frame motion phase hints into locomotion layout guides")
+    parser.add_argument(
+        "--motion-phase-guides",
+        action="store_true",
+        help="prepare Image Gen motion-reference prompts/contracts for locomotion rows (legacy flag name)",
+    )
+    parser.add_argument(
+        "--motion-template-root",
+        type=Path,
+        default=DEFAULT_MOTION_TEMPLATE_ROOT,
+        help="approved reusable Image Gen motion-reference template library",
+    )
     parser.add_argument("--art-direction", choices=sorted(ART_DIRECTION_MODES), default=None, help="add Pixel-art direction or disable it")
     parser.add_argument("--art-profile", action="append", choices=sorted(ART_PROFILE_CHOICES), help="repeatable Pixel-art profile id; use auto for inferred profiles")
     parser.add_argument("--request", type=Path)
@@ -2063,6 +2229,8 @@ def main() -> int:
     args = parser.parse_args()
 
     out_dir = args.out_dir.expanduser().resolve()
+    motion_template_root = args.motion_template_root.expanduser().resolve()
+    motion_template_catalog = load_motion_template_catalog(motion_template_root)
     if out_dir.exists() and any(out_dir.iterdir()) and not args.force:
         raise SystemExit(f"output dir exists and is not empty: {out_dir}; pass --force")
 
@@ -2130,6 +2298,7 @@ def main() -> int:
         "style_preset": style_preset,
         "style": style,
         "motion_phase_guides": wants_motion_phase_guides(raw_request, states, args.motion_phase_guides),
+        "motion_reference_policy": "imagegen-color-coded-mannequin-v1",
         "art_direction": art_direction,
         "raw_layout_policy": str(raw_request.get("raw_layout_policy", "compact-body-grids")),
     }
@@ -2169,11 +2338,29 @@ def main() -> int:
     references = out_dir / "references" / "layout-guides"
     reference_root = out_dir / "references"
     prompts = out_dir / "prompts"
+    motion_reference_prompts = prompts / "motion-references"
+    motion_reference_contracts = reference_root / "motion-reference-contracts"
+    motion_references = reference_root / "motion-references"
     raw = out_dir / "raw"
     frames = out_dir / "frames"
-    for directory in (reference_root, references, prompts, raw, frames):
+    for directory in (
+        reference_root,
+        references,
+        prompts,
+        motion_reference_prompts,
+        motion_reference_contracts,
+        motion_references,
+        raw,
+        frames,
+    ):
         directory.mkdir(parents=True, exist_ok=True)
 
+    motion_reference_plan: dict[str, Any] = {
+        "version": 1,
+        "kind": "imagegen-motion-reference-plan",
+        "policy": request["motion_reference_policy"],
+        "rows": {},
+    }
     for state, entry in states.items():
         draw_guide(
             references / f"{state}.png",
@@ -2181,12 +2368,38 @@ def main() -> int:
             int(entry["frames"]),
             cell,
             request,
-            motion_phase_guides=bool(request["motion_phase_guides"]),
             entry=entry,
             pose_geometry=state_pose_geometry(state, entry) if asset_kind == "sprite" else None,
             isometric_guides=asset_kind != "sprite" and "pixel-isometric" in active_art_profiles(request, state, entry, asset_kind),
         )
         (prompts / f"{state}.txt").write_text(row_prompt(request, state, entry).rstrip() + "\n", encoding="utf-8")
+        reference_contract = motion_reference_contract(request, state, entry)
+        reference_prompt = motion_reference_prompt(request, state, entry)
+        if reference_contract is not None and reference_prompt is not None:
+            (motion_reference_prompts / f"{state}.txt").write_text(reference_prompt.rstrip() + "\n", encoding="utf-8")
+            materialized = materialize_motion_reference_template(
+                motion_template_root,
+                motion_template_catalog,
+                out_dir,
+                state,
+                entry,
+                reference_contract,
+            )
+            reference_contract["source"] = (
+                {"mode": "approved-template", **materialized}
+                if materialized is not None
+                else {"mode": "generate-once", "status": "pending"}
+            )
+            (motion_reference_contracts / f"{state}.json").write_text(
+                json.dumps(reference_contract, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            motion_reference_plan["rows"][state] = reference_contract
+
+    (reference_root / "motion-reference-plan.json").write_text(
+        json.dumps(motion_reference_plan, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
     (reference_root / "art-direction.json").write_text(
         json.dumps(art_direction_summary(request, states, asset_kind), ensure_ascii=False, indent=2) + "\n",

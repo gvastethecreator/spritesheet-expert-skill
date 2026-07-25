@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "workflow": "sideview-walk",
+  "candidate": "candidate-005-organic-six-frame",
+  "status": "rejected_recolored_static_geometry",
+  "frame_count": 6,
+  "mannequin": "continuous softly anatomical 2D figure without capsule segments or circular joint markers",
+  "frames": [
+    { "frame": 1, "phase": "left_contact", "references": [], "status": "selected", "source": "frames/frame-01.png", "asset": "selected/frame-01.png" },
+    { "frame": 2, "phase": "left_down", "references": [1, 4], "status": "selected", "source": "frames/frame-02.png", "asset": "selected/frame-02.png" },
+    { "frame": 3, "phase": "left_pass_up", "references": [2, 4], "status": "selected_after_leg_correction", "source": "frames/frame-03-v2.png", "asset": "selected/frame-03.png" },
+    { "frame": 4, "phase": "right_contact", "references": [1, 6], "status": "selected", "source": "frames/frame-04.png", "asset": "selected/frame-04.png" },
+    { "frame": 5, "phase": "right_down", "references": [4, 6], "status": "selected", "source": "frames/frame-05.png", "asset": "selected/frame-05.png" },
+    { "frame": 6, "phase": "right_pass_up", "references": [1], "status": "selected_after_leg_correction", "source": "frames/frame-06-v2.png", "asset": "selected/frame-06.png" }
+  ],
+  "generation_order": [1, 6, 4, 2, 3, 5]
+}

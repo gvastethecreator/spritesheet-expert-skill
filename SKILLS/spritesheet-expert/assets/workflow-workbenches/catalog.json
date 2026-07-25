@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "kind": "spritesheet-workflow-workbench-catalog",
+  "workbenches": {
+    "sideview-walk": {
+      "status": "active",
+      "family": "character-locomotion",
+      "contract": "sideview-walk/contract.json",
+      "candidate_root": "../motion-reference-templates/candidates/sideview-walk"
+    },
+    "walk-view-transfer": {
+      "status": "blocked",
+      "blocked_by": "sideview-walk",
+      "family": "character-locomotion",
+      "contract": "walk-view-transfer/contract.json",
+      "candidate_root": "../motion-reference-templates/candidates/view-transfer"
+    },
+    "sideview-run": {
+      "status": "blocked",
+      "blocked_by": "sideview-walk",
+      "family": "character-locomotion",
+      "contract": "sideview-run/contract.json",
+      "candidate_root": "../motion-reference-templates/candidates/sideview-run"
+    },
+    "idle-breath": {
+      "status": "blocked",
+      "blocked_by": "sideview-run",
+      "family": "character-idle",
+      "contract": "idle-breath/contract.json",
+      "candidate_root": "candidates/idle-breath"
+    },
+    "responsive-jump": {
+      "status": "blocked",
+      "blocked_by": "idle-breath",
+      "family": "character-action",
+      "contract": "responsive-jump/contract.json",
+      "candidate_root": "candidates/responsive-jump"
+    },
+    "combat-strike": {
+      "status": "blocked",
+      "blocked_by": "responsive-jump",
+      "family": "character-combat",
+      "contract": "combat-strike/contract.json",
+      "candidate_root": "candidates/combat-strike"
+    },
+    "vfx-sequence": {
+      "status": "blocked",
+      "blocked_by": "combat-strike",
+      "family": "vfx",
+      "contract": "vfx-sequence/contract.json",
+      "candidate_root": "candidates/vfx-sequence"
+    },
+    "static-sprite-set": {
+      "status": "blocked",
+      "blocked_by": "sideview-walk",
+      "family": "static-assets",
+      "contract": "static-sprite-set/contract.json",
+      "candidate_root": "candidates/static-sprite-set"
+    }
+  }
+}

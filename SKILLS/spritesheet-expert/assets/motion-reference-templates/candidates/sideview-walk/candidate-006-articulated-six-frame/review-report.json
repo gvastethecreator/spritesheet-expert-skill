@@ -1,0 +1,120 @@
+{
+  "ok": true,
+  "kind": "imagegen-motion-sequence-review",
+  "frame_count": 6,
+  "columns": 3,
+  "rows": 2,
+  "cell_size": 512,
+  "sheet": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-006-articulated-six-frame\\review-sheet.png",
+  "sheet_sha256": "a245fb440f682b9f23286d58c8594625951fafdfc20336fbbf29756c0019dabf",
+  "frames": [
+    {
+      "frame": 1,
+      "source": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-006-articulated-six-frame\\frames\\frame-01.png",
+      "selected": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-006-articulated-six-frame\\selected\\frame-01.png",
+      "source_baseline_y": 915,
+      "target_baseline_y": 915,
+      "translation_y": 0,
+      "subject_bbox": [
+        454,
+        31,
+        1019,
+        912
+      ],
+      "subject_width": 565,
+      "subject_height": 881,
+      "source_sha256": "157c07a7d333b0b3de62ad5b154ec5f29802f05c1fc22672acee7b6b8594777d",
+      "selected_sha256": "3bec0592e78dc827fe69bde6a102f354e096fb4e7d52a1c90e32a80adead498d"
+    },
+    {
+      "frame": 2,
+      "source": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-006-articulated-six-frame\\frames\\frame-02-v2.png",
+      "selected": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-006-articulated-six-frame\\selected\\frame-02.png",
+      "source_baseline_y": 915,
+      "target_baseline_y": 915,
+      "translation_y": 0,
+      "subject_bbox": [
+        445,
+        36,
+        949,
+        912
+      ],
+      "subject_width": 504,
+      "subject_height": 876,
+      "source_sha256": "fbf0a6465ab875830dd100b50ff90a8ddb84dbb9a6e48c3229513f2d81d05881",
+      "selected_sha256": "388c8d5b738293429053c3aebaa681d1b235d4fcbc61f7ef8b06314ffb15e7fc"
+    },
+    {
+      "frame": 3,
+      "source": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-006-articulated-six-frame\\frames\\frame-03.png",
+      "selected": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-006-articulated-six-frame\\selected\\frame-03.png",
+      "source_baseline_y": 915,
+      "target_baseline_y": 915,
+      "translation_y": 0,
+      "subject_bbox": [
+        567,
+        36,
+        985,
+        912
+      ],
+      "subject_width": 418,
+      "subject_height": 876,
+      "source_sha256": "b3a847c92406b9477540c74163208b5c1df237d46ad24d595f4fa7a973aa8c72",
+      "selected_sha256": "0e54f4975dec308b3b10c0a24eb2456815f5ed27c951a984049a45b32b815918"
+    },
+    {
+      "frame": 4,
+      "source": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-006-articulated-six-frame\\frames\\frame-04.png",
+      "selected": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-006-articulated-six-frame\\selected\\frame-04.png",
+      "source_baseline_y": 915,
+      "target_baseline_y": 915,
+      "translation_y": 0,
+      "subject_bbox": [
+        448,
+        33,
+        1033,
+        912
+      ],
+      "subject_width": 585,
+      "subject_height": 879,
+      "source_sha256": "d70601bd6ec5188de51227309e85ac17accb614d0e572aa27f236337e8416e44",
+      "selected_sha256": "5d918ac0066249f5978b826e7a2fc38e8ad35a323e7f7a49a9875aae81214114"
+    },
+    {
+      "frame": 5,
+      "source": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-006-articulated-six-frame\\frames\\frame-05-v2.png",
+      "selected": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-006-articulated-six-frame\\selected\\frame-05.png",
+      "source_baseline_y": 915,
+      "target_baseline_y": 915,
+      "translation_y": 0,
+      "subject_bbox": [
+        470,
+        70,
+        983,
+        912
+      ],
+      "subject_width": 513,
+      "subject_height": 842,
+      "source_sha256": "271630c0359ffbc0bd81c8dbaeaf1213a0784b5c087866a4b74bb2178c087850",
+      "selected_sha256": "8f8766d6b1655437e648588b683f3826f39dd2dae7425cc1ccbab4f09ceda7e0"
+    },
+    {
+      "frame": 6,
+      "source": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-006-articulated-six-frame\\frames\\frame-06.png",
+      "selected": "D:\\DEV\\spritesheet-expert-skill\\SKILLS\\spritesheet-expert\\assets\\motion-reference-templates\\candidates\\sideview-walk\\candidate-006-articulated-six-frame\\selected\\frame-06.png",
+      "source_baseline_y": 915,
+      "target_baseline_y": 915,
+      "translation_y": 0,
+      "subject_bbox": [
+        506,
+        31,
+        1005,
+        912
+      ],
+      "subject_width": 499,
+      "subject_height": 881,
+      "source_sha256": "d2127a81e669d74d51965cea0bc1c1e69054dffdbfc32553a55c76d264e968c6",
+      "selected_sha256": "33268e5b191f72d49de7136749cd62aadddc0e1a52103c700cb9cdb9632ab3a4"
+    }
+  ]
+}

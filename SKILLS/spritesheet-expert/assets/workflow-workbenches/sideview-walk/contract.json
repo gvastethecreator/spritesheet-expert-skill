@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "workflow": "sideview-walk",
+  "asset_kind": "sprite",
+  "output_kind": "six-frame-loop",
+  "views": ["side-right"],
+  "frame_count": 6,
+  "generation_order": [1, 6, 4, 2, 3, 5],
+  "required_templates": ["mechanics-mannequin", "identity-anchor", "real-character-transfer"],
+  "candidate_policy": "one-frame-per-imagegen-call",
+  "review_artifacts": ["review-sheet.png", "review-report.json", "alignment-profile.json", "motion-report.json", "html-playback", "qa-verdict.json"],
+  "hard_gates": ["opposite-contacts", "passing-foot-clearance", "arm-counter-swing", "root-lock", "scale-lock", "background-clean", "loop-seam", "identity-transfer"],
+  "promotion": "mechanics, playback and real-character transfer must all pass"
+}
