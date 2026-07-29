@@ -1,4 +1,4 @@
 interface:
   display_name: "Spritesheet Expert"
   short_description: "Build and validate professional sprite atlases"
-  default_prompt: "Use $spritesheet-expert to create a top-down tileset atlas preset."
+  default_prompt: "Use $spritesheet-expert to choose and execute the right sprite, tileset, texture, or atlas pipeline with provenance and QA."

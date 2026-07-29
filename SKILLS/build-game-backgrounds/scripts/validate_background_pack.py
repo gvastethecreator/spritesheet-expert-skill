@@ -10,16 +10,15 @@ import os
 from pathlib import Path
 import tempfile
 
-from background_pack import (
-    BackgroundPackError,
-    resolve_pack_path,
-    validate_background_pack,
-)
+class _CommandLineError(ValueError):
+    def __init__(self, message: str) -> None:
+        self.issues = (message,)
+        super().__init__(message)
 
 
 class _Parser(argparse.ArgumentParser):
     def error(self, message: str) -> None:
-        raise BackgroundPackError([f"command line: {message}"])
+        raise _CommandLineError(f"command line: {message}")
 
 
 def _failure(message: str) -> dict[str, object]:
@@ -78,7 +77,12 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _source_paths(document: Mapping[str, object], root: Path) -> set[Path]:
+def _source_paths(
+    document: Mapping[str, object],
+    root: Path,
+    resolve_path: object,
+    contract_error: type[Exception],
+) -> set[Path]:
     paths: set[Path] = set()
     layers = document.get("layers")
     if not isinstance(layers, list):
@@ -90,8 +94,8 @@ def _source_paths(document: Mapping[str, object], root: Path) -> set[Path]:
         if not isinstance(value, str):
             continue
         try:
-            paths.add(resolve_pack_path(root, value))
-        except BackgroundPackError:
+            paths.add(resolve_path(root, value))  # type: ignore[operator]
+        except contract_error:
             continue
     return paths
 
@@ -99,8 +103,25 @@ def _source_paths(document: Mapping[str, object], root: Path) -> set[Path]:
 def main(argv: Sequence[str] | None = None) -> int:
     try:
         args = _parse(argv)
-    except BackgroundPackError as exc:
+    except _CommandLineError as exc:
         return _write_report(None, _failure("; ".join(exc.issues)), 1)
+
+    try:
+        from background_pack import (
+            BackgroundPackError,
+            resolve_pack_path,
+            validate_background_pack,
+        )
+    except ModuleNotFoundError as exc:
+        dependency = exc.name or "required package"
+        return _write_report(
+            None,
+            _failure(
+                f"missing runtime dependency '{dependency}'; from the repository "
+                "root run: python -m pip install -e ."
+            ),
+            3,
+        )
 
     pack_path = args.pack.expanduser().resolve()
     root = args.root.expanduser().resolve() if args.root else pack_path.parent
@@ -135,7 +156,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             _failure("pack document root must be an object"),
             1,
         )
-    if report_path in _source_paths(document, root):
+    if report_path in _source_paths(
+        document, root, resolve_pack_path, BackgroundPackError
+    ):
         return _write_report(
             None,
             _failure("report output path must not overwrite a layer input"),

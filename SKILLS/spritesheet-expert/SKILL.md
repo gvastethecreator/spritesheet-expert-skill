@@ -33,7 +33,7 @@ Before final QA or packaging, run `scripts/check_generation_provenance.py --run-
 
 When `$imagegen` outputs are meant for the project, copy or move the selected generated image from the default generated-images location into the run folder before extraction. Do not leave project-referenced row art only under `$CODEX_HOME`.
 
-Requires Python with Pillow available. `rembg` is optional for local model-backed background removal.
+Requires Python with Pillow and jsonschema. From the repository root run `python -m pip install -e .`, then `python scripts/check_python_env.py`; use `python -m pip install -e ".[test]"` for the complete test gate. `rembg` remains optional for local model-backed background removal.
 
 ## Local Handoff Runner Contract
 

@@ -2,17 +2,18 @@
 
 ![Spritesheet Expert banner](./assets/readme-banner.png)
 
-> Codex skill pack for building, extracting, curating, and QAing spritesheets, tilesets, and game asset atlases.
+> Codex skill pack for producing and validating sprites, static assets, backgrounds, UI kits, mockups, and coherent multi-family 2D deliveries.
 
 [![License: MIT](https://shieldcn.dev/badge/license-MIT-yellow.svg?variant=secondary&size=xs)](./LICENSE)
 [![Status](https://shieldcn.dev/badge/status-preview-purple.svg?variant=secondary&size=xs)](#status)
 
-Spritesheet Expert turns a sprite request into a repeatable atlas pipeline: prompts, layout guides, extraction, transparent frames, previews, manifests, and QA checks. It is designed for game assets where consistency, provenance, and frame alignment matter more than a one-off image.
+The suite turns game-art requests into repeatable, hash-backed pipelines. Use the focused leaf skills for one asset family and `produce-2d-assets` when a delivery spans several families.
 
 - Prepare structured sprite and tileset runs from presets or custom contracts.
 - Extract frames from generated or imported source sheets.
 - Compose atlas PNGs, manifests, previews, GIFs, and curation exports.
 - Run checks for provenance, identity, alignment, animation contracts, and tileset placement.
+- Validate static props, layered backgrounds, raster UI states, presentation truth, and aggregate delivery manifests.
 - Keep visual generation separate from deterministic pipeline work.
 
 ## Quick Install
@@ -25,12 +26,21 @@ npx skills add gvastethecreator/spritesheet-expert-skill
 
 Or download this repo and ask Codex to install `spritesheet-expert` in your workspace.
 
+Skills CLI publishes six packages: `produce-2d-assets`, `spritesheet-expert`, `build-static-game-assets`, `build-game-backgrounds`, `build-game-ui-kits`, and `compose-asset-mockups`.
+
 ## Useful Commands
 
 Smoke test the deterministic pipeline:
 
 ```powershell
 python .\SKILLS\spritesheet-expert\scripts\smoke_pipeline.py
+```
+
+Prepare the pinned Python environment and check it:
+
+```powershell
+npm run setup:test
+npm run doctor:test
 ```
 
 The smoke test uses fixtures. Representative game art still requires real generated or imported source images.
@@ -54,14 +64,16 @@ npm run check
 - [`references/`](./SKILLS/spritesheet-expert/references): atlas, pixel art, animation, isometric, workflow, and QA notes.
 - [`scripts/`](./SKILLS/spritesheet-expert/scripts): extraction, curation, composition, preview, and validation helpers.
 - [`agents/openai.yaml`](./SKILLS/spritesheet-expert/agents/openai.yaml): optional agent metadata.
+- [`SKILLS/`](./SKILLS/README.md): routing and commands for all six published skills.
 
 ## Status
 
-Preview skill pack.
+Validated multi-skill pack.
 
 - Local smoke pipeline is available.
 - Optional background-removal dependencies are intentionally not bundled.
 - Generated sample art is not included by default; bring your own licensed source images.
+- Rejected motion-reference candidates remain in repository-only `maintenance/` evidence and are never copied into an installed skill.
 
 ## License
 

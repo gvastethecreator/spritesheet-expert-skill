@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
+import sys
 from types import ModuleType
 
 from jsonschema import Draft202012Validator
@@ -47,6 +49,14 @@ LEAF_SCHEMAS = (
     / "schemas"
     / "ui-kit-v1.schema.json",
 )
+HELP_SCRIPTS = (
+    *LEAF_SCRIPTS,
+    REPO_ROOT
+    / "SKILLS"
+    / "produce-2d-assets"
+    / "scripts"
+    / "validate_asset_pack.py",
+)
 
 
 def _load_script(path: Path) -> ModuleType:
@@ -55,6 +65,20 @@ def _load_script(path: Path) -> ModuleType:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+@pytest.mark.parametrize("script_path", HELP_SCRIPTS, ids=lambda path: path.stem)
+def test_leaf_help_works_without_site_packages(script_path: Path) -> None:
+    result = subprocess.run(
+        [sys.executable, "-S", str(script_path), "--help"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "usage:" in result.stdout
 
 
 @pytest.mark.parametrize("schema_path", LEAF_SCHEMAS, ids=lambda path: path.stem)

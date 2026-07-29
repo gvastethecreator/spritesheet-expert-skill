@@ -4,6 +4,8 @@ from copy import deepcopy
 from hashlib import sha256
 import json
 from pathlib import Path
+import subprocess
+import sys
 
 from PIL import Image
 
@@ -12,6 +14,13 @@ HASH_A = "a" * 64
 HASH_B = "b" * 64
 HASH_C = "c" * 64
 HASH_D = "d" * 64
+PREPARE_CLI = (
+    Path(__file__).resolve().parents[2]
+    / "SKILLS"
+    / "compose-asset-mockups"
+    / "scripts"
+    / "prepare_presentation.py"
+)
 
 
 def content_reference(path: str, sha256: str = HASH_A) -> dict:
@@ -252,3 +261,75 @@ def test_resolve_presentation_copies_verified_imports_to_content_addressed_store
         assert not {"raw", "frames", "atlas"} & set(Path(content_path).parts)
         assert (tmp_path / content_path).read_bytes() == original_bytes[item["source_path"]]
         assert sha256((tmp_path / item["source_path"]).read_bytes()).hexdigest() == item["sha256"]
+
+
+def test_prepare_presentation_cli_writes_portable_atomic_outputs(tmp_path: Path) -> None:
+    document = phase4_presentation()
+    materialize_phase4_sources(tmp_path, document)
+    presentation_path = tmp_path / "presentation.json"
+    presentation_path.write_text(json.dumps(document), encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(PREPARE_CLI),
+            "--presentation",
+            str(presentation_path),
+            "--root",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = json.loads(result.stdout)
+    assert summary["ok"] is True
+    assert summary["import_count"] == 2
+    prepared_path = tmp_path / summary["prepared_path"]
+    resolved_path = tmp_path / summary["resolved_path"]
+    assert prepared_path.is_file()
+    assert resolved_path.is_file()
+    assert not list((tmp_path / "presentation").glob(".*.tmp"))
+    resolved = json.loads(resolved_path.read_text(encoding="utf-8"))
+    assert all(not Path(item["content_path"]).is_absolute() for item in resolved["imports"])
+
+
+def test_prepare_presentation_cli_help_needs_no_site_packages() -> None:
+    result = subprocess.run(
+        [sys.executable, "-S", str(PREPARE_CLI), "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "--presentation" in result.stdout
+
+
+def test_prepare_presentation_cli_rejects_output_escape(tmp_path: Path) -> None:
+    document = phase4_presentation()
+    presentation_path = tmp_path / "presentation.json"
+    presentation_path.write_text(json.dumps(document), encoding="utf-8")
+    escaped = tmp_path.parent / "escaped-prepared.json"
+    escaped.unlink(missing_ok=True)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(PREPARE_CLI),
+            "--presentation",
+            str(presentation_path),
+            "--root",
+            str(tmp_path),
+            "--prepared",
+            "../escaped-prepared.json",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert not escaped.exists()

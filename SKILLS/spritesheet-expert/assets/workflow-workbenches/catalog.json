@@ -6,21 +6,21 @@
       "status": "active",
       "family": "character-locomotion",
       "contract": "sideview-walk/contract.json",
-      "candidate_root": "../motion-reference-templates/candidates/sideview-walk"
+      "candidate_root": "candidates/sideview-walk"
     },
     "walk-view-transfer": {
       "status": "blocked",
       "blocked_by": "sideview-walk",
       "family": "character-locomotion",
       "contract": "walk-view-transfer/contract.json",
-      "candidate_root": "../motion-reference-templates/candidates/view-transfer"
+      "candidate_root": "candidates/view-transfer"
     },
     "sideview-run": {
       "status": "blocked",
       "blocked_by": "sideview-walk",
       "family": "character-locomotion",
       "contract": "sideview-run/contract.json",
-      "candidate_root": "../motion-reference-templates/candidates/sideview-run"
+      "candidate_root": "candidates/sideview-run"
     },
     "idle-breath": {
       "status": "blocked",

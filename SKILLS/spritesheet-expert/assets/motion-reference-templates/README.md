@@ -17,10 +17,12 @@ A template is reusable only when visual QA has passed and its manifest entry
 has `status: "approved"` plus the exact PNG `sha256`. Candidate or missing
 assets are ignored, causing the run to emit a generate-once prompt instead.
 
-Generated attempts belong under `candidates/<workflow>/<candidate-status>/`.
-Use monotonically numbered filenames and never point a manifest asset at a
-candidate. Rejected candidates remain available for diagnosis and comparison,
-but the resolver cannot consume them as production references.
+Generated attempts belong in an explicit run or maintainer workspace outside
+the installed skill. The canonical repository keeps historical attempts under
+`maintenance/motion-reference-candidates/`; Skills CLI packages do not copy
+that corpus. Use monotonically numbered filenames and never point a manifest
+asset at a candidate. The resolver consumes only approved, hash-matching
+assets named by this manifest.
 
 Approval checks:
 

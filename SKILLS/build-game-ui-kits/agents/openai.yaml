@@ -1,3 +1,4 @@
 interface:
   display_name: "Build Game UI Kits"
-  short_description: "Help with Build Game UI Kits tasks"
+  short_description: "Build and validate raster game UI kits"
+  default_prompt: "Use $build-game-ui-kits to create a raster UI kit with complete states, densities, and stretch proof."

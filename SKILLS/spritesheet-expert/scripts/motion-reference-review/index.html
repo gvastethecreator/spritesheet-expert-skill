@@ -426,9 +426,9 @@
     const CURRENT_PROJECT_KEY = `${PROJECT_KIND}:current`;
     const PROJECT_INDEX_KEY = `${PROJECT_KIND}:index`;
     const ASSET_DB_NAME = "sprite-animation-editor-assets";
-    const defaultSheet = "../../assets/motion-reference-templates/candidates/sideview-walk/candidate-006-articulated-six-frame/review-sheet.png";
-    const defaultIdentityReference = "../../assets/motion-reference-templates/candidates/sideview-walk/candidate-007-qa-marked-character-transfer/selected/frame-01.png";
-    const defaultMechanicsReferences = Array.from({ length: 6 }, (_, index) => `../../assets/motion-reference-templates/candidates/sideview-walk/candidate-006-articulated-six-frame/selected/frame-${String(index + 1).padStart(2, "0")}.png`);
+    const defaultSheet = params.get("sheet") || "";
+    const defaultIdentityReference = params.get("identity") || "";
+    const defaultMechanicsReferences = params.getAll("mechanics").filter(Boolean);
     const defaultPhases = ["contact A", "down A", "pass A", "contact B", "down B", "pass B"];
     const animation_contract = {
       id: "sideview-walk-right-6f-v1",

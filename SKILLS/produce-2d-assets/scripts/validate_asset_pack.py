@@ -11,10 +11,6 @@ from pathlib import Path
 import tempfile
 from typing import Any, Mapping
 
-from assetpack import AssetPackContractError, validate_asset_pack_root
-from assetpack.paths import resolve_pack_path
-
-
 DEFAULT_REPORT = "validation/asset-pack-validation-report.json"
 
 
@@ -45,10 +41,6 @@ def _failure_report(
         },
         exit_code,
     )
-
-
-def _resolve_output(root: Path, relative_path: str) -> Path:
-    return resolve_pack_path(root, relative_path)
 
 
 def _atomic_write_json(path: Path, document: Mapping[str, Any]) -> None:
@@ -92,6 +84,23 @@ def main() -> int:
         if args.pack_root is not None
         else pack_path.parent
     )
+    try:
+        from assetpack import AssetPackContractError, validate_asset_pack_root
+        from assetpack.paths import resolve_pack_path
+    except ModuleNotFoundError as exc:
+        dependency = exc.name or "required package"
+        report, exit_code = _failure_report(
+            pack_id=None,
+            pack_root=pack_root,
+            blocker=(
+                f"missing runtime dependency '{dependency}'; from the repository "
+                "root run: python -m pip install -e ."
+            ),
+            status="operational-error",
+            input_fingerprint=None,
+        )
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return exit_code
     raw: bytes | None = None
     document: Mapping[str, Any] | None = None
     try:
@@ -141,7 +150,7 @@ def main() -> int:
                 )
 
     try:
-        report_path = _resolve_output(pack_root, args.report)
+        report_path = resolve_pack_path(pack_root, args.report)
         _atomic_write_json(report_path, report)
     except (OSError, ValueError) as exc:
         report["ok"] = False

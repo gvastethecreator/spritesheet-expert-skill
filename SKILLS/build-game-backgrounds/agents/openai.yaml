@@ -1,3 +1,4 @@
 interface:
   display_name: "Build Game Backgrounds"
-  short_description: "Help with Build Game Backgrounds tasks"
+  short_description: "Build and validate layered game backgrounds"
+  default_prompt: "Use $build-game-backgrounds to create a portable layered background pack with parallax and visual proof."
