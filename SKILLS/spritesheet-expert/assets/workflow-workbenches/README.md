@@ -8,6 +8,9 @@ silently approve another workbench's outputs.
 `catalog.json` is the routing source of truth. Only entries with `status:
 "active"` may generate new candidates. `blocked` entries can be prepared and
 validated, but must not consume Image Gen calls until their dependency passes.
+Candidate roots are workspace-relative destinations, not bundled sample art.
+Choose a writable project copy before generation; never write new evidence
+into an installed skill directory.
 
 The first active workbench is `sideview-walk`. View transfer and the other
 sprite families are intentionally present as test templates so their contracts

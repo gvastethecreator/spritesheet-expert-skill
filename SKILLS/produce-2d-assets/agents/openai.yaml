@@ -1,4 +1,4 @@
 interface:
   display_name: "2D Asset Production"
   short_description: "Coordinate coherent multi-family asset packs"
-  default_prompt: "Use $produce-2d-assets to plan and produce a coherent game asset pack with sprites, backgrounds, UI, and mockups."
+  default_prompt: "Use $produce-2d-assets to coordinate and validate a coherent multi-family pack with sprites, backgrounds, UI, and mockups."

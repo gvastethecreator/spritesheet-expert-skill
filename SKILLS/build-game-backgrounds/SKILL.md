@@ -1,85 +1,45 @@
 ---
 name: build-game-backgrounds
-description: [TODO: Complete and informative explanation of what the skill does and when to use it. Include WHEN to use this skill - specific scenarios, file types, or tasks that trigger it.]
+description: "Build and validate layered raster backgrounds for games. Use for parallax scenes, scrolling panoramas, environment layers, horizon-safe compositions, or background packs that need deterministic manifests and visual proof."
 ---
 
 # Build Game Backgrounds
 
-## Overview
+Produce a portable layered-background pack whose source files, camera contract, hashes, composite, and scrolling proof agree.
 
-[TODO: 1-2 sentences explaining what this skill enables]
+## Workflow
 
-## Structuring This Skill
+1. Define the scene contract before generating art.
+   - Fix canvas size, aspect ratio, horizon, focal safe zone, layer order, depth, parallax factors, repeat behavior, and style fingerprint.
+   - Use this skill for background planes. Route animated sprites and atlases to `$spritesheet-expert`; route isolated props to `$build-static-game-assets`.
 
-[TODO: Choose the structure that best fits this skill's purpose. Common patterns:
+2. Generate or import the layers.
+   - Use `$imagegen` for new user-facing bitmap art and preserve its provenance.
+   - Keep every source below one pack root. Use portable relative paths and record SHA-256 for each layer.
+   - Keep sky, far, mid, near, foreground, overlay, and effects roles explicit. Do not bake gameplay-critical objects into a background without naming the tradeoff.
 
-**1. Workflow-Based** (best for sequential processes)
-- Works well when there are clear step-by-step procedures
-- Example: DOCX skill with "Workflow Decision Tree" -> "Reading" -> "Creating" -> "Editing"
-- Structure: ## Overview -> ## Workflow Decision Tree -> ## Step 1 -> ## Step 2...
+3. Write `background-pack.json` against `references/schemas/background-pack-v1.schema.json`.
+   - Require `schema_version`, `kind`, `pack_id`, `style_fingerprint`, `canvas`, `camera`, and `layers`.
+   - Reject duplicate order/depth ambiguity, hash drift, missing sources, unsafe paths, invalid safe zones, or incompatible dimensions.
 
-**2. Task-Based** (best for tool collections)
-- Works well when the skill offers different operations/capabilities
-- Example: PDF skill with "Quick Start" -> "Merge PDFs" -> "Split PDFs" -> "Extract Text"
-- Structure: ## Overview -> ## Quick Start -> ## Task Category 1 -> ## Task Category 2...
+4. Validate and generate deterministic proof.
 
-**3. Reference/Guidelines** (best for standards or specifications)
-- Works well for brand guidelines, coding standards, or requirements
-- Example: Brand styling with "Brand Guidelines" -> "Colors" -> "Typography" -> "Features"
-- Structure: ## Overview -> ## Guidelines -> ## Specifications -> ## Usage...
+```powershell
+python scripts/validate_background_pack.py --pack <pack-root>/background-pack.json --root <pack-root>
+```
 
-**4. Capabilities-Based** (best for integrated systems)
-- Works well when the skill provides multiple interrelated features
-- Example: Product Management with "Core Capabilities" -> numbered capability list
-- Structure: ## Overview -> ## Core Capabilities -> ### 1. Feature -> ### 2. Feature...
+The command writes `qa/background-pack-report.json`, `qa/background-composite.png`, and `qa/background-scroll.gif` atomically. Install core dependencies from the repository root with `python -m pip install -e .` when the preflight reports a missing module.
 
-Patterns can be mixed and matched as needed. Most skills combine patterns (e.g., start with task-based, add workflow for complex operations).
+5. Inspect the actual composite and scrolling preview.
+   - Check seams, focal readability, horizon stability, parallax order, crop behavior, contrast behind gameplay, and repeated-edge continuity.
+   - Fix the source or contract and rerun. Do not approve from JSON alone.
 
-Delete this entire "Structuring This Skill" section when done - it's just guidance.]
+## Completion Contract
 
-## [TODO: Replace with the first main section based on chosen structure]
+Finish only when the validator exits zero, every input hash is current, all paths are portable, the report references current proof hashes, and both proof images have been inspected. Keep prior proof unchanged when contract validation fails.
 
-[TODO: Add content here. See examples in existing skills:
-- Code samples for technical skills
-- Decision trees for complex workflows
-- Concrete examples with realistic user requests
-- References to scripts/templates/references as needed]
+## Resources
 
-## Resources (optional)
-
-Create only the resource directories this skill actually needs. Delete this section if no resources are required.
-
-### scripts/
-Executable code (Python/Bash/etc.) that can be run directly to perform specific operations.
-
-**Examples from other skills:**
-- PDF skill: `fill_fillable_fields.py`, `extract_form_field_info.py` - utilities for PDF manipulation
-- DOCX skill: `document.py`, `utilities.py` - Python modules for document processing
-
-**Appropriate for:** Python scripts, shell scripts, or any executable code that performs automation, data processing, or specific operations.
-
-**Note:** Scripts may be executed without loading into context, but can still be read by Codex for patching or environment adjustments.
-
-### references/
-Documentation and reference material intended to be loaded into context to inform Codex's process and thinking.
-
-**Examples from other skills:**
-- Product management: `communication.md`, `context_building.md` - detailed workflow guides
-- BigQuery: API reference documentation and query examples
-- Finance: Schema documentation, company policies
-
-**Appropriate for:** In-depth documentation, API references, database schemas, comprehensive guides, or any detailed information that Codex should reference while working.
-
-### assets/
-Files not intended to be loaded into context, but rather used within the output Codex produces.
-
-**Examples from other skills:**
-- Brand styling: PowerPoint template files (.pptx), logo files
-- Frontend builder: HTML/React boilerplate project directories
-- Typography: Font files (.ttf, .woff2)
-
-**Appropriate for:** Templates, boilerplate code, document templates, images, icons, fonts, or any files meant to be copied or used in the final output.
-
----
-
-**Not every skill requires all three types of resources.**
+- `scripts/validate_background_pack.py`: public validation and proof CLI.
+- `scripts/background_pack/`: schema and semantic validation implementation.
+- `references/schemas/background-pack-v1.schema.json`: public pack contract.

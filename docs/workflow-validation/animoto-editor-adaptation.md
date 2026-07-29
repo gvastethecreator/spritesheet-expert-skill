@@ -2,7 +2,7 @@
 
 ## Scope
 
-`D:\DEV\animoto` was inspected as a reference product, not as a dependency.
+An external Animoto checkout was inspected as a reference product, not as a dependency.
 The review covered its running interface and the implementations of
 `MainViewer`, `TransformGizmo`, `Timeline`, `FrameAlignmentModal`,
 `FrameCorrectionModal`, project persistence and keyboard shortcuts.

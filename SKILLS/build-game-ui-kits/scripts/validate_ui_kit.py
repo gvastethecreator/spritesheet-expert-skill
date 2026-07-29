@@ -10,12 +10,15 @@ import os
 from pathlib import Path
 import tempfile
 
-from ui_kit import UiKitError, resolve_kit_path, validate_ui_kit
+class _CommandLineError(ValueError):
+    def __init__(self, message: str) -> None:
+        self.issues = (message,)
+        super().__init__(message)
 
 
 class _Parser(argparse.ArgumentParser):
     def error(self, message: str) -> None:
-        raise UiKitError([f"command line: {message}"])
+        raise _CommandLineError(f"command line: {message}")
 
 
 def _failure(message: str) -> dict[str, object]:
@@ -74,7 +77,12 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _source_paths(document: Mapping[str, object], root: Path) -> set[Path]:
+def _source_paths(
+    document: Mapping[str, object],
+    root: Path,
+    resolve_path: object,
+    contract_error: type[Exception],
+) -> set[Path]:
     paths: set[Path] = set()
     components = document.get("components")
     if not isinstance(components, list):
@@ -95,8 +103,8 @@ def _source_paths(document: Mapping[str, object], root: Path) -> set[Path]:
                 if not isinstance(value, str):
                     continue
                 try:
-                    paths.add(resolve_kit_path(root, value))
-                except UiKitError:
+                    paths.add(resolve_path(root, value))  # type: ignore[operator]
+                except contract_error:
                     continue
     return paths
 
@@ -104,8 +112,21 @@ def _source_paths(document: Mapping[str, object], root: Path) -> set[Path]:
 def main(argv: Sequence[str] | None = None) -> int:
     try:
         args = _parse(argv)
-    except UiKitError as exc:
+    except _CommandLineError as exc:
         return _write_report(None, _failure("; ".join(exc.issues)), 1)
+
+    try:
+        from ui_kit import UiKitError, resolve_kit_path, validate_ui_kit
+    except ModuleNotFoundError as exc:
+        dependency = exc.name or "required package"
+        return _write_report(
+            None,
+            _failure(
+                f"missing runtime dependency '{dependency}'; from the repository "
+                "root run: python -m pip install -e ."
+            ),
+            3,
+        )
 
     kit_path = args.kit.expanduser().resolve()
     root = args.root.expanduser().resolve() if args.root else kit_path.parent
@@ -140,7 +161,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             _failure("kit document root must be an object"),
             1,
         )
-    if report_path in _source_paths(document, root):
+    if report_path in _source_paths(document, root, resolve_kit_path, UiKitError):
         return _write_report(
             None,
             _failure("report output path must not overwrite a component input"),

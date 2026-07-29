@@ -4,7 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "npm run validate && npm test && npm run smoke",
+    "setup": "python -m pip install -e .",
+    "setup:test": "python -m pip install -e \".[test]\"",
+    "doctor": "python scripts/check_python_env.py",
+    "doctor:test": "python scripts/check_python_env.py --test",
+    "check": "npm run doctor:test && npm run validate && npm test && npm run smoke",
     "pretest": "node -e \"require('node:fs').mkdirSync('.scratch', { recursive: true })\"",
     "test": "python -m pytest -p no:cacheprovider --basetemp .scratch/pytest",
     "validate": "node scripts/validate-skill-pack.mjs",

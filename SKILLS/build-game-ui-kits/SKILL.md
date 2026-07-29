@@ -1,85 +1,45 @@
 ---
 name: build-game-ui-kits
-description: [TODO: Complete and informative explanation of what the skill does and when to use it. Include WHEN to use this skill - specific scenarios, file types, or tasks that trigger it.]
+description: "Build and validate raster UI kits for games. Use for buttons, panels, icons, cursors, HUD parts, interaction states, density variants, nine-slice assets, or UI packs that need state and stretch proof."
 ---
 
-# Build Game Ui Kits
+# Build Game UI Kits
 
-## Overview
+Produce a portable raster UI kit with explicit tokens, densities, component states, hashes, and visual proof.
 
-[TODO: 1-2 sentences explaining what this skill enables]
+## Workflow
 
-## Structuring This Skill
+1. Freeze the UI contract.
+   - Name required components, base sizes, densities, interaction states, nine-slice regions, palette tokens, minimum contrast, and the shared style fingerprint.
+   - Use this skill for raster UI families. Route animated character art to `$spritesheet-expert` and cross-family delivery to `$produce-2d-assets`.
 
-[TODO: Choose the structure that best fits this skill's purpose. Common patterns:
+2. Generate or import component art.
+   - Use `$imagegen` for new user-facing bitmap art; retain provenance and source hashes.
+   - Keep every density and state below one kit root. Use portable relative paths.
+   - Include every required state such as default, hover, pressed, disabled, selected, focus, or checked when the component can enter it. Do not represent a state by renaming an identical file.
 
-**1. Workflow-Based** (best for sequential processes)
-- Works well when there are clear step-by-step procedures
-- Example: DOCX skill with "Workflow Decision Tree" -> "Reading" -> "Creating" -> "Editing"
-- Structure: ## Overview -> ## Workflow Decision Tree -> ## Step 1 -> ## Step 2...
+3. Write `ui-kit.json` against `references/schemas/ui-kit-v1.schema.json`.
+   - Require `schema_version`, `kind`, `kit_id`, `style_fingerprint`, `densities`, `tokens`, and `components`.
+   - Reject missing states/densities, hash drift, unsafe paths, invalid nine-slice geometry, inconsistent sizes, and insufficient declared contrast.
 
-**2. Task-Based** (best for tool collections)
-- Works well when the skill offers different operations/capabilities
-- Example: PDF skill with "Quick Start" -> "Merge PDFs" -> "Split PDFs" -> "Extract Text"
-- Structure: ## Overview -> ## Quick Start -> ## Task Category 1 -> ## Task Category 2...
+4. Validate and render proof.
 
-**3. Reference/Guidelines** (best for standards or specifications)
-- Works well for brand guidelines, coding standards, or requirements
-- Example: Brand styling with "Brand Guidelines" -> "Colors" -> "Typography" -> "Features"
-- Structure: ## Overview -> ## Guidelines -> ## Specifications -> ## Usage...
+```powershell
+python scripts/validate_ui_kit.py --kit <kit-root>/ui-kit.json --root <kit-root>
+```
 
-**4. Capabilities-Based** (best for integrated systems)
-- Works well when the skill provides multiple interrelated features
-- Example: Product Management with "Core Capabilities" -> numbered capability list
-- Structure: ## Overview -> ## Core Capabilities -> ### 1. Feature -> ### 2. Feature...
+The command writes `qa/ui-kit-report.json`, `qa/ui-state-board.png`, and `qa/ui-nine-slice.png` atomically. Install core dependencies from the repository root with `python -m pip install -e .` when needed.
 
-Patterns can be mixed and matched as needed. Most skills combine patterns (e.g., start with task-based, add workflow for complex operations).
+5. Inspect the boards at intended scale.
+   - Verify state distinction, legibility, optical alignment, pixel snapping, focus visibility, density parity, and nine-slice corners/edges.
+   - Treat the deterministic report as a gate, not a substitute for visual inspection.
 
-Delete this entire "Structuring This Skill" section when done - it's just guidance.]
+## Completion Contract
 
-## [TODO: Replace with the first main section based on chosen structure]
+Finish only when the validator exits zero, source hashes are current, every required state and density is present, paths are portable, and both proof boards have been inspected. Failed validation must not replace prior valid proof.
 
-[TODO: Add content here. See examples in existing skills:
-- Code samples for technical skills
-- Decision trees for complex workflows
-- Concrete examples with realistic user requests
-- References to scripts/templates/references as needed]
+## Resources
 
-## Resources (optional)
-
-Create only the resource directories this skill actually needs. Delete this section if no resources are required.
-
-### scripts/
-Executable code (Python/Bash/etc.) that can be run directly to perform specific operations.
-
-**Examples from other skills:**
-- PDF skill: `fill_fillable_fields.py`, `extract_form_field_info.py` - utilities for PDF manipulation
-- DOCX skill: `document.py`, `utilities.py` - Python modules for document processing
-
-**Appropriate for:** Python scripts, shell scripts, or any executable code that performs automation, data processing, or specific operations.
-
-**Note:** Scripts may be executed without loading into context, but can still be read by Codex for patching or environment adjustments.
-
-### references/
-Documentation and reference material intended to be loaded into context to inform Codex's process and thinking.
-
-**Examples from other skills:**
-- Product management: `communication.md`, `context_building.md` - detailed workflow guides
-- BigQuery: API reference documentation and query examples
-- Finance: Schema documentation, company policies
-
-**Appropriate for:** In-depth documentation, API references, database schemas, comprehensive guides, or any detailed information that Codex should reference while working.
-
-### assets/
-Files not intended to be loaded into context, but rather used within the output Codex produces.
-
-**Examples from other skills:**
-- Brand styling: PowerPoint template files (.pptx), logo files
-- Frontend builder: HTML/React boilerplate project directories
-- Typography: Font files (.ttf, .woff2)
-
-**Appropriate for:** Templates, boilerplate code, document templates, images, icons, fonts, or any files meant to be copied or used in the final output.
-
----
-
-**Not every skill requires all three types of resources.**
+- `scripts/validate_ui_kit.py`: public validation and proof CLI.
+- `scripts/ui_kit/`: schema and semantic validation implementation.
+- `references/schemas/ui-kit-v1.schema.json`: public kit contract.
