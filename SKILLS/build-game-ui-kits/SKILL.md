@@ -28,7 +28,7 @@ Produce a portable raster UI kit with explicit tokens, densities, component stat
 python scripts/validate_ui_kit.py --kit <kit-root>/ui-kit.json --root <kit-root>
 ```
 
-The command writes `qa/ui-kit-report.json`, `qa/ui-state-board.png`, and `qa/ui-nine-slice.png` atomically. Install core dependencies from the repository root with `python -m pip install -e .` when needed.
+The command writes `qa/ui-kit-report.json`, `qa/ui-state-board.png`, and `qa/ui-nine-slice.png` atomically. From the installed skill directory run `python -m pip install -r requirements-runtime.txt` when needed.
 
 5. Inspect the boards at intended scale.
    - Verify state distinction, legibility, optical alignment, pixel snapping, focus visibility, density parity, and nine-slice corners/edges.

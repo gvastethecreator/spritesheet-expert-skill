@@ -12,6 +12,7 @@ import tempfile
 from typing import Any, Mapping
 
 DEFAULT_REPORT = "validation/asset-pack-validation-report.json"
+REQUIREMENTS = Path(__file__).resolve().parents[1] / "requirements-runtime.txt"
 
 
 def _failure_report(
@@ -93,8 +94,8 @@ def main() -> int:
             pack_id=None,
             pack_root=pack_root,
             blocker=(
-                f"missing runtime dependency '{dependency}'; from the repository "
-                "root run: python -m pip install -e ."
+                f"missing runtime dependency '{dependency}'; install from this "
+                f'copied skill with: python -m pip install -r "{REQUIREMENTS}"'
             ),
             status="operational-error",
             input_fingerprint=None,

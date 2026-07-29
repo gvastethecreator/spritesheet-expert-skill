@@ -11,7 +11,9 @@
     "check": "npm run doctor:test && npm run validate && npm test && npm run smoke",
     "pretest": "node -e \"require('node:fs').mkdirSync('.scratch', { recursive: true })\"",
     "test": "python -m pytest -p no:cacheprovider --basetemp .scratch/pytest",
-    "validate": "node scripts/validate-skill-pack.mjs",
+    "validate": "node scripts/validate-skill-pack.mjs && npm run validate:evals && npm run validate:motion-templates",
+    "validate:evals": "node scripts/validate-routing-evals.mjs",
+    "validate:motion-templates": "python SKILLS/spritesheet-expert/scripts/check_motion_template_library.py --template-root SKILLS/spritesheet-expert/assets/motion-reference-templates --allow-pending",
     "smoke": "python ./SKILLS/spritesheet-expert/scripts/smoke_pipeline.py"
   }
 }

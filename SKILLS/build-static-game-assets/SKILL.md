@@ -28,7 +28,7 @@ Produce a portable static-asset pack with explicit roles, dimensions, pivots, cr
 python scripts/validate_static_pack.py --pack <pack-root>/static-pack.json --root <pack-root>
 ```
 
-The command writes `qa/static-pack-report.json` and `qa/static-pack-contact.png` atomically. Install core dependencies from the repository root with `python -m pip install -e .` when needed.
+The command writes `qa/static-pack-report.json` and `qa/static-pack-contact.png` atomically. From the installed skill directory run `python -m pip install -r requirements-runtime.txt` when needed.
 
 5. Inspect the contact sheet.
    - Check silhouette, consistent scale, pivot intent, alpha edges, cropping, role coverage, palette/style continuity, and readability at target size.

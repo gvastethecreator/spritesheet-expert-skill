@@ -24,7 +24,7 @@ Create derived presentations from already validated assets without mutating sour
 python scripts/prepare_presentation.py --presentation <root>/presentation.json --root <root>
 ```
 
-The command validates the contract, writes canonical prepared/resolved JSON, verifies every pin, and copies imported content into `presentation/content-addressed/`. Use `--validate-only` when no import copy is wanted. Install core dependencies from the repository root with `python -m pip install -e .` when needed.
+The command validates the contract, writes canonical prepared/resolved JSON, verifies every pin, and copies imported content into `presentation/content-addressed/`. Use `--validate-only` when no import copy is wanted. From the installed skill directory run `python -m pip install -r requirements-runtime.txt` when needed.
 
 4. Build only derived outputs.
    - Compose from the resolved content store using the project's existing image, HTML/canvas, or design tooling.

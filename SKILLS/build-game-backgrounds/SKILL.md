@@ -28,7 +28,7 @@ Produce a portable layered-background pack whose source files, camera contract, 
 python scripts/validate_background_pack.py --pack <pack-root>/background-pack.json --root <pack-root>
 ```
 
-The command writes `qa/background-pack-report.json`, `qa/background-composite.png`, and `qa/background-scroll.gif` atomically. Install core dependencies from the repository root with `python -m pip install -e .` when the preflight reports a missing module.
+The command writes `qa/background-pack-report.json`, `qa/background-composite.png`, and `qa/background-scroll.gif` atomically. From the installed skill directory run `python -m pip install -r requirements-runtime.txt` when the preflight reports a missing module.
 
 5. Inspect the actual composite and scrolling preview.
    - Check seams, focal readability, horizon stability, parallax order, crop behavior, contrast behind gameplay, and repeated-edge continuity.
