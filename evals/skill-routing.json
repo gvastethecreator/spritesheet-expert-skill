@@ -1,0 +1,147 @@
+{
+  "version": 1,
+  "candidates": [
+    "produce-2d-assets",
+    "spritesheet-expert",
+    "build-static-game-assets",
+    "build-game-backgrounds",
+    "build-game-ui-kits",
+    "compose-asset-mockups"
+  ],
+  "cases": [
+    {
+      "id": "background-parallax-forest",
+      "prompt": "Create three seamless parallax forest layers with a horizon-safe composition and a manifest for a side-scrolling game.",
+      "scope": "production-single-family",
+      "families": ["backgrounds"],
+      "familyCount": 1,
+      "expectedSkill": "build-game-backgrounds",
+      "excludedSkills": ["produce-2d-assets", "spritesheet-expert", "build-static-game-assets", "build-game-ui-kits", "compose-asset-mockups"],
+      "rationale": "The delivery contains one background family and needs layered-scene validation, not atlas or multi-family coordination."
+    },
+    {
+      "id": "background-arena-panorama",
+      "prompt": "Necesito un panorama de arena de combate con primer plano, fondo y capa atmosférica, listo para desplazamiento horizontal.",
+      "scope": "production-single-family",
+      "families": ["backgrounds"],
+      "familyCount": 1,
+      "expectedSkill": "build-game-backgrounds",
+      "excludedSkills": ["produce-2d-assets", "spritesheet-expert", "build-static-game-assets", "build-game-ui-kits", "compose-asset-mockups"],
+      "rationale": "Es una sola familia de fondos con capas y scroll; no requiere el router de una entrega compuesta."
+    },
+    {
+      "id": "ui-nine-slice-states",
+      "prompt": "Build a raster game UI kit with idle, hover, pressed, disabled, and focus states plus nine-slice proof for every panel.",
+      "scope": "production-single-family",
+      "families": ["ui"],
+      "familyCount": 1,
+      "expectedSkill": "build-game-ui-kits",
+      "excludedSkills": ["produce-2d-assets", "spritesheet-expert", "build-static-game-assets", "build-game-backgrounds", "compose-asset-mockups"],
+      "rationale": "The work is a single UI family whose critical contract is interaction-state and stretch validation."
+    },
+    {
+      "id": "ui-hud-density-variants",
+      "prompt": "Entrega un kit HUD raster con iconos, cursores y paneles en dos densidades, incluyendo estados de interacción verificables.",
+      "scope": "production-single-family",
+      "families": ["ui"],
+      "familyCount": 1,
+      "expectedSkill": "build-game-ui-kits",
+      "excludedSkills": ["produce-2d-assets", "spritesheet-expert", "build-static-game-assets", "build-game-backgrounds", "compose-asset-mockups"],
+      "rationale": "El pedido se limita a componentes raster de interfaz y necesita pruebas de estados y densidad."
+    },
+    {
+      "id": "static-pickup-pack",
+      "prompt": "Create 24 non-animated pickup sprites with consistent pivots, transparent bounds, hashes, and a contact sheet.",
+      "scope": "production-single-family",
+      "families": ["static-assets"],
+      "familyCount": 1,
+      "expectedSkill": "build-static-game-assets",
+      "excludedSkills": ["produce-2d-assets", "spritesheet-expert", "build-game-backgrounds", "build-game-ui-kits", "compose-asset-mockups"],
+      "rationale": "These are static gameplay objects, so pivot, sizing, provenance, and contact-sheet proof are the decisive checks."
+    },
+    {
+      "id": "static-inventory-items",
+      "prompt": "Genera un pack no animado de pociones, llaves y monedas con tamaños coherentes, licencias y manifiesto de exportación.",
+      "scope": "production-single-family",
+      "families": ["static-assets"],
+      "familyCount": 1,
+      "expectedSkill": "build-static-game-assets",
+      "excludedSkills": ["produce-2d-assets", "spritesheet-expert", "build-game-backgrounds", "build-game-ui-kits", "compose-asset-mockups"],
+      "rationale": "Es una única familia de objetos estáticos y no contiene animación, fondos ni estados de interfaz."
+    },
+    {
+      "id": "spritesheet-run-cycle",
+      "prompt": "Turn six authored run-cycle frames into a packed sprite atlas and verify timing, frame order, pivots, and transparent padding.",
+      "scope": "production-single-family",
+      "families": ["animated-sprites"],
+      "familyCount": 1,
+      "expectedSkill": "spritesheet-expert",
+      "excludedSkills": ["produce-2d-assets", "build-static-game-assets", "build-game-backgrounds", "build-game-ui-kits", "compose-asset-mockups"],
+      "rationale": "Animation frames and atlas assembly require the spritesheet pipeline rather than a static asset validator."
+    },
+    {
+      "id": "spritesheet-tileset-extraction",
+      "prompt": "Extrae y valida un tileset desde este atlas, detecta celdas, evita bleed entre vecinos y entrega pruebas de repetición.",
+      "scope": "production-single-family",
+      "families": ["tilesets"],
+      "familyCount": 1,
+      "expectedSkill": "spritesheet-expert",
+      "excludedSkills": ["produce-2d-assets", "build-static-game-assets", "build-game-backgrounds", "build-game-ui-kits", "compose-asset-mockups"],
+      "rationale": "La extracción y QA de un atlas o tileset pertenece al pipeline especializado de spritesheets."
+    },
+    {
+      "id": "mockup-store-board",
+      "prompt": "Assemble the already approved sprites, backgrounds, and UI into a store-art review board without modifying any source asset.",
+      "scope": "presentation-only",
+      "sourceMode": "approved-existing-assets",
+      "expectedSkill": "compose-asset-mockups",
+      "excludedSkills": ["produce-2d-assets", "spritesheet-expert", "build-static-game-assets", "build-game-backgrounds", "build-game-ui-kits"],
+      "rationale": "The source assets already exist and the requested output is a non-destructive presentation derived from them."
+    },
+    {
+      "id": "mockup-pitch-reconstruction",
+      "prompt": "Compón una reconstrucción de gameplay para un pitch usando sólo assets aprobados, con hashes, etiquetas de verdad y procedencia.",
+      "scope": "presentation-only",
+      "sourceMode": "approved-existing-assets",
+      "expectedSkill": "compose-asset-mockups",
+      "excludedSkills": ["produce-2d-assets", "spritesheet-expert", "build-static-game-assets", "build-game-backgrounds", "build-game-ui-kits"],
+      "rationale": "Se pide una composición de evidencia, no producir ni alterar familias de assets fuente."
+    },
+    {
+      "id": "router-full-game-pack",
+      "prompt": "Deliver one coherent 2D game pack containing an animated hero, static props, parallax backgrounds, a UI kit, and a shared release manifest.",
+      "scope": "production-multi-family",
+      "families": ["animated-sprites", "static-assets", "backgrounds", "ui"],
+      "familyCount": 4,
+      "expectedSkill": "produce-2d-assets",
+      "excludedSkills": ["spritesheet-expert", "build-static-game-assets", "build-game-backgrounds", "build-game-ui-kits", "compose-asset-mockups"],
+      "rationale": "Four coordinated production families need one router, shared style rules, owners, and a combined release manifest."
+    },
+    {
+      "id": "router-pickups-and-inventory-ui",
+      "prompt": "Produce matching world pickups and inventory UI icons as one delivery with shared palette, naming, variants, and release ownership.",
+      "scope": "production-multi-family",
+      "families": ["static-assets", "ui"],
+      "familyCount": 2,
+      "expectedSkill": "produce-2d-assets",
+      "excludedSkills": ["spritesheet-expert", "build-static-game-assets", "build-game-backgrounds", "build-game-ui-kits", "compose-asset-mockups"],
+      "rationale": "The request crosses two production families and explicitly requires shared coordination, so a single leaf is insufficient."
+    },
+    {
+      "id": "outside-existing-react-dashboard",
+      "prompt": "Fix spacing, responsiveness, keyboard focus, and loading states in my existing React analytics dashboard.",
+      "scope": "outside-suite",
+      "expectedSkill": null,
+      "excludedSkills": ["produce-2d-assets", "spritesheet-expert", "build-static-game-assets", "build-game-backgrounds", "build-game-ui-kits", "compose-asset-mockups"],
+      "rationale": "This is implementation work on an existing web interface, not production or composition of raster game assets."
+    },
+    {
+      "id": "outside-rigged-3d-creature",
+      "prompt": "Model, rig, skin, and light a real-time 3D creature for Blender and export it as glTF.",
+      "scope": "outside-suite",
+      "expectedSkill": null,
+      "excludedSkills": ["produce-2d-assets", "spritesheet-expert", "build-static-game-assets", "build-game-backgrounds", "build-game-ui-kits", "compose-asset-mockups"],
+      "rationale": "The target is a rigged 3D asset and falls outside every 2D raster production and presentation contract in this suite."
+    }
+  ]
+}

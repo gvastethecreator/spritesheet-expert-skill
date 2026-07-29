@@ -37,7 +37,7 @@ Do not delegate merely because multiple skills exist. Execute directly when the 
 python scripts/validate_asset_pack.py --pack <pack-root>/asset-pack.json --pack-root <pack-root>
 ```
 
-The command writes `validation/asset-pack-validation-report.json`. Exit `0` passes, `1` means contract failure, `2` means a real dependency remains blocked, and `3` means an operational failure. Install core dependencies from the repository root with `python -m pip install -e .` when needed.
+The command writes `validation/asset-pack-validation-report.json`. Exit `0` passes, `1` means contract failure, `2` means a real dependency remains blocked, and `3` means an operational failure. From the installed skill directory run `python -m pip install -r requirements-runtime.txt` when needed.
 
 5. Reconcile the real pack.
    - Inspect the family proof artifacts together for scale, palette, camera, density, naming, variants, ownership, licensing, and presentation truth.

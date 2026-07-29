@@ -10,6 +10,8 @@ import os
 from pathlib import Path
 import tempfile
 
+REQUIREMENTS = Path(__file__).resolve().parents[1] / "requirements-runtime.txt"
+
 
 class _CommandLineError(ValueError):
     pass
@@ -158,8 +160,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _emit(
             False,
             "operational-error",
-            f"missing runtime dependency '{dependency}'; from the repository root run: "
-            "python -m pip install -e .",
+            f"missing runtime dependency '{dependency}'; install from this copied "
+            f'skill with: python -m pip install -r "{REQUIREMENTS}"',
         )
 
     try:

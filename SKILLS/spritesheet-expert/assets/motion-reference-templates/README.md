@@ -1,6 +1,8 @@
 # Motion reference templates
 
-This library stores approved Image Gen mannequin masters. Each master is an
+This catalog reserves five slots for approved Image Gen mannequin masters.
+The bundled manifest currently marks a slot `needs-imagegen` until a reviewed
+PNG, exact hash, and approval sidecar are promoted. An approved master is an
 8-frame `4x2` walk cycle. `prepare_sprite_run.py` derives 4- and 6-frame
 references by selecting protected phases, and mirrors right-facing masters for
 left-facing rows. It never redraws anatomy procedurally.

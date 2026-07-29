@@ -10,6 +10,9 @@ import os
 from pathlib import Path
 import tempfile
 
+REQUIREMENTS = Path(__file__).resolve().parents[1] / "requirements-runtime.txt"
+
+
 class _CommandLineError(ValueError):
     def __init__(self, message: str) -> None:
         self.issues = (message,)
@@ -117,8 +120,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _write_report(
             None,
             _failure(
-                f"missing runtime dependency '{dependency}'; from the repository "
-                "root run: python -m pip install -e ."
+                f"missing runtime dependency '{dependency}'; install from this "
+                f'copied skill with: python -m pip install -r "{REQUIREMENTS}"'
             ),
             3,
         )
