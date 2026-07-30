@@ -182,6 +182,43 @@ def test_prepare_preserves_explicit_v2_semantics_and_sampling(tmp_path: Path) ->
     assert written["sampling_policy"] == request["sampling_policy"]
 
 
+def test_prepare_preserves_license_bindings_for_provider_intake(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    request = {
+        "states": {
+            "idle": {"frames": 1, "fps": 1, "loop": True, "action": "idle"},
+        },
+        "licenses": [
+            {
+                "id": "imagegen-generated",
+                "status": "generated",
+                "reference": "accepted Imagegen provider output",
+            }
+        ],
+    }
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(PREPARE),
+            "--out-dir",
+            str(run_dir),
+            "--character-id",
+            "hero",
+            "--request-json",
+            json.dumps(request),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    written = json.loads((run_dir / "sprite-request.json").read_text(encoding="utf-8"))
+    assert written["licenses"] == request["licenses"]
+
+
 @pytest.mark.parametrize(
     ("frame_semantics", "declared_workflows", "expected_workflows"),
     [
@@ -235,6 +272,48 @@ def test_prepare_routes_workflows_from_semantics_not_static_nouns(
         (run_dir / "references" / "art-direction.json").read_text(encoding="utf-8")
     )
     assert summary["rows"]["water-pickups"]["animation_workflows"] == expected_workflows
+
+
+def test_prepare_routes_character_wave_to_gesture_loop(tmp_path: Path) -> None:
+    run_dir = tmp_path / "character-wave"
+    request = {
+        "asset_kind": "sprite",
+        "frame_semantics": "animation",
+        "cell": {"width": 192, "height": 192, "safe_margin": 12},
+        "states": {
+            "wave": {
+                "frames": 6,
+                "fps": 6,
+                "loop": True,
+                "action": "friendly planted hand wave gesture",
+            }
+        },
+    }
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(PREPARE),
+            "--out-dir",
+            str(run_dir),
+            "--character-id",
+            "gesture-routing",
+            "--request-json",
+            json.dumps(request),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = json.loads(
+        (run_dir / "references" / "art-direction.json").read_text(encoding="utf-8")
+    )
+    workflows = summary["rows"]["wave"]["animation_workflows"]
+    assert "gesture-loop" in workflows
+    assert "water-loop" not in workflows
 
 
 def test_prepare_rejects_temporal_workflow_on_static_semantics(tmp_path: Path) -> None:

@@ -59,14 +59,21 @@ def _provenance_for(
         for entry in prior.get("accepted_sources", [])
         if plan.state not in entry.get("states", [])
     ]
-    accepted.append(
-        {
-            "path": f"raw/{plan.state}.png",
-            "sha256": output_sha256,
-            "size_bytes": output_size,
-            "states": [plan.state],
-        }
-    )
+    accepted_source = {
+        "path": f"raw/{plan.state}.png",
+        "sha256": output_sha256,
+        "size_bytes": output_size,
+        "states": [plan.state],
+    }
+    if plan.source_type == "grok-imagine-image":
+        accepted_source.update(
+            {
+                "source_type": "grok-imagine-image",
+                "art_engine": "grok-imagine",
+                "upstream_report": "qa/source-intake-report.json",
+            }
+        )
+    accepted.append(accepted_source)
     state_order = {state: index for index, state in enumerate(plan.request["states"])}
     accepted.sort(
         key=lambda entry: min(
@@ -83,7 +90,11 @@ def _provenance_for(
         "version": 2,
         "kind": "sprite-source-provenance",
         "source_type": plan.source_type,
-        "art_engine": plan.source_type,
+        "art_engine": (
+            "grok-imagine"
+            if plan.source_type == "grok-imagine-image"
+            else plan.source_type
+        ),
         "fixture": plan.source_type == "fixture",
         "verification_status": "verified",
         "accepted_sources": accepted,

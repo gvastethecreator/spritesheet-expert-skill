@@ -30,7 +30,7 @@ from spritecore.image_ops import (
 from segmentation import alpha_mass_extent_80, projection_sprites
 
 
-DEFAULT_REMBG_MODEL = "birefnet-general-lite"
+DEFAULT_REMBG_MODEL = "birefnet-general"
 DEFAULT_BEN2_MODEL = "PramaLLC/BEN2"
 BACKGROUND_REMOVAL_METHODS = {"none", "chroma", "matte", "rembg", "ben2", "auto"}
 STABLE_FEATURE_KEYS = ("head_width", "upper_width", "torso_width", "opaque_area", "body_mass_width_80", "body_mass_height_80")
@@ -405,6 +405,12 @@ def refine_cutout_edges(
     return rgba
 
 
+def effective_edge_feather(args: argparse.Namespace) -> float:
+    """Keep pixel-art cutouts binary while retaining soft illustration edges."""
+
+    return 0.0 if bool(getattr(args, "pixel_art", False)) else args.edge_refine_feather
+
+
 def normalize_background_removal(request: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
     raw = request.get("background_removal")
     config = raw if isinstance(raw, dict) else {}
@@ -428,17 +434,34 @@ def normalize_background_removal(request: dict[str, Any], args: argparse.Namespa
         post_rembg_chroma_cleanup = args.post_rembg_chroma_cleanup
     if not isinstance(post_rembg_chroma_cleanup, bool):
         raise SystemExit("background_removal.post_rembg_chroma_cleanup must be boolean")
+    generation_background = request.get("generation_background")
+    inferred_family = (
+        "neutral"
+        if isinstance(generation_background, dict)
+        and generation_background.get("family") == "neutral"
+        else "legacy-chroma"
+    )
+    source_family = str(config.get("source_family", inferred_family))
+    if source_family not in {"neutral", "legacy-chroma", "unknown"}:
+        raise SystemExit(
+            "background_removal.source_family must be neutral, legacy-chroma, or unknown"
+        )
+    if post_rembg_chroma_cleanup and source_family != "legacy-chroma":
+        raise SystemExit(
+            "post_rembg_chroma_cleanup is valid only for legacy-chroma sources"
+        )
     return {
         "method": method,
         "model": model,
         "device": device,
         "alpha_matting": alpha_matting,
         "post_rembg_chroma_cleanup": post_rembg_chroma_cleanup,
+        "source_family": source_family,
         "matte_threshold": args.matte_threshold,
         "matte_max_colors": args.matte_max_colors,
         "edge_refine": args.edge_refine,
         "edge_refine_threshold": args.edge_refine_threshold,
-        "edge_refine_feather": args.edge_refine_feather,
+        "edge_refine_feather": effective_edge_feather(args),
         "edge_refine_passes": args.edge_refine_passes,
         "chroma_mask": "border-connected",
         "chroma_matte": "soft-edge-despill",
@@ -518,7 +541,10 @@ def remove_background(
     if method == "auto":
         if transparent_edge_ratio(source) >= 0.70:
             return source, "alpha"
-        if chroma_edge_ratio(source, chroma_key, args.key_threshold) >= 0.45:
+        if (
+            config.get("source_family") == "legacy-chroma"
+            and chroma_edge_ratio(source, chroma_key, args.key_threshold) >= 0.45
+        ):
             method = "chroma"
         elif matte_edge_ratio(source, args.matte_threshold, args.matte_max_colors) >= 0.82:
             method = "matte"
@@ -531,7 +557,7 @@ def remove_background(
                 cutout,
                 edge_palette_colors(source, args.matte_threshold, args.matte_max_colors),
                 args.edge_refine_threshold,
-                args.edge_refine_feather,
+                effective_edge_feather(args),
                 args.edge_refine_passes,
             )
         return cutout, "matte"
@@ -550,7 +576,7 @@ def remove_background(
                 cutout,
                 edge_palette_colors(source, args.matte_threshold, args.matte_max_colors),
                 args.edge_refine_threshold,
-                args.edge_refine_feather,
+                effective_edge_feather(args),
                 args.edge_refine_passes,
             )
         return cutout, "rembg"
@@ -561,7 +587,7 @@ def remove_background(
                 cutout,
                 edge_palette_colors(source, args.matte_threshold, args.matte_max_colors),
                 args.edge_refine_threshold,
-                args.edge_refine_feather,
+                effective_edge_feather(args),
                 args.edge_refine_passes,
             )
         return cutout, "ben2"
@@ -577,7 +603,7 @@ def remove_background(
             cutout,
             [chroma_key],
             args.edge_refine_threshold,
-            args.edge_refine_feather,
+            effective_edge_feather(args),
             args.edge_refine_passes,
         )
     return cutout, "chroma"
@@ -630,7 +656,7 @@ def save_background_matte_review(entries: list[dict[str, Any]], out_dir: Path) -
     panel_height = 92
     gutter = 8
     label_height = 20
-    row_width = panel_width * 4 + gutter * 5
+    row_width = panel_width * 6 + gutter * 7
     row_height = panel_height + label_height + gutter * 2
     review = Image.new("RGBA", (row_width, row_height * len(entries)), (7, 7, 7, 255))
     draw = ImageDraw.Draw(review)
@@ -645,7 +671,9 @@ def save_background_matte_review(entries: list[dict[str, Any]], out_dir: Path) -
         panels = [
             labeled_preview("raw source", raw, panel_width, panel_height),
             labeled_preview("processed on checker", checker, panel_width, panel_height),
-            labeled_preview("processed on dark", composite_on_color(processed, (8, 10, 12)), panel_width, panel_height),
+            labeled_preview("processed on black", composite_on_color(processed, (0, 0, 0)), panel_width, panel_height),
+            labeled_preview("processed on gray", composite_on_color(processed, (128, 128, 128)), panel_width, panel_height),
+            labeled_preview("processed on white", composite_on_color(processed, (255, 255, 255)), panel_width, panel_height),
             labeled_preview("alpha mask", alpha_mask_preview(processed), panel_width, panel_height),
         ]
         draw.text((gutter, y + 4), f"{state} | {method}", fill=(245, 245, 245, 255))
@@ -654,7 +682,7 @@ def save_background_matte_review(entries: list[dict[str, Any]], out_dir: Path) -
             review.alpha_composite(panel, (x, y + label_height))
     path = qa_dir / "background-matte-review.png"
     atomic_save_image(review, path)
-    return str(path.relative_to(out_dir))
+    return path.relative_to(out_dir).as_posix()
 
 
 def connected_components(image: Image.Image) -> list[dict[str, Any]]:
@@ -1777,6 +1805,7 @@ def main() -> int:
         "run_dir": str(run_dir),
         "cell": request["cell"],
         "chroma_key": request["chroma_key"],
+        "generation_background": request.get("generation_background"),
         "background_removal": background_removal,
         "background_matte_review": matte_review,
         "sprite_registration": {

@@ -49,8 +49,54 @@
       "additionalProperties": { "$ref": "#/$defs/state" }
     },
     "sampling_policy": { "$ref": "#/$defs/samplingPolicy" }
+    ,
+    "generation_background": { "$ref": "#/$defs/generationBackground" }
   },
   "$defs": {
+    "generationBackground": {
+      "type": "object",
+      "required": ["family", "name", "hex", "rgb"],
+      "properties": {
+        "family": { "const": "neutral" },
+        "name": { "enum": ["gray", "black", "white"] },
+        "hex": { "enum": ["#808080", "#000000", "#FFFFFF"] },
+        "rgb": {
+          "type": "array",
+          "prefixItems": [
+            { "type": "integer", "minimum": 0, "maximum": 255 },
+            { "type": "integer", "minimum": 0, "maximum": 255 },
+            { "type": "integer", "minimum": 0, "maximum": 255 }
+          ],
+          "items": false
+        },
+        "selection": { "enum": ["manual", "auto", "fallback"] },
+        "score": { "type": "number", "minimum": 0 }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "name": { "const": "gray" },
+            "hex": { "const": "#808080" },
+            "rgb": { "const": [128, 128, 128] }
+          }
+        },
+        {
+          "properties": {
+            "name": { "const": "black" },
+            "hex": { "const": "#000000" },
+            "rgb": { "const": [0, 0, 0] }
+          }
+        },
+        {
+          "properties": {
+            "name": { "const": "white" },
+            "hex": { "const": "#FFFFFF" },
+            "rgb": { "const": [255, 255, 255] }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
     "state": {
       "type": "object",
       "required": ["frames", "fps"],

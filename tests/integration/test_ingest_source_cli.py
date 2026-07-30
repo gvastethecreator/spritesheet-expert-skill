@@ -221,6 +221,72 @@ def test_ingest_accepts_hash_bound_imagegen_row_and_writes_v2_provenance(
     assert report["output"]["path"] == "raw/idle.png"
 
 
+def test_ingest_accepts_provider_canvas_dimensions_independent_of_output_cell(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "provider-sized"
+    create_run_marker(run_dir, run_id="provider-sized-source")
+    request = _write_request(run_dir)
+    candidate = run_dir / "handoff" / "outbox" / "job-idle.png"
+    candidate.parent.mkdir(parents=True)
+    Image.new("RGB", (1254, 1254), (128, 128, 128)).save(candidate)
+    intake = _intake(
+        run_dir,
+        request,
+        candidate_hash=sha256(candidate.read_bytes()).hexdigest(),
+    )
+    intake["candidate"]["width"] = 1254
+    intake["candidate"]["height"] = 1254
+    intake_path = run_dir / "handoff" / "inbox" / "job-idle.json"
+    intake_path.parent.mkdir(parents=True)
+    intake_path.write_text(json.dumps(intake), encoding="utf-8")
+
+    completed = _run(run_dir, intake_path)
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    with Image.open(run_dir / "raw" / "idle.png") as image:
+        assert image.size == (1254, 1254)
+
+
+def test_ingest_accepts_hash_bound_grok_imagine_still(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "grok-still"
+    create_run_marker(run_dir, run_id="grok-source-intake")
+    request = _write_request(run_dir)
+    candidate = run_dir / "handoff" / "outbox" / "grok-idle.png"
+    candidate_hash, mime = _write_candidate(candidate)
+    intake = _intake(
+        run_dir,
+        request,
+        source_type="grok-imagine-image",
+        engine="grok-imagine",
+        candidate_path="handoff/outbox/grok-idle.png",
+        candidate_hash=candidate_hash,
+        mime=mime,
+    )
+    intake["provider"].update(
+        {"name": "grok-imagine", "model": "grok-imagine-image"}
+    )
+    intake_path = run_dir / "grok-intake.json"
+    intake_path.write_text(json.dumps(intake), encoding="utf-8")
+
+    completed = _run(run_dir, intake_path)
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    provenance = json.loads(
+        (run_dir / "source-provenance.json").read_text(encoding="utf-8")
+    )
+    assert provenance["source_type"] == "grok-imagine-image"
+    assert provenance["art_engine"] == "grok-imagine"
+    assert provenance["fixture"] is False
+    assert provenance["accepted_sources"][0]["source_type"] == "grok-imagine-image"
+    assert provenance["accepted_sources"][0]["art_engine"] == "grok-imagine"
+    assert provenance["accepted_sources"][0]["upstream_report"] == (
+        "qa/source-intake-report.json"
+    )
+
+
 def test_ingest_accepts_imported_and_fixture_sources_with_explicit_policy(
     tmp_path: Path,
 ) -> None:

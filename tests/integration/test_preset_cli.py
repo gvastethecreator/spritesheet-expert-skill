@@ -15,6 +15,7 @@ VALIDATOR = REPO_ROOT / "SKILLS" / "spritesheet-expert" / "scripts" / "validate_
 WORKFLOW_IDS = {
     "idle-breath",
     "fighting-stance-idle",
+    "gesture-loop",
     "sideview-locomotion",
     "topdown-locomotion",
     "combat-quick-strike",

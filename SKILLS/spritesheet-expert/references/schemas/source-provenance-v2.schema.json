@@ -16,8 +16,17 @@
   "properties": {
     "version": { "const": 2 },
     "kind": { "const": "sprite-source-provenance" },
-    "source_type": { "enum": ["imagegen", "imported", "fixture"] },
-    "art_engine": { "enum": ["imagegen", "imported", "fixture"] },
+    "source_type": {
+      "enum": [
+        "imagegen",
+        "grok-imagine-image",
+        "grok-imagine-video",
+        "imported",
+        "fixture",
+        "mixed"
+      ]
+    },
+    "art_engine": { "enum": ["imagegen", "grok-imagine", "imported", "fixture", "mixed"] },
     "fixture": { "type": "boolean" },
     "verification_status": { "enum": ["verified", "legacy-unverified"] },
     "accepted_sources": {
@@ -53,7 +62,12 @@
           "type": "array",
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/stateSlug" }
-        }
+        },
+        "source_type": {
+          "enum": ["imagegen", "grok-imagine-image", "grok-imagine-video", "imported", "fixture"]
+        },
+        "art_engine": { "enum": ["imagegen", "grok-imagine", "imported", "fixture"] },
+        "upstream_report": { "type": "string", "minLength": 1 }
       },
       "additionalProperties": false
     }
@@ -61,6 +75,14 @@
   "allOf": [
     {
       "oneOf": [
+        {
+          "properties": {
+            "source_type": { "enum": ["grok-imagine-image", "grok-imagine-video"] },
+            "art_engine": { "const": "grok-imagine" },
+            "fixture": { "const": false }
+          },
+          "required": ["source_type", "art_engine", "fixture"]
+        },
         {
           "properties": {
             "source_type": { "const": "imagegen" },
@@ -82,6 +104,14 @@
             "source_type": { "const": "fixture" },
             "art_engine": { "const": "fixture" },
             "fixture": { "const": true }
+          },
+          "required": ["source_type", "art_engine", "fixture"]
+        },
+        {
+          "properties": {
+            "source_type": { "const": "mixed" },
+            "art_engine": { "const": "mixed" },
+            "fixture": { "const": false }
           },
           "required": ["source_type", "art_engine", "fixture"]
         }

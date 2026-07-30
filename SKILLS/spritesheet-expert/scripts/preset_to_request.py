@@ -15,7 +15,7 @@ from spritecore.contracts import ContractError, normalize_contract
 LOOP_HINTS = ("idle", "walk", "run", "running", "move", "blink", "talk", "sleep", "thinking")
 FRAME_BUDGETS = ("default", "compact", "micro")
 BACKGROUND_REMOVAL_METHODS = ("none", "chroma", "matte", "rembg", "ben2", "auto")
-DEFAULT_REMBG_MODEL = "birefnet-general-lite"
+DEFAULT_REMBG_MODEL = "birefnet-general"
 DEFAULT_BEN2_MODEL = "PramaLLC/BEN2"
 ART_DIRECTION_MODES = ("none", "pixel-art")
 ART_DIRECTION_MODE_ALIASES: dict[str, str] = {}
@@ -39,6 +39,7 @@ ART_PROFILES = {
 ANIMATION_WORKFLOWS = {
     "idle-breath",
     "fighting-stance-idle",
+    "gesture-loop",
     "sideview-locomotion",
     "topdown-locomotion",
     "combat-quick-strike",

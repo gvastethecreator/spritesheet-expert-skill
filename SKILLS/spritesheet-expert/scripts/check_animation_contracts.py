@@ -24,6 +24,7 @@ from runio import atomic_write_text
 WORKFLOW_ORDER = [
     "idle-breath",
     "fighting-stance-idle",
+    "gesture-loop",
     "sideview-locomotion",
     "topdown-locomotion",
     "combat-quick-strike",
@@ -41,7 +42,7 @@ WORKFLOW_ORDER = [
 
 LOCOMOTION_WORKFLOWS = {"sideview-locomotion", "topdown-locomotion", "run-gun-layered-motion"}
 ACTION_WORKFLOWS = {"combat-quick-strike", "combat-power-strike", "topdown-weapon-attack"}
-LOOP_WORKFLOWS = {"idle-breath", "fighting-stance-idle", "water-loop", "wind-ambient-loop", "pickup-feedback"}
+LOOP_WORKFLOWS = {"idle-breath", "fighting-stance-idle", "gesture-loop", "water-loop", "wind-ambient-loop", "pickup-feedback"}
 
 WORKFLOW_CONTRACTS: dict[str, dict[str, Any]] = {
     "idle-breath": {
@@ -60,6 +61,15 @@ WORKFLOW_CONTRACTS: dict[str, dict[str, Any]] = {
             "guard, support side, and weapon or fist logic read clearly",
             "extremities amplify the torso without becoming random bobbing",
             "stance communicates role, not a generic idle with raised hands",
+        ],
+    },
+    "gesture-loop": {
+        "min_frames": 3,
+        "phases": ["identity anchor", "gesture anticipation", "clear accent", "return to anchor"],
+        "visual_checks": [
+            "the gesture reads from body and limb motion without detached symbols",
+            "feet, camera, scale, and character identity remain stable",
+            "the final-to-first transition returns cleanly without an arm or prop pop",
         ],
     },
     "sideview-locomotion": {
@@ -278,6 +288,8 @@ def infer_workflows(request: dict[str, Any], state: str, entry: dict[str, Any]) 
             workflows.append("tiny-motion")
         if state_only_tokens & {"idle", "stance", "guard", "block"}:
             workflows.append("fighting-stance-idle" if fighting else "idle-breath")
+        if state_only_tokens & {"wave", "waving", "greet", "greeting", "salute", "saluting", "emote"}:
+            workflows.append("gesture-loop")
         if tokens & {"walk", "walking", "run", "running", "move", "moving", "dash", "dashing"}:
             workflows.append("topdown-locomotion" if is_topdown and not is_sideview else "sideview-locomotion")
             if tokens & {"gun", "guns", "shoot", "shooting", "aim", "aiming"} or "run-n-gun" in descriptor:
@@ -326,7 +338,12 @@ def infer_workflows(request: dict[str, Any], state: str, entry: dict[str, Any]) 
 
     if asset_kind == "vfx" or tokens & {"vfx", "fx", "effect", "effects", "explosion", "impact", "spark", "smoke", "fire", "electric"}:
         workflows.append("vfx-buildup-peak-decay")
-    if tokens & {"water", "waterfall", "river", "ripple", "splash", "lake", "ocean", "wave", "waves"}:
+    water_tokens = {"water", "waterfall", "river", "ripple", "splash", "lake", "ocean"}
+    water_context = bool(tokens & water_tokens)
+    if water_context or (
+        bool(tokens & {"wave", "waves"})
+        and asset_kind in {"vfx", "tileset", "texture", "background"}
+    ):
         workflows.append("water-loop")
     if tokens & {"wind", "fabric", "cloth", "hair", "leaf", "leaves", "grass", "tree", "dust", "cloud", "swirl"}:
         workflows.append("wind-ambient-loop")
@@ -748,8 +765,17 @@ def inspect_loop(
     closure = loop_closure_diff(frames)
     area_range = alpha_area_range_ratio(metrics)
     average_diff = sum(pair_diffs) / len(pair_diffs) if pair_diffs else 0.0
+    transition_diffs = pair_diffs[:-1] if len(pair_diffs) > 1 else pair_diffs
+    transition_average = (
+        sum(transition_diffs) / len(transition_diffs) if transition_diffs else 0.0
+    )
     if closure > args.max_loop_closure_diff:
         warnings.append(f"loop seam has high alpha difference ({closure:.3f}); verify end-to-start playback")
+    if "gesture-loop" in workflows and closure > max(0.18, transition_average * 1.35):
+        errors.append(
+            "gesture loop does not return cleanly to its identity anchor "
+            f"(closure {closure:.3f}, in-loop average {transition_average:.3f})"
+        )
     if "water-loop" in workflows or "wind-ambient-loop" in workflows:
         if average_diff < args.min_ambient_pair_diff:
             errors.append(f"ambient loop barely moves (avg diff {average_diff:.3f})")
@@ -761,6 +787,7 @@ def inspect_loop(
         "loop_closure_diff": round(closure, 4),
         "alpha_area_range_ratio": round(area_range, 4),
         "average_pair_diff": round(average_diff, 4),
+        "average_in_loop_transition_diff": round(transition_average, 4),
     }
 
 
