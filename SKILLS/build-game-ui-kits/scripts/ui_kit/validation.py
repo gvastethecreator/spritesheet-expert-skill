@@ -30,6 +30,26 @@ _VALIDATOR = validators.extend(
 _RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 
 
+def _check_provider_record(
+    provenance: Mapping[str, Any], root: Path, label: str, issues: list[str]
+) -> dict[str, Any] | None:
+    pin = provenance.get("provider_record")
+    if pin is None:
+        return None
+    try:
+        path = resolve_kit_path(root, pin["path"])
+    except UiKitError as exc:
+        issues.extend(f"{label} provider record: {issue}" for issue in exc.issues)
+        return None
+    if not path.is_file():
+        issues.append(f"{label}: provider record does not exist: {pin['path']}")
+        return None
+    actual = _hash(path)
+    if actual != pin["sha256"]:
+        issues.append(f"{label}: provider record sha256 mismatch")
+    return {"path": pin["path"], "sha256": actual, "verified": actual == pin["sha256"]}
+
+
 def resolve_kit_path(root: Path, value: str) -> Path:
     if unicodedata.normalize("NFC", value) != value or not value or "\\" in value or value.startswith("/") or ":" in value:
         raise UiKitError([f"component path must be portable and NFC relative: {value!r}"])
@@ -86,6 +106,24 @@ def _contrast(foreground: str, background: str) -> float:
     return (lighter + 0.05) / (darker + 0.05)
 
 
+def _preview_backdrop(name: str, size: tuple[int, int]) -> Image.Image:
+    colors = {
+        "black": (0, 0, 0, 255),
+        "gray": (128, 128, 128, 255),
+        "white": (255, 255, 255, 255),
+    }
+    if name in colors:
+        return Image.new("RGBA", size, colors[name])
+    tile = 8
+    backdrop = Image.new("RGBA", size, (224, 224, 224, 255))
+    draw = ImageDraw.Draw(backdrop)
+    for y in range(0, size[1], tile):
+        for x in range(0, size[0], tile):
+            if (x // tile + y // tile) % 2:
+                draw.rectangle((x, y, x + tile - 1, y + tile - 1), fill=(176, 176, 176, 255))
+    return backdrop
+
+
 def _proof_path(root: Path, value: Path, label: str) -> Path:
     target = Path(value).expanduser().resolve()
     if not target.is_relative_to(root):
@@ -114,19 +152,26 @@ def _nine_slice(image: Image.Image, guides: Mapping[str, Any], target: tuple[int
 
 
 def _state_board(records: list[dict[str, Any]], path: Path) -> dict[str, Any]:
-    cell_w, cell_h = 112, 72
+    views = ("checker", "black", "gray", "white")
+    panel_w, panel_h = 64, 40
+    cell_w, cell_h = panel_w * 2, panel_h * 2 + 22
     columns = min(4, max(1, len(records)))
     rows = (len(records) + columns - 1) // columns
     board = Image.new("RGBA", (columns * cell_w, rows * cell_h), (24, 24, 28, 255))
     draw = ImageDraw.Draw(board)
     for index, record in enumerate(records):
         image = record["image"].copy()
-        image.thumbnail((96, 48), Image.Resampling.NEAREST)
+        image.thumbnail((panel_w - 8, panel_h - 8), Image.Resampling.NEAREST)
         x, y = (index % columns) * cell_w, (index // columns) * cell_h
-        board.alpha_composite(image, (x + (cell_w - image.width) // 2, y + 2))
-        draw.text((x + 4, y + 52), f"{record['component']}:{record['state']}@{record['density']}x", fill=(245, 245, 245, 255))
+        for view_index, view in enumerate(views):
+            panel_x = x + (view_index % 2) * panel_w
+            panel_y = y + (view_index // 2) * panel_h
+            backdrop = _preview_backdrop(view, (panel_w, panel_h))
+            backdrop.alpha_composite(image, ((panel_w - image.width) // 2, (panel_h - image.height) // 2))
+            board.alpha_composite(backdrop, (panel_x, panel_y))
+        draw.text((x + 4, y + panel_h * 2 + 3), f"{record['component']}:{record['state']}@{record['density']}x", fill=(245, 245, 245, 255))
     _atomic_save(board, path, format="PNG")
-    return {"path": str(path), "sha256": _hash(path)}
+    return {"path": str(path), "sha256": _hash(path), "views": list(views)}
 
 
 def validate_ui_kit(
@@ -188,6 +233,12 @@ def validate_ui_kit(
             if set(seen_densities) != densities or len(seen_densities) != len(set(seen_densities)):
                 issues.append(f"component {component['id']} state {state}: density variants must equal {sorted(densities)}")
             for variant in variants:
+                provider_record = _check_provider_record(
+                    variant["provenance"],
+                    root,
+                    f"component {component['id']} state {state} density {variant['density']}",
+                    issues,
+                )
                 try:
                     path = resolve_kit_path(root, variant["path"])
                 except UiKitError as exc:
@@ -210,7 +261,18 @@ def validate_ui_kit(
                 if image.size != expected:
                     issues.append(f"component {component['id']} state {state}: dimensions {image.size} do not match density target {expected}")
                 source_paths.add(path)
-                records.append({"component": component["id"], "state": state, "density": variant["density"], "path": variant["path"], "sha256": actual_hash, "image": image})
+                records.append({
+                    "component": component["id"],
+                    "state": state,
+                    "density": variant["density"],
+                    "path": variant["path"],
+                    "sha256": actual_hash,
+                    "provenance": {
+                        **dict(variant["provenance"]),
+                        **({"provider_record": provider_record} if provider_record else {}),
+                    },
+                    "image": image,
+                })
                 if guides and variant["density"] == 1 and state == component["required_states"][0]:
                     stretch_records.append((component["id"], _nine_slice(image, guides, (base_size[0] * 2, base_size[1] * 2))))
     if any(target in source_paths for target in proof_targets):
@@ -237,11 +299,32 @@ def validate_ui_kit(
             "path": target.relative_to(root).as_posix(),
             "sha256": _hash(target),
         }
+    representative = all(
+        not variant["provenance"]["fixture"]
+        for component in components
+        for variants in component["states"].values()
+        for variant in variants
+    )
+    source_types = sorted({
+        variant["provenance"]["source_type"]
+        for component in components
+        for variants in component["states"].values()
+        for variant in variants
+    })
     return {
         "version": 1,
         "kind": "ui-kit-validation",
         "ok": True,
         "kit_id": document["kit_id"],
+        "representative": representative,
+        "source_types": source_types,
+        "evidence": {
+            "production_media": {
+                "representative": representative,
+                "provenance_verified": True,
+                "source_types": source_types,
+            }
+        },
         "checked_components": sorted(ids),
         "contrast_ratio": round(contrast, 4),
         "state_board": state_board,

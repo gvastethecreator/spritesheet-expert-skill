@@ -23,6 +23,15 @@ const validScopes = new Set([
   "presentation-only",
   "outside-suite",
 ]);
+const requiredBoundaryCases = new Set([
+  "background-grok-full-bleed",
+  "ui-grok-neutral-controls",
+  "static-imagegen-neutral-cutout",
+  "spritesheet-grok-first-frame-video",
+  "spritesheet-imagegen-neutral-mascot",
+  "spritesheet-retry-planted-greeting",
+  "router-mixed-provider-release",
+]);
 
 const errors = [];
 let suite;
@@ -118,6 +127,9 @@ function validateSuite(value) {
   }
   for (const scope of validScopes) {
     if (scopeCounts.get(scope) < 2) fail(`${scope}: require at least two routing cases`);
+  }
+  for (const id of requiredBoundaryCases) {
+    if (!ids.has(id)) fail(`missing learned-workflow boundary case: ${id}`);
   }
 }
 

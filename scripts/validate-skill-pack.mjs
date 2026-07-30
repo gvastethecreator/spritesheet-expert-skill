@@ -68,6 +68,9 @@ async function main() {
   await checkRequiredFiles();
   await checkNoLinkedSkillFolders();
   await checkSkillFrontmatter();
+  await checkProductionMediaContracts();
+  await checkSourceProvenanceSchemas();
+  await checkCrossSkillEvidence();
   await checkAgentMetadata();
   await checkCatalog();
   await checkPresetsJson();
@@ -129,6 +132,127 @@ async function checkSkillFrontmatter() {
   }
   if (!main.includes("check_generation_provenance.py")) {
     errors.push("spritesheet-expert: missing generation provenance gate");
+  }
+}
+
+async function checkProductionMediaContracts() {
+  const contracts = {
+    "spritesheet-expert": [
+      "Mandatory Imagegen Rule And Grok Exception",
+      "Optional Grok Imagine Provider",
+      "Failure Prevention Contract",
+      "gray, black, or white",
+      "green, blue, cyan, or magenta",
+      "model-backed",
+      "representative production art",
+      "contact sheet proves inventory and order",
+    ],
+    "build-static-game-assets": [
+      "$imagegen",
+      "$grok-imagine",
+      "gray, black, or white",
+      "green, blue, cyan, or magenta",
+      "BiRefNet/BEN2",
+      "source.provenance",
+      "representative",
+      "checker/black/gray/white",
+      "must not draw replacement production art",
+    ],
+    "build-game-backgrounds": [
+      "$imagegen",
+      "$grok-imagine",
+      "Full-bleed scene layers",
+      "green, blue, cyan, or magenta",
+      "provenance for every layer",
+      "representative",
+      "composite proves layer order",
+      "must not paint replacement production scenery",
+    ],
+    "build-game-ui-kits": [
+      "$imagegen",
+      "$grok-imagine",
+      "flat gray, black, or white",
+      "green, blue, cyan, or magenta",
+      "BiRefNet/BEN2",
+      "provenance on every state/density variant",
+      "representative",
+      "state board proves state/density comparison",
+      "must not draw replacement production UI",
+    ],
+    "compose-asset-mockups": [
+      "marked non-representative",
+      "placeholder",
+      "must not invent missing character, prop, background, or UI art",
+      "Runtime-captured claims require hash-backed capture evidence",
+    ],
+    "produce-2d-assets": [
+      "$imagegen",
+      "$grok-imagine",
+      "evidence.production_media",
+      "provenance_verified: true",
+      "neutral gray/black/white",
+      "single contact sheet cannot certify all families",
+      "may not replace the failed semantic art",
+    ],
+  };
+  for (const [skill, markers] of Object.entries(contracts)) {
+    const content = await readText(path.join(root, "SKILLS", skill, "SKILL.md"));
+    for (const marker of markers) {
+      if (!content.includes(marker)) errors.push(`${skill}: missing production-media contract marker: ${marker}`);
+    }
+  }
+}
+
+async function checkSourceProvenanceSchemas() {
+  const schemas = [
+    ["build-static-game-assets", "references/schemas/static-asset-pack-v1.schema.json", ["$defs", "asset", "properties", "source", "required"]],
+    ["build-game-backgrounds", "references/schemas/background-pack-v1.schema.json", ["$defs", "layer", "required"]],
+    ["build-game-ui-kits", "references/schemas/ui-kit-v1.schema.json", ["$defs", "variant", "required"]],
+  ];
+  for (const [skill, relativePath, requiredPath] of schemas) {
+    const file = path.join(root, "SKILLS", skill, relativePath);
+    let schema;
+    try {
+      schema = JSON.parse(await readText(file));
+    } catch (error) {
+      errors.push(`${skill}: cannot parse source provenance schema: ${error.message}`);
+      continue;
+    }
+    const sourceContract = schema?.$defs?.sourceProvenance;
+    const types = sourceContract?.properties?.source_type?.enum;
+    const engines = sourceContract?.properties?.art_engine?.enum;
+    if (JSON.stringify(types) !== JSON.stringify(["imagegen", "grok-imagine-image", "imported", "fixture"])) {
+      errors.push(`${skill}: source_type contract drifted`);
+    }
+    if (JSON.stringify(engines) !== JSON.stringify(["imagegen", "grok-imagine", "imported", "fixture"])) {
+      errors.push(`${skill}: art_engine contract drifted`);
+    }
+    let required = schema;
+    for (const segment of requiredPath) required = required?.[segment];
+    if (!Array.isArray(required) || !required.includes("provenance")) {
+      errors.push(`${skill}: every produced source must require provenance`);
+    }
+    const validationModule = skill === "build-static-game-assets"
+      ? "scripts/static_assets/validation.py"
+      : skill === "build-game-backgrounds"
+        ? "scripts/background_pack/validation.py"
+        : "scripts/ui_kit/validation.py";
+    const implementation = await readText(path.join(root, "SKILLS", skill, validationModule));
+    for (const marker of ['"representative"', '"production_media"', '"source_types"', "provider record sha256 mismatch"]) {
+      if (!implementation.includes(marker)) errors.push(`${skill}: validator missing ${marker}`);
+    }
+  }
+}
+
+async function checkCrossSkillEvidence() {
+  const files = {
+    "spritesheet-expert": ["SKILLS/spritesheet-expert/scripts/spritecore/orchestrator.py", '"production_media"'],
+    "produce-2d-assets": ["SKILLS/produce-2d-assets/scripts/assetpack/aggregate.py", "_PRODUCTION_SOURCE_TYPES"],
+    "compose-asset-mockups": ["SKILLS/compose-asset-mockups/scripts/presentation_pipeline/preparation.py", "_verified_production_media"],
+  };
+  for (const [skill, [relativePath, marker]] of Object.entries(files)) {
+    const content = await readText(path.join(root, relativePath));
+    if (!content.includes(marker)) errors.push(`${skill}: executable production-media evidence gate is missing`);
   }
 }
 

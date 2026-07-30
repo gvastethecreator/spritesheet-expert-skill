@@ -41,6 +41,26 @@ _RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f
 _ISOLATED_ROLES = {"prop", "item", "pickup", "icon", "cursor", "badge"}
 
 
+def _check_provider_record(
+    provenance: Mapping[str, Any], root: Path, label: str, issues: list[str]
+) -> dict[str, Any] | None:
+    pin = provenance.get("provider_record")
+    if pin is None:
+        return None
+    try:
+        path = resolve_pack_path(root, pin["path"])
+    except StaticAssetPackError as exc:
+        issues.extend(f"{label} provider record: {issue}" for issue in exc.issues)
+        return None
+    if not path.is_file():
+        issues.append(f"{label}: provider record does not exist: {pin['path']}")
+        return None
+    actual = _hash(path)
+    if actual != pin["sha256"]:
+        issues.append(f"{label}: provider record sha256 mismatch")
+    return {"path": pin["path"], "sha256": actual, "verified": actual == pin["sha256"]}
+
+
 def _schema_path(error: Any) -> str:
     path = "$"
     for part in error.absolute_path:
@@ -101,6 +121,24 @@ def _atomic_save(image: Image.Image, path: Path, *, format: str) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def _preview_backdrop(name: str, size: tuple[int, int]) -> Image.Image:
+    colors = {
+        "black": (0, 0, 0, 255),
+        "gray": (128, 128, 128, 255),
+        "white": (255, 255, 255, 255),
+    }
+    if name in colors:
+        return Image.new("RGBA", size, colors[name])
+    tile = 8
+    backdrop = Image.new("RGBA", size, (224, 224, 224, 255))
+    draw = ImageDraw.Draw(backdrop)
+    for y in range(0, size[1], tile):
+        for x in range(0, size[0], tile):
+            if (x // tile + y // tile) % 2:
+                draw.rectangle((x, y, x + tile - 1, y + tile - 1), fill=(176, 176, 176, 255))
+    return backdrop
+
+
 def _variant_issues(assets: list[Mapping[str, Any]]) -> list[str]:
     by_id = {asset["id"]: asset for asset in assets}
     issues: list[str] = []
@@ -128,22 +166,34 @@ def _variant_issues(assets: list[Mapping[str, Any]]) -> list[str]:
 
 
 def _render_contact(records: list[dict[str, Any]], target: Path) -> dict[str, Any]:
-    cell = 96
-    label_height = 24
-    columns = min(4, max(1, len(records)))
+    views = ("checker", "black", "gray", "white")
+    panel = 64
+    cell_width = panel * len(views)
+    cell_height = panel + 24
+    columns = min(2, max(1, len(records)))
     rows = (len(records) + columns - 1) // columns
-    board = Image.new("RGBA", (columns * cell, rows * (cell + label_height)), (24, 24, 28, 255))
+    board = Image.new("RGBA", (columns * cell_width, rows * cell_height), (24, 24, 28, 255))
     draw = ImageDraw.Draw(board)
     for index, record in enumerate(records):
         with Image.open(record["absolute_path"]) as opened:
             thumb = opened.convert("RGBA")
-        thumb.thumbnail((cell - 16, cell - 16), Image.Resampling.NEAREST)
-        left = (index % columns) * cell
-        top = (index // columns) * (cell + label_height)
-        board.alpha_composite(thumb, (left + (cell - thumb.width) // 2, top + (cell - thumb.height) // 2))
-        draw.text((left + 4, top + cell + 4), record["id"], fill=(245, 245, 245, 255))
+        thumb.thumbnail((panel - 12, panel - 12), Image.Resampling.NEAREST)
+        left = (index % columns) * cell_width
+        top = (index // columns) * cell_height
+        for view_index, view in enumerate(views):
+            backdrop = _preview_backdrop(view, (panel, panel))
+            backdrop.alpha_composite(thumb, ((panel - thumb.width) // 2, (panel - thumb.height) // 2))
+            board.alpha_composite(backdrop, (left + view_index * panel, top))
+            draw.text((left + view_index * panel + 3, top + 3), view[0].upper(), fill=(255, 96, 96, 255))
+        draw.text((left + 4, top + panel + 4), record["id"], fill=(245, 245, 245, 255))
     _atomic_save(board, target, format="PNG")
-    return {"path": str(target), "sha256": _hash(target), "width": board.width, "height": board.height}
+    return {
+        "path": str(target),
+        "sha256": _hash(target),
+        "width": board.width,
+        "height": board.height,
+        "views": list(views),
+    }
 
 
 def validate_static_pack(
@@ -160,6 +210,7 @@ def validate_static_pack(
     assets = list(document["assets"])
     ids = [asset["id"] for asset in assets]
     license_ids = [license_entry["id"] for license_entry in document["licenses"]]
+    licenses_by_id = {license_entry["id"]: license_entry for license_entry in document["licenses"]}
     issues: list[str] = []
     if len(ids) != len(set(ids)):
         issues.append("asset ids must be unique")
@@ -177,6 +228,29 @@ def validate_static_pack(
     )
     records: list[dict[str, Any]] = []
     for asset in assets:
+        provenance = asset["source"]["provenance"]
+        license_entry = licenses_by_id.get(asset["license_ref"])
+        expected_license_status = {
+            "imagegen": "generated",
+            "grok-imagine-image": "generated",
+            "fixture": "fixture",
+        }.get(provenance["source_type"])
+        if expected_license_status and license_entry is not None and license_entry["status"] != expected_license_status:
+            issues.append(
+                f"asset {asset['id']}: {provenance['source_type']} provenance requires "
+                f"a {expected_license_status} license status"
+            )
+        if (
+            provenance["source_type"] == "imported"
+            and license_entry is not None
+            and license_entry["status"] not in {"user-owned", "licensed"}
+        ):
+            issues.append(
+                f"asset {asset['id']}: imported provenance requires a user-owned or licensed status"
+            )
+        provider_record = _check_provider_record(
+            provenance, root, f"asset {asset['id']}", issues
+        )
         try:
             path = resolve_pack_path(root, asset["source"]["path"])
         except StaticAssetPackError as exc:
@@ -225,6 +299,10 @@ def validate_static_pack(
                 "opaque_ratio": round(ratio, 6),
                 "bbox": list(bbox) if bbox else None,
                 "pivot": dict(asset["pivot"]),
+                "provenance": {
+                    **dict(provenance),
+                    **({"provider_record": provider_record} if provider_record else {}),
+                },
             }
         )
     if contact_target is not None and any(
@@ -233,12 +311,27 @@ def validate_static_pack(
         issues.append("contact-sheet proof path must not overwrite an asset input")
     if issues:
         raise StaticAssetPackError(sorted(set(issues)))
+    representative = all(
+        not asset["source"]["provenance"]["fixture"] for asset in assets
+    )
+    source_types = sorted(
+        {asset["source"]["provenance"]["source_type"] for asset in assets}
+    )
     report: dict[str, Any] = {
         "version": 1,
         "kind": "static-asset-pack-validation",
         "ok": True,
         "pack_id": document["pack_id"],
         "style_fingerprint": document["style_fingerprint"],
+        "representative": representative,
+        "source_types": source_types,
+        "evidence": {
+            "production_media": {
+                "representative": representative,
+                "provenance_verified": True,
+                "source_types": source_types,
+            }
+        },
         "checked_assets": sorted(ids),
         "assets": [
             {key: value for key, value in record.items() if key != "absolute_path"}

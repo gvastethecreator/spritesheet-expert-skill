@@ -26,6 +26,9 @@ _LEAF_FIELDS = (
     "complete",
     "status",
 )
+_PRODUCTION_SOURCE_TYPES = frozenset(
+    {"imagegen", "grok-imagine-image", "grok-imagine-video", "imported", "mixed"}
+)
 
 
 def _sha256(content: bytes) -> str:
@@ -176,6 +179,7 @@ def aggregate_asset_pack(
         if isinstance(checked, list):
             checked_assets.extend(item for item in checked if isinstance(item, str))
         style_tokens_ok = False
+        production_media_ok = False
         if leaf is not None and isinstance(leaf.get("evidence"), Mapping):
             candidate = leaf["evidence"].get("style_tokens")
             if isinstance(candidate, Mapping):
@@ -193,6 +197,28 @@ def aggregate_asset_pack(
                     style_tokens_ok = True
             else:
                 block(f"asset {reference.asset_id}: style_tokens evidence is missing")
+            production_media = leaf["evidence"].get("production_media")
+            if not isinstance(production_media, Mapping):
+                block(f"asset {reference.asset_id}: production_media evidence is missing")
+            else:
+                source_types = production_media.get("source_types")
+                source_types_ok = (
+                    isinstance(source_types, list)
+                    and bool(source_types)
+                    and len(source_types) == len(set(source_types))
+                    and all(source_type in _PRODUCTION_SOURCE_TYPES for source_type in source_types)
+                )
+                if production_media.get("representative") is not True:
+                    block(f"asset {reference.asset_id}: production media is not representative")
+                if production_media.get("provenance_verified") is not True:
+                    block(f"asset {reference.asset_id}: production provenance is not verified")
+                if not source_types_ok:
+                    block(f"asset {reference.asset_id}: production source_types are missing or invalid")
+                production_media_ok = (
+                    production_media.get("representative") is True
+                    and production_media.get("provenance_verified") is True
+                    and source_types_ok
+                )
         verified = (
             leaf is not None
             and not shape_errors
@@ -205,6 +231,7 @@ def aggregate_asset_pack(
             and not leaf.get("errors")
             and reference.asset_id in checked
             and style_tokens_ok
+            and production_media_ok
         )
         if leaf is not None and actual_sha256 != reference.sha256:
             block(f"asset {reference.asset_id}: validation report sha256 mismatch")
@@ -269,6 +296,7 @@ def aggregate_asset_pack(
                 "checked_items": checked if isinstance(checked, list) else [],
                 "validation_errors": shape_errors,
                 "style_tokens_verified": style_tokens_ok,
+                "production_media_verified": production_media_ok,
                 "verified": verified,
             }
         )

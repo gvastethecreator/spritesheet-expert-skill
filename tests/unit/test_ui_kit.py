@@ -28,6 +28,10 @@ def _state_image(path: Path, size: tuple[int, int], fill: tuple[int, int, int, i
     return sha256(path.read_bytes()).hexdigest()
 
 
+def _imported_provenance() -> dict:
+    return {"source_type": "imported", "art_engine": "imported", "fixture": False, "verification_status": "verified"}
+
+
 def _kit(root: Path) -> dict:
     states = {}
     for state, color in (("default", (35, 55, 85, 255)), ("pressed", (20, 35, 60, 255))):
@@ -40,6 +44,7 @@ def _kit(root: Path) -> dict:
                     "density": density,
                     "path": f"components/{path.name}",
                     "sha256": digest,
+                    "provenance": _imported_provenance(),
                 }
             )
         states[state] = variants
@@ -84,6 +89,10 @@ def test_ui_kit_validates_state_density_parity_and_renders_proof_boards(tmp_path
     )
 
     assert report["ok"] is True
+    assert report["representative"] is True
+    assert report["source_types"] == ["imported"]
+    assert report["evidence"]["production_media"]["provenance_verified"] is True
+    assert report["state_board"]["views"] == ["checker", "black", "gray", "white"]
     assert report["checked_components"] == ["status-panel"]
     assert report["contrast_ratio"] >= 4.5
     assert (tmp_path / "qa" / "ui-state-board.png").is_file()
@@ -157,6 +166,44 @@ def test_ui_kit_accepts_fully_read_only_contract_mappings(tmp_path: Path) -> Non
     report = validate_ui_kit(_read_only_mappings(_kit(tmp_path)), root=tmp_path)
 
     assert report["ok"] is True
+
+
+def test_ui_kit_marks_fixtures_non_representative_and_requires_provenance(
+    tmp_path: Path,
+) -> None:
+    from ui_kit import UiKitError, validate_ui_kit
+
+    fixture = _kit(tmp_path)
+    for variants in fixture["components"][0]["states"].values():
+        for variant in variants:
+            variant["provenance"] = {"source_type": "fixture", "art_engine": "fixture", "fixture": True, "verification_status": "verified"}
+    assert validate_ui_kit(fixture, root=tmp_path)["representative"] is False
+
+    missing = _kit(tmp_path)
+    del missing["components"][0]["states"]["default"][0]["provenance"]
+    with pytest.raises(UiKitError, match="provenance"):
+        validate_ui_kit(missing, root=tmp_path)
+
+
+def test_ui_kit_rejects_a_stale_grok_provider_record(tmp_path: Path) -> None:
+    from ui_kit import UiKitError, validate_ui_kit
+
+    kit = _kit(tmp_path)
+    record = tmp_path / "provider" / "invocation.json"
+    record.parent.mkdir()
+    record.write_text('{"status":"completed"}', encoding="utf-8")
+    for variants in kit["components"][0]["states"].values():
+        for variant in variants:
+            variant["provenance"] = {
+                "source_type": "grok-imagine-image",
+                "art_engine": "grok-imagine",
+                "fixture": False,
+                "verification_status": "verified",
+                "provider_record": {"path": "provider/invocation.json", "sha256": "0" * 64},
+            }
+
+    with pytest.raises(UiKitError, match="provider record sha256 mismatch"):
+        validate_ui_kit(kit, root=tmp_path)
 
 
 def test_ui_proof_replacement_is_atomic_on_save_failure(

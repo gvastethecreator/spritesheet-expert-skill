@@ -30,6 +30,16 @@
       "rationale": "Es una sola familia de fondos con capas y scroll; no requiere el router de una entrega compuesta."
     },
     {
+      "id": "background-grok-full-bleed",
+      "prompt": "Use Grok Imagine still generation for a full-bleed desert parallax scene, preserve the authored sky and terrain pixels, then verify composite and scroll behavior.",
+      "scope": "production-single-family",
+      "families": ["backgrounds"],
+      "familyCount": 1,
+      "expectedSkill": "build-game-backgrounds",
+      "excludedSkills": ["produce-2d-assets", "spritesheet-expert", "build-static-game-assets", "build-game-ui-kits", "compose-asset-mockups"],
+      "rationale": "Grok is the selected still provider, but the output remains one full-bleed background family whose proof is composite plus scroll."
+    },
+    {
       "id": "ui-nine-slice-states",
       "prompt": "Build a raster game UI kit with idle, hover, pressed, disabled, and focus states plus nine-slice proof for every panel.",
       "scope": "production-single-family",
@@ -50,6 +60,16 @@
       "rationale": "El pedido se limita a componentes raster de interfaz y necesita pruebas de estados y densidad."
     },
     {
+      "id": "ui-grok-neutral-controls",
+      "prompt": "Generate a small button and toggle family with Grok Imagine on neutral gray, remove the matte without losing gray outlines, and prove states, alpha edges, densities, and nine-slice behavior.",
+      "scope": "production-single-family",
+      "families": ["ui"],
+      "familyCount": 1,
+      "expectedSkill": "build-game-ui-kits",
+      "excludedSkills": ["produce-2d-assets", "spritesheet-expert", "build-static-game-assets", "build-game-backgrounds", "compose-asset-mockups"],
+      "rationale": "The explicit still provider does not change ownership: neutral cutout, states, density and stretch proof belong to the UI leaf."
+    },
+    {
       "id": "static-pickup-pack",
       "prompt": "Create 24 non-animated pickup sprites with consistent pivots, transparent bounds, hashes, and a contact sheet.",
       "scope": "production-single-family",
@@ -68,6 +88,16 @@
       "expectedSkill": "build-static-game-assets",
       "excludedSkills": ["produce-2d-assets", "spritesheet-expert", "build-game-backgrounds", "build-game-ui-kits", "compose-asset-mockups"],
       "rationale": "Es una única familia de objetos estáticos y no contiene animación, fondos ni estados de interfaz."
+    },
+    {
+      "id": "static-imagegen-neutral-cutout",
+      "prompt": "Use Imagegen to create isolated gray-metal pickups on a neutral white background, remove only the background without erasing subject neutrals, and deliver pivots, provenance, hashes, and alpha proof.",
+      "scope": "production-single-family",
+      "families": ["static-assets"],
+      "familyCount": 1,
+      "expectedSkill": "build-static-game-assets",
+      "excludedSkills": ["produce-2d-assets", "spritesheet-expert", "build-game-backgrounds", "build-game-ui-kits", "compose-asset-mockups"],
+      "rationale": "This is one static family; provider-backed neutral cutout and contact proof are owned by the static asset skill."
     },
     {
       "id": "spritesheet-run-cycle",
@@ -98,6 +128,26 @@
       "expectedSkill": "spritesheet-expert",
       "excludedSkills": ["produce-2d-assets", "build-static-game-assets", "build-game-backgrounds", "build-game-ui-kits", "compose-asset-mockups"],
       "rationale": "The provider video is only a source; deterministic frame sampling, alignment, atlas composition, previews, and animation QA belong to the spritesheet pipeline."
+    },
+    {
+      "id": "spritesheet-imagegen-neutral-mascot",
+      "prompt": "Generate a mascot sprite row with Imagegen on neutral gray, use model-backed background removal, align the extracted frames, and inspect playback, contact poses, onion skin, and alpha edges.",
+      "scope": "production-single-family",
+      "families": ["animated-sprites"],
+      "familyCount": 1,
+      "expectedSkill": "spritesheet-expert",
+      "excludedSkills": ["produce-2d-assets", "build-static-game-assets", "build-game-backgrounds", "build-game-ui-kits", "compose-asset-mockups"],
+      "rationale": "A provider-generated animated row still needs the spritesheet extraction, registration, playback, onion and animation-contract gates."
+    },
+    {
+      "id": "spritesheet-retry-planted-greeting",
+      "prompt": "The generated greeting loop moves both feet across the floor; regenerate the semantic motion while locking pelvis and feet, then verify planted-leg metrics, onion overlays, and chronological playback.",
+      "scope": "production-single-family",
+      "families": ["animated-sprites"],
+      "familyCount": 1,
+      "expectedSkill": "spritesheet-expert",
+      "excludedSkills": ["produce-2d-assets", "build-static-game-assets", "build-game-backgrounds", "build-game-ui-kits", "compose-asset-mockups"],
+      "rationale": "The failure is real lower-body motion, so it must return to semantic generation and then pass sprite-specific alignment and gesture gates."
     },
     {
       "id": "mockup-store-board",
@@ -136,6 +186,16 @@
       "expectedSkill": "produce-2d-assets",
       "excludedSkills": ["spritesheet-expert", "build-static-game-assets", "build-game-backgrounds", "build-game-ui-kits", "compose-asset-mockups"],
       "rationale": "The request crosses two production families and explicitly requires shared coordination, so a single leaf is insufficient."
+    },
+    {
+      "id": "router-mixed-provider-release",
+      "prompt": "Deliver one release containing Imagegen character sprites, Grok still backgrounds, imported UI, and a truth-labelled review board with one shared style contract and verified provider provenance.",
+      "scope": "production-multi-family",
+      "families": ["animated-sprites", "backgrounds", "ui", "presentation"],
+      "familyCount": 4,
+      "expectedSkill": "produce-2d-assets",
+      "excludedSkills": ["spritesheet-expert", "build-static-game-assets", "build-game-backgrounds", "build-game-ui-kits", "compose-asset-mockups"],
+      "rationale": "Several producing families and a presentation must reconcile mixed providers, style, provenance, proof, ownership, and delivery hashes."
     },
     {
       "id": "outside-existing-react-dashboard",

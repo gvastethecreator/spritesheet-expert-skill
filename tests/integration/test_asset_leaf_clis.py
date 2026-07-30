@@ -34,6 +34,10 @@ STATIC_SCRIPT = (
 )
 
 
+def _fixture_provenance() -> dict:
+    return {"source_type": "fixture", "art_engine": "fixture", "fixture": True, "verification_status": "verified"}
+
+
 def _write_background_pack(root: Path) -> Path:
     layer_path = root / "layers" / "sky.png"
     layer_path.parent.mkdir(parents=True, exist_ok=True)
@@ -55,6 +59,7 @@ def _write_background_pack(root: Path) -> Path:
                 "role": "sky",
                 "path": "layers/sky.png",
                 "sha256": sha256(layer_path.read_bytes()).hexdigest(),
+                "provenance": _fixture_provenance(),
                 "order": 0,
                 "depth": 0.0,
                 "parallax_x": 0.0,
@@ -96,6 +101,7 @@ def _write_ui_kit(root: Path) -> Path:
                             "density": 1,
                             "path": "components/button-default.png",
                             "sha256": sha256(image_path.read_bytes()).hexdigest(),
+                            "provenance": _fixture_provenance(),
                         }
                     ]
                 },
@@ -130,6 +136,7 @@ def _write_static_pack(root: Path) -> Path:
                 "source": {
                     "path": "assets/crate.png",
                     "sha256": sha256(image_path.read_bytes()).hexdigest(),
+                    "provenance": _fixture_provenance(),
                 },
                 "target": {"width": 16, "height": 16},
                 "pivot": {"x": 0.5, "y": 1.0},
@@ -170,6 +177,7 @@ def test_background_cli_writes_current_atomic_proof_report(tmp_path: Path) -> No
     composite = tmp_path / "qa" / "background-composite.png"
     scroll = tmp_path / "qa" / "background-scroll.gif"
     assert report["ok"] is True
+    assert report["representative"] is False
     assert report["composite"]["path"] == "qa/background-composite.png"
     assert report["scroll_preview"]["path"] == "qa/background-scroll.gif"
     assert report["composite"]["sha256"] == sha256(composite.read_bytes()).hexdigest()
@@ -202,6 +210,7 @@ def test_ui_cli_writes_current_atomic_proof_report(tmp_path: Path) -> None:
     state_board = tmp_path / "qa" / "ui-state-board.png"
     stretch_board = tmp_path / "qa" / "ui-nine-slice.png"
     assert report["ok"] is True
+    assert report["representative"] is False
     assert report["state_board"]["path"] == "qa/ui-state-board.png"
     assert report["stretch_board"]["path"] == "qa/ui-nine-slice.png"
     assert report["state_board"]["sha256"] == sha256(state_board.read_bytes()).hexdigest()
@@ -234,6 +243,7 @@ def test_static_cli_writes_current_atomic_proof_report_without_host_paths(
     report = json.loads(report_path.read_text(encoding="utf-8"))
     contact = tmp_path / "qa" / "static-pack-contact.png"
     assert report["ok"] is True
+    assert report["representative"] is False
     assert report["contact_sheet"]["path"] == "qa/static-pack-contact.png"
     assert report["contact_sheet"]["sha256"] == sha256(contact.read_bytes()).hexdigest()
     assert "absolute_path" not in report_path.read_text(encoding="utf-8")

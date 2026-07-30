@@ -33,6 +33,27 @@
   "$defs": {
     "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$", "maxLength": 64},
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "sourceProvenance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_type", "art_engine", "fixture", "verification_status"],
+      "properties": {
+        "source_type": {"enum": ["imagegen", "grok-imagine-image", "imported", "fixture"]},
+        "art_engine": {"enum": ["imagegen", "grok-imagine", "imported", "fixture"]},
+        "fixture": {"type": "boolean"},
+        "verification_status": {"const": "verified"},
+        "provider_record": {
+          "type": "object", "additionalProperties": false,
+          "required": ["path", "sha256"],
+          "properties": {"path": {"type": "string", "minLength": 1}, "sha256": {"$ref": "#/$defs/sha256"}}
+        }
+      },
+      "oneOf": [
+        {"properties": {"source_type": {"const": "imagegen"}, "art_engine": {"const": "imagegen"}, "fixture": {"const": false}}},
+        {"properties": {"source_type": {"const": "grok-imagine-image"}, "art_engine": {"const": "grok-imagine"}, "fixture": {"const": false}}, "required": ["provider_record"]},
+        {"properties": {"source_type": {"const": "imported"}, "art_engine": {"const": "imported"}, "fixture": {"const": false}}},
+        {"properties": {"source_type": {"const": "fixture"}, "art_engine": {"const": "fixture"}, "fixture": {"const": true}}}
+      ]
+    },
     "normalizedRect": {
       "type": "object", "additionalProperties": false,
       "required": ["x", "y", "width", "height"],
@@ -45,12 +66,13 @@
     },
     "layer": {
       "type": "object", "additionalProperties": false,
-      "required": ["id", "role", "path", "sha256", "order", "depth", "parallax_x", "parallax_y", "repeat_x", "blend_mode"],
+      "required": ["id", "role", "path", "sha256", "provenance", "order", "depth", "parallax_x", "parallax_y", "repeat_x", "blend_mode"],
       "properties": {
         "id": {"$ref": "#/$defs/id"},
         "role": {"enum": ["sky", "far", "mid", "near", "foreground", "fog", "lighting"]},
         "path": {"type": "string", "minLength": 1},
         "sha256": {"$ref": "#/$defs/sha256"},
+        "provenance": {"$ref": "#/$defs/sourceProvenance"},
         "order": {"type": "integer", "minimum": 0},
         "depth": {"type": "number", "minimum": 0, "maximum": 1},
         "parallax_x": {"type": "number", "minimum": 0, "maximum": 1},

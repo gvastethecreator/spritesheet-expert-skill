@@ -402,6 +402,25 @@ def _build_report(
     partial: bool,
 ) -> tuple[dict[str, Any], int]:
     status, exit_code, complete = _overall_status(results, partial=partial)
+    provenance_result = next(
+        (result for result in results if result.id == "generation-provenance"),
+        None,
+    )
+    source_type = (
+        provenance_result.evidence.get("source_type")
+        if provenance_result is not None
+        else None
+    )
+    provenance_verified = bool(
+        provenance_result is not None
+        and provenance_result.status is CheckStatus.PASS
+        and source_type
+    )
+    representative = bool(
+        workflow == "production"
+        and provenance_verified
+        and source_type != "fixture"
+    )
     blockers = [
         f"{result.id}: {error}"
         for result in results
@@ -423,6 +442,13 @@ def _build_report(
         "complete": complete,
         "exit_code": exit_code,
         "input_fingerprint": _aggregate_fingerprint(policy, results),
+        "evidence": {
+            "production_media": {
+                "representative": representative,
+                "provenance_verified": provenance_verified,
+                "source_types": [source_type] if isinstance(source_type, str) else [],
+            }
+        },
         "policy": policy.to_dict() if policy else None,
         "checked_items": checked_items,
         "results": [result.to_dict() for result in results],

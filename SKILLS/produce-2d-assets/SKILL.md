@@ -1,6 +1,6 @@
 ---
 name: produce-2d-assets
-description: "Coordinate and validate coherent multi-family 2D game asset packs. Use when one delivery spans sprites, static props, backgrounds, UI kits, presentation mockups, shared style rules, variants, owners, and a release manifest."
+description: "Coordinate and validate coherent multi-family 2D game asset packs. Use when one delivery spans two or more of sprites, static props, backgrounds, UI, and mockups and must reconcile Imagegen/Grok/imported provenance, representative proof, style, variants, owners, and release manifests."
 ---
 
 # Produce 2D Assets
@@ -22,10 +22,14 @@ Do not delegate merely because multiple skills exist. Execute directly when the 
 1. Freeze the cross-family contract.
    - Define pack id, owners, style bible, inventory, variant matrix, delivery targets, dependencies, and acceptance proof.
    - Reuse one style fingerprint across participating families. Make allowed differences explicit instead of letting families drift.
+   - Record the selected semantic provider per generated family: `$imagegen` is the still default; `$grok-imagine` is explicit and paid runs require reviewed dry-run plus current-task acknowledgement. Grok video-to-frames belongs to `$spritesheet-expert`.
 
 2. Produce each family through its owner.
    - Require real source provenance, licenses, portable paths, current hashes, and the leaf skill's deterministic report/proof.
+   - Require `evidence.production_media` from every production leaf with `representative: true`, `provenance_verified: true`, and explicit `source_types`. Imagegen/Grok/imported sources remain distinct; fixtures, placeholders, deterministic drawings, and legacy-unverified media cannot satisfy a production family.
+   - For isolated sprites, props, and UI use neutral gray/black/white source backgrounds and reviewed model-backed removal when matte removal is ambiguous. Full-bleed backgrounds retain authored scene pixels.
    - Keep a dependency blocked until its upstream report passes. Do not create placeholder deliverables to make the aggregate green.
+   - When a provider result fails identity, anatomy, semantics, repeat behavior, or edge quality, retry that provider route. Deterministic code may extract, align, compose, preview, and validate; it may not replace the failed semantic art.
 
 3. Write `asset-pack.json` against the schemas under `references/schemas/`.
    - Require `schema_version`, `pack_id`, `owners`, `style_bible`, `inventory`, `variant_matrix`, and `delivery_manifest`.
@@ -41,6 +45,7 @@ The command writes `validation/asset-pack-validation-report.json`. Exit `0` pass
 
 5. Reconcile the real pack.
    - Inspect the family proof artifacts together for scale, palette, camera, density, naming, variants, ownership, licensing, and presentation truth.
+   - Inspect the right proof for each claim: animation playback/onion/contact evidence, background composite plus scroll, UI state plus stretch boards, static contact/alpha proof, and truth-labelled mockups. A single contact sheet cannot certify all families.
    - Run the aggregate validator again after any leaf changes; stale leaf reports must fail.
 
 ## Completion Contract

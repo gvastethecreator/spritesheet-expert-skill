@@ -30,6 +30,26 @@ _VALIDATOR = validators.extend(
 _RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 
 
+def _check_provider_record(
+    provenance: Mapping[str, Any], root: Path, label: str, issues: list[str]
+) -> dict[str, Any] | None:
+    pin = provenance.get("provider_record")
+    if pin is None:
+        return None
+    try:
+        path = resolve_pack_path(root, pin["path"])
+    except BackgroundPackError as exc:
+        issues.extend(f"{label} provider record: {issue}" for issue in exc.issues)
+        return None
+    if not path.is_file():
+        issues.append(f"{label}: provider record does not exist: {pin['path']}")
+        return None
+    actual = _hash(path)
+    if actual != pin["sha256"]:
+        issues.append(f"{label}: provider record sha256 mismatch")
+    return {"path": pin["path"], "sha256": actual, "verified": actual == pin["sha256"]}
+
+
 def resolve_pack_path(root: Path, value: str) -> Path:
     if unicodedata.normalize("NFC", value) != value or not value or "\\" in value or value.startswith("/") or ":" in value:
         raise BackgroundPackError([f"layer path must be portable and NFC relative: {value!r}"])
@@ -179,6 +199,9 @@ def validate_background_pack(
         issues.append("proof output paths must be distinct")
     records: list[dict[str, Any]] = []
     for layer in layers:
+        provider_record = _check_provider_record(
+            layer["provenance"], root, f"layer {layer['id']}", issues
+        )
         try:
             path = resolve_pack_path(root, layer["path"])
         except BackgroundPackError as exc:
@@ -202,7 +225,16 @@ def validate_background_pack(
         seam_delta = _edge_delta(image) if layer["repeat_x"] else None
         if seam_delta is not None and seam_delta > 0.03:
             issues.append(f"layer {layer['id']}: horizontal repeat seam delta {seam_delta:.4f}")
-        records.append({**dict(layer), "absolute_path": str(path), "image": image, "seam_delta": seam_delta})
+        records.append({
+            **dict(layer),
+            "provenance": {
+                **dict(layer["provenance"]),
+                **({"provider_record": provider_record} if provider_record else {}),
+            },
+            "absolute_path": str(path),
+            "image": image,
+            "seam_delta": seam_delta,
+        })
     input_paths = {Path(record["absolute_path"]) for record in records}
     if any(target in input_paths for target in proof_targets):
         issues.append("proof output paths must not overwrite layer inputs")
@@ -225,11 +257,22 @@ def validate_background_pack(
             "path": target.relative_to(root).as_posix(),
             "sha256": _hash(target),
         }
+    representative = all(not layer["provenance"]["fixture"] for layer in layers)
+    source_types = sorted({layer["provenance"]["source_type"] for layer in layers})
     return {
         "version": 1,
         "kind": "background-pack-validation",
         "ok": True,
         "pack_id": document["pack_id"],
+        "representative": representative,
+        "source_types": source_types,
+        "evidence": {
+            "production_media": {
+                "representative": representative,
+                "provenance_verified": True,
+                "source_types": source_types,
+            }
+        },
         "checked_layers": ids,
         "camera": dict(document["camera"]),
         "layers": [{key: value for key, value in record.items() if key not in {"image", "absolute_path"}} for record in records],

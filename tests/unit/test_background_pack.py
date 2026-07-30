@@ -31,6 +31,10 @@ def _layer(path: Path, color: tuple[int, int, int, int], *, seam: bool = True) -
     return sha256(path.read_bytes()).hexdigest()
 
 
+def _imported_provenance() -> dict:
+    return {"source_type": "imported", "art_engine": "imported", "fixture": False, "verification_status": "verified"}
+
+
 def _pack(root: Path) -> dict:
     sky_hash = _layer(root / "layers" / "sky.png", (60, 100, 180, 255))
     far_hash = _layer(root / "layers" / "far.png", (80, 120, 100, 180))
@@ -47,9 +51,9 @@ def _pack(root: Path) -> dict:
             "focal_safe_zone": {"x": 0.25, "y": 0.2, "width": 0.5, "height": 0.5},
         },
         "layers": [
-            {"id": "sky", "role": "sky", "path": "layers/sky.png", "sha256": sky_hash, "order": 0, "depth": 0.0, "parallax_x": 0.0, "parallax_y": 0.0, "repeat_x": True, "blend_mode": "normal"},
-            {"id": "far", "role": "far", "path": "layers/far.png", "sha256": far_hash, "order": 1, "depth": 0.5, "parallax_x": 0.25, "parallax_y": 0.05, "repeat_x": True, "blend_mode": "normal"},
-            {"id": "near", "role": "near", "path": "layers/near.png", "sha256": near_hash, "order": 2, "depth": 1.0, "parallax_x": 0.8, "parallax_y": 0.15, "repeat_x": True, "blend_mode": "normal"},
+            {"id": "sky", "role": "sky", "path": "layers/sky.png", "sha256": sky_hash, "provenance": _imported_provenance(), "order": 0, "depth": 0.0, "parallax_x": 0.0, "parallax_y": 0.0, "repeat_x": True, "blend_mode": "normal"},
+            {"id": "far", "role": "far", "path": "layers/far.png", "sha256": far_hash, "provenance": _imported_provenance(), "order": 1, "depth": 0.5, "parallax_x": 0.25, "parallax_y": 0.05, "repeat_x": True, "blend_mode": "normal"},
+            {"id": "near", "role": "near", "path": "layers/near.png", "sha256": near_hash, "provenance": _imported_provenance(), "order": 2, "depth": 1.0, "parallax_x": 0.8, "parallax_y": 0.15, "repeat_x": True, "blend_mode": "normal"},
         ],
     }
 
@@ -65,6 +69,9 @@ def test_background_pack_validates_and_renders_composite_and_scroll_proofs(tmp_p
     )
 
     assert report["ok"] is True
+    assert report["representative"] is True
+    assert report["source_types"] == ["imported"]
+    assert report["evidence"]["production_media"]["provenance_verified"] is True
     assert report["checked_layers"] == ["sky", "far", "near"]
     assert (tmp_path / "qa" / "background-composite.png").is_file()
     assert (tmp_path / "qa" / "background-scroll.gif").is_file()
@@ -130,6 +137,42 @@ def test_background_pack_accepts_fully_read_only_contract_mappings(
     report = validate_background_pack(_read_only_mappings(_pack(tmp_path)), root=tmp_path)
 
     assert report["ok"] is True
+
+
+def test_background_pack_marks_fixture_non_representative_and_requires_provenance(
+    tmp_path: Path,
+) -> None:
+    from background_pack import BackgroundPackError, validate_background_pack
+
+    fixture = _pack(tmp_path)
+    for layer in fixture["layers"]:
+        layer["provenance"] = {"source_type": "fixture", "art_engine": "fixture", "fixture": True, "verification_status": "verified"}
+    assert validate_background_pack(fixture, root=tmp_path)["representative"] is False
+
+    missing = _pack(tmp_path)
+    del missing["layers"][0]["provenance"]
+    with pytest.raises(BackgroundPackError, match="provenance"):
+        validate_background_pack(missing, root=tmp_path)
+
+
+def test_background_pack_rejects_a_stale_grok_provider_record(tmp_path: Path) -> None:
+    from background_pack import BackgroundPackError, validate_background_pack
+
+    pack = _pack(tmp_path)
+    record = tmp_path / "provider" / "invocation.json"
+    record.parent.mkdir()
+    record.write_text('{"status":"completed"}', encoding="utf-8")
+    for layer in pack["layers"]:
+        layer["provenance"] = {
+            "source_type": "grok-imagine-image",
+            "art_engine": "grok-imagine",
+            "fixture": False,
+            "verification_status": "verified",
+            "provider_record": {"path": "provider/invocation.json", "sha256": "0" * 64},
+        }
+
+    with pytest.raises(BackgroundPackError, match="provider record sha256 mismatch"):
+        validate_background_pack(pack, root=tmp_path)
 
 
 def test_background_proof_replacement_is_atomic_on_save_failure(
