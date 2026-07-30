@@ -34,6 +34,7 @@ _SCHEMA_PATH = (
 )
 _TYPE_BINDINGS = {
     "imagegen": ("imagegen", "provider-output", {"generated"}),
+    "grok-imagine-image": ("grok-imagine", "provider-output", {"generated"}),
     "imported": ("imported", "user-import", {"user-owned", "licensed"}),
     "fixture": ("fixture", "fixture", {"fixture"}),
 }
@@ -435,24 +436,19 @@ def validate_source_intake(
 
     if isinstance(entry, Mapping):
         layout = entry.get("raw_layout")
-        cell = request.get("cell", {})
-        if isinstance(cell, Mapping):
-            columns = (
-                int(layout.get("columns", 0))
-                if isinstance(layout, Mapping)
-                else int(entry.get("frames", 0))
+        columns = (
+            int(layout.get("columns", 0))
+            if isinstance(layout, Mapping)
+            else int(entry.get("frames", 0))
+        )
+        rows = int(layout.get("rows", 0)) if isinstance(layout, Mapping) else 1
+        if columns <= 0 or rows <= 0:
+            issues.append(f"raw_layout for {state!r} must declare positive columns and rows")
+        elif candidate["width"] < columns or candidate["height"] < rows:
+            issues.append(
+                f"candidate resolution is too small for raw_layout {columns}x{rows} "
+                f"for {state!r}; every source slot must contain at least one pixel"
             )
-            rows = int(layout.get("rows", 0)) if isinstance(layout, Mapping) else 1
-            expected_width = columns * int(cell.get("width", 0))
-            expected_height = rows * int(cell.get("height", 0))
-            if (candidate["width"], candidate["height"]) != (
-                expected_width,
-                expected_height,
-            ):
-                issues.append(
-                    f"candidate dimensions do not match raw_layout for {state!r}: "
-                    f"expected {expected_width}x{expected_height}"
-                )
 
     existing_provenance = _validate_existing_provenance(
         run_root, request, state, source_type, license_ref, issues

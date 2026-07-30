@@ -135,6 +135,41 @@ def test_static_variants_do_not_infer_temporal_workflow_from_nouns() -> None:
     assert infer_workflows(request, "nature-materials", entry) == []
 
 
+def test_character_wave_infers_gesture_loop_not_water_loop() -> None:
+    request = {
+        "asset_kind": "sprite",
+        "frame_semantics": "animation",
+        "cell": {"width": 192, "height": 192},
+    }
+    entry = {
+        "frames": 6,
+        "fps": 6,
+        "loop": True,
+        "action": "planted friendly hand wave loop",
+    }
+
+    assert infer_workflows(request, "wave", entry) == ["gesture-loop"]
+
+
+def test_environment_wave_still_infers_water_loop() -> None:
+    request = {
+        "asset_kind": "vfx",
+        "frame_semantics": "effects",
+        "cell": {"width": 64, "height": 64},
+    }
+    entry = {
+        "frames": 6,
+        "fps": 8,
+        "loop": True,
+        "action": "ocean wave surface loop",
+    }
+
+    assert infer_workflows(request, "wave", entry) == [
+        "vfx-buildup-peak-decay",
+        "water-loop",
+    ]
+
+
 def test_auto_import_is_blocked_for_production_but_explicit_diagnostic_can_succeed(
     tmp_path: Path,
 ) -> None:

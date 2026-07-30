@@ -115,7 +115,7 @@ STYLE_PRESETS: dict[str, dict[str, str]] = {
 STYLE_DEFAULT_PRESET = "pixel-art"
 STYLE_DEFAULT = STYLE_PRESETS[STYLE_DEFAULT_PRESET]["contract"]
 BACKGROUND_REMOVAL_METHODS = {"none", "chroma", "matte", "rembg", "ben2", "auto"}
-DEFAULT_REMBG_MODEL = "birefnet-general-lite"
+DEFAULT_REMBG_MODEL = "birefnet-general"
 DEFAULT_BEN2_MODEL = "PramaLLC/BEN2"
 ART_DIRECTION_MODES = {"none", "pixel-art"}
 ART_DIRECTION_MODE_ALIASES: dict[str, str] = {}
@@ -129,6 +129,7 @@ PREPARE_KNOWN_OUTPUTS = (
     "references/art-direction.json",
     "frames",
     "qa",
+    "provider",
     "sprite-request.json",
     "sprite-sheet-alpha.png",
     "sprite-sheet-alpha.webp",
@@ -142,15 +143,15 @@ TRANSPARENCY_ARTIFACT_RULES = [
     "Effects are allowed only when state-relevant, opaque, controlled, fully inside the same frame slot, and physically touching or overlapping the character silhouette.",
     "Do not draw detached effects: floating stars, loose sparkles, floating punctuation, floating icons, separated smoke clouds, loose dust, disconnected outline bits, or stray pixels.",
     "Do not draw wave marks, motion arcs, speed lines, action streaks, afterimages, blur, smears, halos, glows, auras, floor patches, cast shadows, contact shadows, drop shadows, oval floor shadows, landing marks, or impact bursts.",
-    "Do not include text, labels, frame numbers, visible grids, guide marks, speech bubbles, thought bubbles, UI panels, code snippets, scenery, checkerboard transparency, white backgrounds, or black backgrounds.",
+    "Do not include text, labels, frame numbers, visible grids, guide marks, speech bubbles, thought bubbles, UI panels, code snippets, scenery, checkerboard transparency, gradients, textured backgrounds, or background lighting effects.",
     "Reject any pose that is cropped, overlaps another pose, crosses into a neighboring frame slot, or creates a separate disconnected component that is not attached to the character.",
 ]
 
 ASSET_ARTIFACT_RULES = [
-    "Do not include text, labels, frame numbers, visible grids, guide marks, UI mockups, contact-sheet captions, checkerboard transparency, white backgrounds, or black backgrounds.",
+    "Do not include text, labels, frame numbers, visible grids, guide marks, UI mockups, contact-sheet captions, checkerboard transparency, gradients, textured backgrounds, or background lighting effects.",
     "Do not merge slots into one scene. Each slot must be one complete runtime asset, tile, texture sample, icon, prop, decal, or effect frame.",
     "Keep every asset inside its slot. No artwork may cross into a neighboring slot or rely on another slot to read correctly.",
-    "For textures and tiles, keep tile edges intentional and runtime-usable; for props/icons/VFX, keep the outside area pure chroma-key background.",
+    "For textures and tiles, keep tile edges intentional and runtime-usable; for props/icons/VFX, keep the outside area on the declared flat neutral generation background.",
     "Effects are allowed only when the row action asks for them, and must stay fully inside the same slot.",
 ]
 
@@ -507,6 +508,16 @@ ANIMATION_WORKFLOWS: dict[str, dict[str, Any]] = {
             "Avoid a robotic up/down bounce; use holds and offset timing so relaxed muscles still feel alert.",
         ],
     },
+    "gesture-loop": {
+        "label": "Character gesture loop workflow",
+        "sources": ["08-intro-to-animation"],
+        "rules": [
+            "Start from the accepted identity anchor, stage one readable limb/body gesture, and return to that anchor before the loop closes.",
+            "Keep feet, camera, framing, and character scale locked unless the gesture explicitly requires a step.",
+            "Do not use motion marks, symbols, detached effects, or camera movement to substitute for the gesture pose.",
+            "Review the final-to-first transition at playback speed; an arm or prop pop is a failed loop.",
+        ],
+    },
     "sideview-locomotion": {
         "label": "Side-view locomotion workflow",
         "sources": ["08-intro-to-animation", "25-motion-cycles", "50-human-walk-cycle", "60-side-view-run-n-gun"],
@@ -703,12 +714,17 @@ RUN_PHASE_CYCLE = [
     },
 ]
 
-CHROMA_CANDIDATES = [
-    ("green", "#00FF00"),
-    ("cyan", "#00FFFF"),
-    ("blue", "#004DFF"),
-    ("magenta", "#FF00FF"),
+NEUTRAL_BACKGROUND_CANDIDATES = [
+    ("gray", "#808080"),
+    ("black", "#000000"),
+    ("white", "#FFFFFF"),
 ]
+LEGACY_CHROMA_KEY = {
+    "name": "legacy-magenta",
+    "hex": "#FF00FF",
+    "rgb": [255, 0, 255],
+    "selection": "compatibility-only",
+}
 
 RUN_PHASE_INDICES_BY_FRAME_COUNT = {
     4: [0, 2, 4, 6],
@@ -741,7 +757,7 @@ DEFAULT_MOTION_TEMPLATE_ROOT = Path(__file__).resolve().parents[1] / "assets" / 
 
 def parse_hex_color(value: str) -> tuple[int, int, int]:
     if not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
-        raise SystemExit(f"invalid chroma key color: {value}; expected #RRGGBB")
+        raise SystemExit(f"invalid background color: {value}; expected #RRGGBB")
     return tuple(int(value[index : index + 2], 16) for index in (1, 3, 5))
 
 
@@ -771,26 +787,50 @@ def sampled_reference_pixels(path: Path | None) -> list[tuple[int, int, int]]:
     return pixels
 
 
-def choose_chroma_key(reference: Path | None, requested: str) -> dict[str, Any]:
+def choose_generation_background(reference: Path | None, requested: str) -> dict[str, Any]:
     if requested.lower() != "auto":
         rgb = parse_hex_color(requested)
         hex_value = rgb_to_hex(rgb)
-        name = next((candidate_name for candidate_name, candidate_hex in CHROMA_CANDIDATES if candidate_hex == hex_value), "manual")
-        return {"name": name, "hex": hex_value, "rgb": list(rgb), "selection": "manual"}
+        name = next(
+            (
+                candidate_name
+                for candidate_name, candidate_hex in NEUTRAL_BACKGROUND_CANDIDATES
+                if candidate_hex == hex_value
+            ),
+            None,
+        )
+        if name is None:
+            raise SystemExit(
+                "generation background must be neutral gray #808080, black #000000, or white #FFFFFF"
+            )
+        return {
+            "family": "neutral",
+            "name": name,
+            "hex": hex_value,
+            "rgb": list(rgb),
+            "selection": "manual",
+        }
 
     pixels = sampled_reference_pixels(reference)
     if not pixels:
-        rgb = parse_hex_color("#00FF00")
-        return {"name": "green", "hex": "#00FF00", "rgb": list(rgb), "selection": "fallback"}
+        rgb = parse_hex_color("#808080")
+        return {
+            "family": "neutral",
+            "name": "gray",
+            "hex": "#808080",
+            "rgb": list(rgb),
+            "selection": "fallback",
+        }
 
     scored: list[tuple[float, int, str, tuple[int, int, int]]] = []
-    for preference_index, (name, hex_color) in enumerate(CHROMA_CANDIDATES):
+    for preference_index, (name, hex_color) in enumerate(NEUTRAL_BACKGROUND_CANDIDATES):
         rgb = parse_hex_color(hex_color)
         distances = sorted(color_distance(rgb, pixel) for pixel in pixels)
         percentile_index = max(0, min(len(distances) - 1, int(len(distances) * 0.01)))
         scored.append((distances[percentile_index], -preference_index, name, rgb))
     score, _preference, name, rgb = max(scored)
     return {
+        "family": "neutral",
         "name": name,
         "hex": rgb_to_hex(rgb),
         "rgb": list(rgb),
@@ -805,6 +845,10 @@ def normalize_background_removal(raw: dict[str, Any], args: argparse.Namespace, 
     method = args.background_removal or str(source.get("method", default_method))
     if method not in BACKGROUND_REMOVAL_METHODS:
         raise SystemExit("background_removal.method must be none, chroma, rembg, ben2, or auto")
+    if method == "chroma":
+        raise SystemExit(
+            "new generation no longer supports chroma backgrounds; use neutral generation plus auto, matte, rembg, or ben2, and reserve chroma for legacy imports"
+        )
     default_model = DEFAULT_BEN2_MODEL if method == "ben2" else DEFAULT_REMBG_MODEL
     model = args.background_model or str(source.get("model", default_model))
     device = args.background_device or str(source.get("device", "auto"))
@@ -813,7 +857,14 @@ def normalize_background_removal(raw: dict[str, Any], args: argparse.Namespace, 
         alpha_matting = args.alpha_matting
     if not isinstance(alpha_matting, bool):
         raise SystemExit("background_removal.alpha_matting must be boolean")
-    return {"method": method, "model": model, "device": device, "alpha_matting": alpha_matting}
+    return {
+        "method": method,
+        "model": model,
+        "device": device,
+        "alpha_matting": alpha_matting,
+        "post_rembg_chroma_cleanup": False,
+        "source_family": "neutral",
+    }
 
 
 def normalize_states(raw: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
@@ -1182,7 +1233,7 @@ def infer_animation_workflows(request: dict[str, Any], state: str, entry: dict[s
         "special",
         "cast",
     }
-    water_tokens = {"water", "waterfall", "river", "ripple", "splash", "lake", "ocean", "wave", "waves"}
+    water_tokens = {"water", "waterfall", "river", "ripple", "splash", "lake", "ocean"}
     wind_tokens = {"wind", "fabric", "cloth", "hair", "leaf", "leaves", "grass", "tree", "trees", "dust", "cloud", "swirl"}
     pickup_tokens = {"pickup", "pickups", "item", "items", "coin", "coins", "gem", "gems", "heart", "powerup", "powerups", "icon", "icons"}
     vfx_tokens = {"vfx", "fx", "effect", "effects", "explosion", "spark", "sparks", "smoke", "fire", "electric", "electricity"}
@@ -1192,6 +1243,8 @@ def infer_animation_workflows(request: dict[str, Any], state: str, entry: dict[s
             workflows.append("tiny-motion")
         if state_only_tokens & {"idle", "stance"}:
             workflows.append("fighting-stance-idle" if is_fighting_context(request, state, entry) else "idle-breath")
+        if state_only_tokens & {"wave", "waving", "greet", "greeting", "salute", "saluting", "emote"}:
+            workflows.append("gesture-loop")
         if is_locomotion_state(state):
             workflows.append("topdown-locomotion" if is_topdown and not is_sideview else "sideview-locomotion")
             if "run-n-gun" in descriptor or tokens & {"gun", "guns", "shoot", "shooting", "aim", "aiming"}:
@@ -1932,7 +1985,13 @@ def materialize_motion_reference_template(
 
 def row_prompt(request: dict[str, Any], state: str, entry: dict[str, Any]) -> str:
     cell = request["cell"]
-    chroma = request["chroma_key"]
+    generation_background = request.get("generation_background") or {
+        "family": "neutral",
+        "name": "gray",
+        "hex": "#808080",
+        "rgb": [128, 128, 128],
+        "selection": "fallback",
+    }
     character = request["character"]
     asset_kind = str(request.get("asset_kind", "sprite"))
     is_sprite = asset_kind == "sprite"
@@ -2180,8 +2239,8 @@ Layout requirements:
 - Treat the image as {frames} equal-width invisible {runtime_size} frame slots. Fill every slot: each requested slot must contain exactly one {slot_fill}.
 - Spread the {frames} items evenly across the declared layout. Do not leave any requested slot blank or create large empty gaps between slots.
 - Center one {slot_fill} in each slot. No item may cross into the neighboring slot.
-- Use a perfectly flat pure {chroma["name"]} {chroma["hex"]} chroma-key background across the whole image.
-- Do not use {chroma["hex"]}, pure {chroma["name"]}, or chroma-adjacent colors in the artwork, highlights, props, shadows, or effects.
+- Use a perfectly flat pure neutral {generation_background["name"]} {generation_background["hex"]} background across the whole image, with no gradient, texture, vignette, floor, cast shadow, or lighting variation.
+- The neutral background is a removable source constraint only. Preserve legitimate black, white, and gray colors inside the artwork, outlines, highlights, props, and effects.
 - {rendering_note}
 - Keep every frame self-contained with at least {safe_margin_x} px horizontal and {safe_margin_y} px vertical safe padding. {clip_text}
 - Avoid motion blur. Use clear pose changes readable at {runtime_size}.
@@ -2203,7 +2262,16 @@ def main() -> int:
     parser.add_argument("--cell-width", type=int)
     parser.add_argument("--cell-height", type=int)
     parser.add_argument("--safe-margin", type=int, default=24)
-    parser.add_argument("--chroma-key", default="auto", help="auto or #RRGGBB")
+    parser.add_argument(
+        "--chroma-key",
+        default=None,
+        help="deprecated for generation; chroma is supported only when importing legacy sheets",
+    )
+    parser.add_argument(
+        "--generation-background",
+        default="auto",
+        help="auto, #808080, #000000, or #FFFFFF",
+    )
     parser.add_argument("--extraction-mode", choices=["components", "slots"], default=None)
     parser.add_argument("--background-removal", choices=sorted(BACKGROUND_REMOVAL_METHODS), default=None)
     parser.add_argument("--background-model", default=None, help=f"model name; rembg default {DEFAULT_REMBG_MODEL}; ben2 default {DEFAULT_BEN2_MODEL}")
@@ -2256,7 +2324,16 @@ def main() -> int:
         raise SystemExit(f"missing base image: {base_source}")
 
     base_dest_name = f"base-source{base_source.suffix.lower() or '.png'}" if base_source else None
-    chroma_key = choose_chroma_key(base_source, args.chroma_key)
+    if args.chroma_key is not None:
+        raise SystemExit(
+            "--chroma-key is no longer accepted for new generation; use --generation-background with gray, black, or white"
+        )
+    generation_background = choose_generation_background(
+        base_source,
+        str(raw_request.get("generation_background", {}).get("hex", args.generation_background))
+        if isinstance(raw_request.get("generation_background"), dict)
+        else args.generation_background,
+    )
     style_preset = str(raw_request.get("style_preset") or args.style_preset)
     if style_preset not in STYLE_PRESETS:
         raise SystemExit(f"unknown style_preset {style_preset!r}; choices: {', '.join(sorted(STYLE_PRESETS))}")
@@ -2292,7 +2369,8 @@ def main() -> int:
             "base_image": base_dest_name,
         },
         "cell": cell,
-        "chroma_key": chroma_key,
+        "chroma_key": dict(LEGACY_CHROMA_KEY),
+        "generation_background": generation_background,
         "background_removal": normalize_background_removal(raw_request, args, asset_kind, extraction_mode),
         "states": states,
         "style_preset": style_preset,
@@ -2312,6 +2390,7 @@ def main() -> int:
         "projection",
         "frame_semantics",
         "sampling_policy",
+        "licenses",
     ):
         if key in raw_request:
             request[key] = raw_request[key]

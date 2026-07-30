@@ -38,8 +38,8 @@
       },
       "additionalProperties": false
     },
-    "source_type": { "enum": ["imagegen", "imported", "fixture"] },
-    "engine": { "enum": ["imagegen", "imported", "fixture"] },
+    "source_type": { "enum": ["imagegen", "grok-imagine-image", "imported", "fixture"] },
+    "engine": { "enum": ["imagegen", "grok-imagine", "imported", "fixture"] },
     "source_stage": {
       "enum": ["provider-output", "user-import", "fixture"]
     },

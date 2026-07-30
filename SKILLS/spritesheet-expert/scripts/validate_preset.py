@@ -26,6 +26,7 @@ STATIC_FRAME_SEMANTICS = {
 ANIMATION_WORKFLOWS = {
     "idle-breath",
     "fighting-stance-idle",
+    "gesture-loop",
     "sideview-locomotion",
     "topdown-locomotion",
     "combat-quick-strike",
