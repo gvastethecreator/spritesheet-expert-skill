@@ -44,6 +44,19 @@ def test_production_policy_applies_generated_animated_sprite_gates() -> None:
     assert "extraction_mode=components" in policy.skipped_reasons["asset-slots"]
 
 
+@pytest.mark.parametrize("source_type", ["grok-imagine-image", "grok-imagine-video", "mixed"])
+def test_production_policy_treats_grok_and_mixed_sources_as_generated(
+    source_type: str,
+) -> None:
+    policy = derive_gate_policy(
+        _normalized_request(source_type=source_type),
+        workflow="production",
+    )
+
+    assert policy.categories == ("animated", "generated")
+    assert "generation-provenance" in policy.required_gate_ids
+
+
 def test_isometric_tileset_policy_uses_structured_projection_fact() -> None:
     request = _normalized_request(
         asset_kind="tileset",

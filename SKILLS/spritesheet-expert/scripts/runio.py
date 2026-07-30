@@ -97,6 +97,16 @@ def atomic_write_text(target: Path, text: str) -> None:
     _atomic_replace(target, payload)
 
 
+def atomic_write_bytes(target: Path, content: bytes) -> None:
+    """Write exact bytes via temp file + os.replace without newline translation."""
+
+    def payload(fd: int, _tmp_name: str) -> None:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(content)
+
+    _atomic_replace(target, payload)
+
+
 def atomic_save_image(image: Image.Image, target: Path, **save_kwargs: Any) -> None:
     """Save a PIL image via temp file + os.replace (format from target suffix)."""
     fmt = (target.suffix.lstrip(".") or "png").upper()

@@ -27,8 +27,11 @@ _SCHEMA_FILES = {
 }
 _ART_ENGINE_SOURCE_TYPES = {
     "imagegen": frozenset({"imagegen", "$imagegen", "openai-image"}),
+    "grok-imagine-image": frozenset({"grok-imagine-image"}),
+    "grok-imagine-video": frozenset({"grok-imagine-video"}),
     "imported": frozenset({"imported", "user-provided", "existing-sheet"}),
     "fixture": frozenset({"fixture", "synthetic", "procedural"}),
+    "mixed": frozenset({"mixed"}),
 }
 
 
@@ -381,7 +384,15 @@ def _semantic_issues(document: Mapping[str, Any], kind: ContractKind) -> list[st
     issues: list[str] = []
     if kind is ContractKind.PROVENANCE:
         source_type = document.get("source_type")
-        engine_source_type = _source_type_from_art_engine(document.get("art_engine"))
+        art_engine = document.get("art_engine")
+        engine_source_type = _source_type_from_art_engine(art_engine)
+        if art_engine == "grok-imagine":
+            if source_type not in {"grok-imagine-image", "grok-imagine-video"}:
+                issues.append(
+                    "art_engine identifies Grok Imagine provenance but source_type is "
+                    f"{source_type}"
+                )
+            engine_source_type = None
         if engine_source_type is not None and engine_source_type != source_type:
             issues.append(
                 "art_engine identifies "

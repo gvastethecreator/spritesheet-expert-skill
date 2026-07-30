@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spritesheet-expert.local/schemas/grok-video-animation-job-v1.schema.json",
+  "title": "Spritesheet Expert Grok video animation job v1",
+  "type": "object",
+  "required": [
+    "version",
+    "kind",
+    "provider",
+    "operation",
+    "repo_root",
+    "state",
+    "duration_seconds",
+    "requested_frames",
+    "sprite_request",
+    "first_frame",
+    "prompt",
+    "provider_output",
+    "dry_run"
+  ],
+  "properties": {
+    "version": { "const": 1 },
+    "kind": { "const": "sprite-grok-video-animation-job" },
+    "provider": { "const": "grok-imagine" },
+    "operation": { "const": "video-from-image" },
+    "repo_root": { "type": "string", "minLength": 1 },
+    "state": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "maxLength": 64
+    },
+    "duration_seconds": { "enum": [6, 10] },
+    "requested_frames": { "type": "integer", "minimum": 2, "maximum": 64 },
+    "loop": { "type": "boolean" },
+    "sampling_mode": {
+      "enum": ["cyclic-half-open", "bookended-inclusive"]
+    },
+    "generation_background": {
+      "type": "object",
+      "required": ["family", "name", "hex"],
+      "properties": {
+        "family": { "const": "neutral" },
+        "name": { "enum": ["gray", "black", "white"] },
+        "hex": { "enum": ["#808080", "#000000", "#FFFFFF"] }
+      },
+      "additionalProperties": true
+    },
+    "sprite_request": { "$ref": "#/$defs/file" },
+    "first_frame": { "$ref": "#/$defs/file" },
+    "prompt": { "$ref": "#/$defs/file" },
+    "provider_output": {
+      "type": "object",
+      "required": ["result_path", "invocation_path", "expected_videos"],
+      "properties": {
+        "result_path": { "type": "string", "minLength": 1 },
+        "invocation_path": { "type": "string", "minLength": 1 },
+        "expected_videos": { "const": 1 }
+      },
+      "additionalProperties": false
+    },
+    "dry_run": {
+      "type": "object",
+      "required": ["skill", "wrapper", "args", "real_run_ack_flag"],
+      "properties": {
+        "skill": { "const": "$grok-imagine" },
+        "wrapper": { "const": "run-grok-imagine.mjs" },
+        "args": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "string" }
+        },
+        "real_run_ack_flag": { "const": "--ack-run" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "required": ["path", "sha256", "size_bytes"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "size_bytes": { "type": "integer", "minimum": 1 },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
