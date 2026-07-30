@@ -1,4 +1,4 @@
 interface:
   display_name: "Build Static Game Assets"
   short_description: "Build and validate static game asset packs"
-  default_prompt: "Use $build-static-game-assets to create a portable static asset pack with pivots, licenses, hashes, and contact-sheet proof."
+  default_prompt: "Use $build-static-game-assets to create a portable static asset pack with real provider provenance, neutral-background cutouts, pivots, licenses, hashes, and multi-background contact proof."

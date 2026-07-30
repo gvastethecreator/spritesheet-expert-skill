@@ -1,4 +1,4 @@
 interface:
   display_name: "Spritesheet Expert"
   short_description: "Build and validate professional sprite atlases"
-  default_prompt: "Use $spritesheet-expert to choose and execute the right sprite, tileset, texture, or atlas pipeline with provenance and QA."
+  default_prompt: "Use $spritesheet-expert to choose Imagegen, explicit Grok still/video, or imported media and deliver neutral-cutout sprites, registered frames, atlas, playback/onion previews, provenance, and QA."

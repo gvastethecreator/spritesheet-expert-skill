@@ -21,12 +21,29 @@ def run_validator(eval_path: Path = EVALS) -> subprocess.CompletedProcess[str]:
 def test_routing_eval_matrix_is_release_ready() -> None:
     result = run_validator()
     assert result.returncode == 0, result.stderr
-    assert "15 cases, 6 candidates" in result.stdout
+    assert "21 cases, 6 candidates" in result.stdout
+
+
+def test_routing_eval_matrix_requires_learned_workflow_boundaries(tmp_path: Path) -> None:
+    suite = json.loads(EVALS.read_text(encoding="utf-8"))
+    suite["cases"] = [
+        case for case in suite["cases"] if case["id"] != "spritesheet-retry-planted-greeting"
+    ]
+    broken = tmp_path / "routing.json"
+    broken.write_text(json.dumps(suite), encoding="utf-8")
+
+    result = run_validator(broken)
+    assert result.returncode == 1
+    assert "missing learned-workflow boundary case: spritesheet-retry-planted-greeting" in result.stderr
 
 
 def test_routing_eval_matrix_rejects_a_missing_multi_family_case(tmp_path: Path) -> None:
     suite = json.loads(EVALS.read_text(encoding="utf-8"))
-    suite["cases"] = [case for case in suite["cases"] if case["id"] != "router-pickups-and-inventory-ui"]
+    suite["cases"] = [
+        case
+        for case in suite["cases"]
+        if case["id"] not in {"router-pickups-and-inventory-ui", "router-full-game-pack"}
+    ]
     broken = tmp_path / "routing.json"
     broken.write_text(json.dumps(suite), encoding="utf-8")
 

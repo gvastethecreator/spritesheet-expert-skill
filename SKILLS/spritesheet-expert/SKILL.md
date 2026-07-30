@@ -1,6 +1,6 @@
 ---
 name: spritesheet-expert
-description: "Spritesheet pipeline. Use for sprites, tilesets, textures, asset sheets, extraction, curation, and QA."
+description: "Build and validate spritesheets, animation rows, tilesets, textures, and atlases from imported art, Imagegen, or explicit Grok still/video. Use for neutral-background cutouts, first-frame-to-video animation, extraction, frame registration, playback/onion previews, provenance, curation, and QA."
 ---
 
 # Spritesheet Expert
@@ -42,6 +42,15 @@ Load and follow `$grok-imagine` when the user selects Grok still generation or t
 For video animation, create and approve one exact first frame, then run `scripts/prepare_grok_video_animation.py`. It produces a two-sentence locked-camera prompt and a `$grok-imagine video-from-image` dry-run job. `scripts/ingest_grok_video_animation.py` accepts only the one video named by a completed, successful `invocation.json`; it checks the prompt and first-frame hashes, decodes in bounded two-pass mode, samples deterministic indices, restores the accepted first-frame pixels exactly as frame 1, and writes the normal `raw/<state>.png` grid plus provider provenance. Then run the same extraction, registration, atlas, alignment, identity, animation-contract, runtime-preview, visual-review, and aggregate gates as every other row.
 
 Read `references/grok-video-animation.md` before this route. On Zero Data Retention teams, video generation may require a caller-owned `output.upload_url`; do not retry around that provider boundary or claim completion without copied media and a completed invocation manifest.
+
+## Failure Prevention Contract
+
+- Never infer provider provenance from filenames or appearance. Pin accepted source bytes and declare Imagegen, Grok image, Grok video, imported, fixture, or mixed provenance explicitly.
+- Never promote deterministic fixtures, procedural drawings, layout guides, or repaired placeholders as representative production art. They may test geometry and failure paths only.
+- New isolated generation uses flat gray, black, or white. Green, blue, cyan, and magenta are legacy-import chroma only. When subject colors overlap a matte, use reviewed model-backed removal and compare checker/black/gray/white views.
+- A failed semantic frame returns to Imagegen or the explicitly selected Grok provider. Registration may remove extraction jitter; it must not hide actual root, pelvis, foot, or contact drift.
+- A contact sheet proves inventory and order. Animation claims require chronological playback plus contact/onion evidence; runtime placement, repeat, projection, and edge claims require their specific proof artifacts.
+- Rebuild proof after any source, request, curation, registration, atlas, manifest, or QA change. Final approval must reference current hashes and an inspected visual-review record.
 
 ## Local Handoff Runner Contract
 

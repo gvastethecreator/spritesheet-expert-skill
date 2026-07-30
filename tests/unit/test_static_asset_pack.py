@@ -29,6 +29,15 @@ def _write_asset(path: Path, *, size: tuple[int, int] = (32, 32), alpha: bool = 
     return sha256(path.read_bytes()).hexdigest()
 
 
+def _imported_provenance() -> dict:
+    return {
+        "source_type": "imported",
+        "art_engine": "imported",
+        "fixture": False,
+        "verification_status": "verified",
+    }
+
+
 def _valid_pack(root: Path) -> dict:
     barrel_hash = _write_asset(root / "sources" / "barrel.png")
     red_hash = _write_asset(root / "sources" / "barrel-red.png")
@@ -44,7 +53,7 @@ def _valid_pack(root: Path) -> dict:
             {
                 "id": "barrel",
                 "role": "prop",
-                "source": {"path": "sources/barrel.png", "sha256": barrel_hash},
+                "source": {"path": "sources/barrel.png", "sha256": barrel_hash, "provenance": _imported_provenance()},
                 "target": {"width": 32, "height": 32},
                 "pivot": {"x": 0.5, "y": 1.0},
                 "transparency": "required",
@@ -55,7 +64,7 @@ def _valid_pack(root: Path) -> dict:
             {
                 "id": "barrel-red",
                 "role": "prop",
-                "source": {"path": "sources/barrel-red.png", "sha256": red_hash},
+                "source": {"path": "sources/barrel-red.png", "sha256": red_hash, "provenance": _imported_provenance()},
                 "target": {"width": 32, "height": 32},
                 "pivot": {"x": 0.5, "y": 1.0},
                 "transparency": "required",
@@ -80,9 +89,13 @@ def test_static_pack_validates_files_lineage_and_renders_contact_sheet(tmp_path:
     report = validate_static_pack(pack, root=tmp_path, contact_sheet=contact)
 
     assert report["ok"] is True
+    assert report["representative"] is True
+    assert report["source_types"] == ["imported"]
+    assert report["evidence"]["production_media"]["provenance_verified"] is True
     assert report["checked_assets"] == ["barrel", "barrel-red"]
     assert contact.is_file()
     assert report["contact_sheet"]["sha256"] == sha256(contact.read_bytes()).hexdigest()
+    assert report["contact_sheet"]["views"] == ["checker", "black", "gray", "white"]
     assert all("absolute_path" not in asset for asset in report["assets"])
 
 
@@ -102,7 +115,7 @@ def test_static_pack_rejects_wrong_target_dimensions_and_alpha_policy(tmp_path: 
     pack = _valid_pack(tmp_path)
     opaque = tmp_path / "sources" / "opaque.png"
     opaque_hash = _write_asset(opaque, size=(24, 24), alpha=False)
-    pack["assets"][0]["source"] = {"path": "sources/opaque.png", "sha256": opaque_hash}
+    pack["assets"][0]["source"] = {"path": "sources/opaque.png", "sha256": opaque_hash, "provenance": _imported_provenance()}
 
     with pytest.raises(StaticAssetPackError, match="dimensions.*transparency|required"):
         validate_static_pack(pack, root=tmp_path)
@@ -159,6 +172,59 @@ def test_static_pack_accepts_fully_read_only_contract_mappings(tmp_path: Path) -
     report = validate_static_pack(_read_only_mappings(pack), root=tmp_path)
 
     assert report["ok"] is True
+
+
+def test_static_pack_marks_fixtures_non_representative_and_rejects_missing_provenance(
+    tmp_path: Path,
+) -> None:
+    from static_assets import StaticAssetPackError, validate_static_pack
+
+    fixture = _valid_pack(tmp_path)
+    fixture["licenses"][0]["status"] = "fixture"
+    fixture["assets"][0]["source"]["provenance"] = {
+        "source_type": "fixture",
+        "art_engine": "fixture",
+        "fixture": True,
+        "verification_status": "verified",
+    }
+    fixture["assets"][1]["source"]["provenance"] = fixture["assets"][0]["source"]["provenance"].copy()
+    assert validate_static_pack(fixture, root=tmp_path)["representative"] is False
+
+    missing = _valid_pack(tmp_path)
+    del missing["assets"][0]["source"]["provenance"]
+    with pytest.raises(StaticAssetPackError, match="provenance"):
+        validate_static_pack(missing, root=tmp_path)
+
+
+def test_static_pack_verifies_grok_provider_record(tmp_path: Path) -> None:
+    from static_assets import StaticAssetPackError, validate_static_pack
+
+    pack = _valid_pack(tmp_path)
+    invocation = tmp_path / "provider" / "invocation.json"
+    invocation.parent.mkdir()
+    invocation.write_text('{"status":"completed"}', encoding="utf-8")
+    pack["licenses"][0]["status"] = "generated"
+    for asset in pack["assets"]:
+        asset["source"]["provenance"] = {
+            "source_type": "grok-imagine-image",
+            "art_engine": "grok-imagine",
+            "fixture": False,
+            "verification_status": "verified",
+            "provider_record": {"path": "provider/invocation.json", "sha256": "0" * 64},
+        }
+
+    with pytest.raises(StaticAssetPackError, match="provider record sha256 mismatch"):
+        validate_static_pack(pack, root=tmp_path)
+
+
+def test_static_pack_rejects_imported_media_with_generated_license(tmp_path: Path) -> None:
+    from static_assets import StaticAssetPackError, validate_static_pack
+
+    pack = _valid_pack(tmp_path)
+    pack["licenses"][0]["status"] = "generated"
+
+    with pytest.raises(StaticAssetPackError, match="imported provenance requires"):
+        validate_static_pack(pack, root=tmp_path)
 
 
 def test_static_core_rejects_proof_paths_outside_pack_root(tmp_path: Path) -> None:

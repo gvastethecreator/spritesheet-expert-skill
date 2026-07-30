@@ -8,6 +8,7 @@ import subprocess
 import sys
 
 from PIL import Image
+import pytest
 
 
 HASH_A = "a" * 64
@@ -197,7 +198,17 @@ def materialize_phase4_sources(root: Path, document: dict) -> dict[str, bytes]:
         manifest, sort_keys=True, separators=(",", ":")
     ).encode()
     report_bytes = json.dumps(
-        {"status": "pass", "checked_outputs": sorted(artifacts)},
+        {
+            "status": "pass",
+            "checked_outputs": sorted(artifacts),
+            "evidence": {
+                "production_media": {
+                    "representative": True,
+                    "provenance_verified": True,
+                    "source_types": ["imagegen"],
+                }
+            },
+        },
         sort_keys=True,
         separators=(",", ":"),
     ).encode()
@@ -255,12 +266,55 @@ def test_resolve_presentation_copies_verified_imports_to_content_addressed_store
         "asset:hero",
         "font:display-font",
     ]
+    assert resolved["imports"][0]["production_media"]["representative"] is True
     for item in resolved["imports"]:
         content_path = item["content_path"]
         assert content_path.startswith("presentation/content-addressed/")
         assert not {"raw", "frames", "atlas"} & set(Path(content_path).parts)
         assert (tmp_path / content_path).read_bytes() == original_bytes[item["source_path"]]
         assert sha256((tmp_path / item["source_path"]).read_bytes()).hexdigest() == item["sha256"]
+
+
+def test_resolve_presentation_rejects_non_representative_upstream_asset(
+    tmp_path: Path,
+) -> None:
+    from presentation_pipeline import prepare_presentation, resolve_presentation
+
+    source = phase4_presentation()
+    materialize_phase4_sources(tmp_path, source)
+    report_path = tmp_path / "upstream" / "validation-report.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    report["evidence"]["production_media"]["representative"] = False
+    report_path.write_text(
+        json.dumps(report, sort_keys=True, separators=(",", ":")), encoding="utf-8"
+    )
+    report_hash = sha256(report_path.read_bytes()).hexdigest()
+    for item in [*source["inventory"]["assets"], *source["brand_kit"]["fonts"]]:
+        item["source"]["validation_report"]["sha256"] = report_hash
+
+    with pytest.raises(ValueError, match="not representative production media"):
+        resolve_presentation(prepare_presentation(source), tmp_path)
+
+
+def test_resolve_presentation_rejects_fixture_source_labeled_representative(
+    tmp_path: Path,
+) -> None:
+    from presentation_pipeline import prepare_presentation, resolve_presentation
+
+    source = phase4_presentation()
+    materialize_phase4_sources(tmp_path, source)
+    report_path = tmp_path / "upstream" / "validation-report.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    report["evidence"]["production_media"]["source_types"] = ["fixture"]
+    report_path.write_text(
+        json.dumps(report, sort_keys=True, separators=(",", ":")), encoding="utf-8"
+    )
+    report_hash = sha256(report_path.read_bytes()).hexdigest()
+    for item in [*source["inventory"]["assets"], *source["brand_kit"]["fonts"]]:
+        item["source"]["validation_report"]["sha256"] = report_hash
+
+    with pytest.raises(ValueError, match="invalid production source_types"):
+        resolve_presentation(prepare_presentation(source), tmp_path)
 
 
 def test_prepare_presentation_cli_writes_portable_atomic_outputs(tmp_path: Path) -> None:

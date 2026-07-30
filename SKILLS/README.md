@@ -10,3 +10,11 @@ This repo ships six focused Codex skills:
 - [`compose-asset-mockups`](./compose-asset-mockups/SKILL.md): prepare non-destructive, evidence-backed asset presentations.
 
 Use one leaf skill for a single family. Use `produce-2d-assets` only when one delivery needs two or more families and a shared manifest.
+
+## Production Media Contract
+
+- `$imagegen` is the default still provider. `$grok-imagine` is explicit, dry-run-first, and requires current-task acknowledgement for a paid run; video-to-frames belongs to `spritesheet-expert`.
+- Deterministic code may prepare, extract, register, cut out, compose, preview, and validate. It must not create replacement production art.
+- Isolated sprites, props, and UI use gray/black/white source backgrounds, never new green/blue/cyan/magenta chroma. Full-bleed background scenes retain authored scene pixels.
+- Every produced source declares verified provider/import provenance. Fixtures and placeholders remain non-representative even when technical validation passes.
+- Inspect the proof that matches the claim: playback/contact/onion for animation, composite plus scroll for backgrounds, state plus stretch boards for UI, multi-background alpha contact boards for static art, and hash-backed truth labels for mockups.

@@ -117,6 +117,11 @@ def test_preflight_derives_gates_and_skips_animation_for_static_variants(
     assert decisions["animation-contracts"]["applied"] is False
     assert decisions["identity-consistency"]["applied"] is False
     assert report["checked_items"] == ["barrel"]
+    assert report["evidence"]["production_media"] == {
+        "representative": True,
+        "provenance_verified": True,
+        "source_types": ["imagegen"],
+    }
 
 
 def test_generated_preflight_fails_when_provenance_is_missing(tmp_path: Path) -> None:
@@ -135,6 +140,7 @@ def test_generated_preflight_fails_when_provenance_is_missing(tmp_path: Path) ->
     )
     assert provenance["status"] == "fail"
     assert provenance["errors"]
+    assert report["evidence"]["production_media"]["representative"] is False
 
 
 def test_prepackage_is_blocked_when_required_visual_review_is_missing(

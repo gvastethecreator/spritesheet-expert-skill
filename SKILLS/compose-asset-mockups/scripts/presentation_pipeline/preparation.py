@@ -10,6 +10,11 @@ from typing import Any
 from .contracts import validate_prepared_presentation, validate_presentation
 
 
+_PRODUCTION_SOURCE_TYPES = frozenset(
+    {"imagegen", "grok-imagine-image", "grok-imagine-video", "imported", "mixed"}
+)
+
+
 def canonical_json_bytes(document: Mapping[str, Any]) -> bytes:
     """Return the stable JSON encoding used by every pipeline fingerprint."""
 
@@ -57,6 +62,34 @@ def _verified_pin(root: Path, pin: Mapping[str, Any], label: str) -> tuple[Path,
     return candidate, content
 
 
+def _verified_production_media(content: bytes, label: str) -> dict[str, Any]:
+    try:
+        report = json.loads(content.decode("utf-8-sig"))
+    except (UnicodeDecodeError, ValueError) as error:
+        raise ValueError(f"{label} is not valid JSON") from error
+    evidence = report.get("evidence") if isinstance(report, Mapping) else None
+    production_media = evidence.get("production_media") if isinstance(evidence, Mapping) else None
+    if not isinstance(production_media, Mapping):
+        raise ValueError(f"{label} is missing evidence.production_media")
+    source_types = production_media.get("source_types")
+    if production_media.get("representative") is not True:
+        raise ValueError(f"{label} is not representative production media")
+    if production_media.get("provenance_verified") is not True:
+        raise ValueError(f"{label} has unverified production provenance")
+    if (
+        not isinstance(source_types, list)
+        or not source_types
+        or len(source_types) != len(set(source_types))
+        or any(source_type not in _PRODUCTION_SOURCE_TYPES for source_type in source_types)
+    ):
+        raise ValueError(f"{label} has missing or invalid production source_types")
+    return {
+        "representative": True,
+        "provenance_verified": True,
+        "source_types": list(source_types),
+    }
+
+
 def resolve_presentation(
     prepared: Mapping[str, Any], root: str | Path
 ) -> dict[str, Any]:
@@ -73,8 +106,19 @@ def resolve_presentation(
 
     for kind, item in sources:
         source = item["source"]
-        for pin_name in ("manifest", "validation_report"):
-            _verified_pin(root_path, source[pin_name], f"{kind} '{item['id']}' {pin_name}")
+        _verified_pin(root_path, source["manifest"], f"{kind} '{item['id']}' manifest")
+        _, validation_content = _verified_pin(
+            root_path,
+            source["validation_report"],
+            f"{kind} '{item['id']}' validation_report",
+        )
+        production_media = (
+            _verified_production_media(
+                validation_content, f"{kind} '{item['id']}' validation_report"
+            )
+            if kind == "asset"
+            else None
+        )
         source_path, content = _verified_pin(
             root_path, source["artifact"], f"{kind} '{item['id']}' artifact"
         )
@@ -100,6 +144,7 @@ def resolve_presentation(
                 "source_path": source["artifact"]["path"],
                 "content_path": relative_destination.as_posix(),
                 "sha256": digest,
+                **({"production_media": production_media} if production_media else {}),
             }
         )
 

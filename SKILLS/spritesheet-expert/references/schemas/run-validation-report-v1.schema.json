@@ -15,6 +15,7 @@
     "complete",
     "exit_code",
     "input_fingerprint",
+    "evidence",
     "policy",
     "checked_items",
     "results",
@@ -33,6 +34,27 @@
     "input_fingerprint": {
       "type": ["string", "null"],
       "pattern": "^[a-f0-9]{64}$"
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["production_media"],
+      "properties": {
+        "production_media": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["representative", "provenance_verified", "source_types"],
+          "properties": {
+            "representative": {"type": "boolean"},
+            "provenance_verified": {"type": "boolean"},
+            "source_types": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"enum": ["imagegen", "grok-imagine-image", "grok-imagine-video", "imported", "fixture", "mixed"]}
+            }
+          }
+        }
+      }
     },
     "policy": {"type": ["object", "null"]},
     "checked_items": {

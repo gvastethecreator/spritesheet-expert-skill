@@ -126,6 +126,11 @@ def valid_asset_pack_artifacts() -> tuple[dict, dict[str, bytes]]:
             "warnings": [],
             "evidence": {
                 "asset_kind": asset["kind"],
+                "production_media": {
+                    "representative": True,
+                    "provenance_verified": True,
+                    "source_types": ["imagegen"],
+                },
                 "style_tokens": {
                     "palette": contract["style_bible"]["palette"],
                     "projection": contract["style_bible"]["projection"],
@@ -191,6 +196,32 @@ def test_asset_pack_aggregate_rejects_cross_family_style_drift() -> None:
 
     assert exit_code == 1
     assert any("hero" in blocker and "lighting" in blocker for blocker in report["blockers"])
+
+
+def test_asset_pack_aggregate_rejects_non_representative_production_media() -> None:
+    from assetpack import aggregate_asset_pack
+
+    contract, artifacts = valid_asset_pack_artifacts()
+    rewrite_leaf_report(
+        contract,
+        artifacts,
+        "hero",
+        {
+            "evidence": {
+                **json.loads(artifacts[contract["inventory"]["assets"][1]["validation_report"]["path"]])["evidence"],
+                "production_media": {
+                    "representative": False,
+                    "provenance_verified": True,
+                    "source_types": ["imagegen"],
+                },
+            }
+        },
+    )
+
+    report, exit_code = aggregate_asset_pack(contract, artifacts)
+
+    assert exit_code == 1
+    assert any("hero" in blocker and "not representative" in blocker for blocker in report["blockers"])
 def materialize_asset_pack(tmp_path: Path) -> tuple[Path, dict, dict[str, bytes]]:
     contract, artifacts = valid_asset_pack_artifacts()
     for relative_path, content in artifacts.items():

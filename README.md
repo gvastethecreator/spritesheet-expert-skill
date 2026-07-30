@@ -10,13 +10,13 @@
 The suite turns game-art requests into repeatable, hash-backed pipelines. Use the focused leaf skills for one asset family and `produce-2d-assets` when a delivery spans several families.
 
 - Prepare structured sprite and tileset runs from presets or custom contracts.
-- Generate on neutral gray/black/white backgrounds and remove them with conservative matte or BiRefNet quality defaults.
+- Generate isolated sprites, props, and UI on neutral gray/black/white and remove the matte conservatively or with reviewed BiRefNet/BEN2 defaults; keep full-bleed background scene pixels intact.
 - Use `$imagegen` by default or the optional dry-run-first `$grok-imagine` image/video route.
 - Turn an approved first frame into provider video, then deterministically sample it into the normal verified sprite pipeline.
-- Compose atlas PNGs, manifests, deterministic previews, an interactive review workbench, GIFs, and curation exports.
+- Compose atlas PNGs, manifests, deterministic previews, an interactive review workbench, GIFs, checker/black/gray/white alpha boards, and curation exports.
 - Run checks for provenance, identity, alignment, animation contracts, and tileset placement.
 - Validate static props, layered backgrounds, raster UI states, presentation truth, and aggregate delivery manifests.
-- Keep visual generation separate from deterministic pipeline work.
+- Keep semantic visual generation separate from deterministic extraction, registration, composition, preview, and QA. Fixtures can pass technical smoke gates but never count as representative production media.
 
 ## Quick Install
 
