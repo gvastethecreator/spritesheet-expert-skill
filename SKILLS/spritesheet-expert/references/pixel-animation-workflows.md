@@ -86,6 +86,21 @@ Required phases:
 QA: stance communicates fighter/weapon role and does not look like a generic
 idle with fists raised.
 
+### `gesture-loop`
+
+For a character wave, greeting, salute, emote, or other planted body gesture.
+It is not a water-wave workflow.
+
+Required phases:
+
+1. Exact accepted identity anchor.
+2. Readable anticipation or limb raise.
+3. One clear gesture accent.
+4. Return to the identity anchor before playback wraps.
+
+QA: feet, framing, scale, and identity stay locked; no detached symbols replace
+the pose; the final-to-first transition does not pop an arm, hand, or prop.
+
 ### `sideview-locomotion`
 
 For side-view walk/run/platformer/run-and-gun motion.
@@ -302,6 +317,8 @@ Before done, map every animated row to its active workflow:
 
 - locomotion: contact/pass logic, frame 1 vs frame 3 opposite support, loop
   seam, foot/support alternation;
+- character gesture: identity anchor, readable limb/body accent, stable feet,
+  and clean final-to-first return;
 - combat: stance, startup/load if needed, smear direction, hit/contact,
   follow-through, recovery, overshoot;
 - top-down: direction strategy, projection consistency, handedness;

@@ -51,21 +51,19 @@ Use this reference when improving prompts, presets, curation, QA, or generated a
 - Sprite: full-body/contact-aware animation with identity, scale, silhouette, pivot, and motion QA.
 - Tileset: slot extraction, exact grid fit, compatible edges, readable collision surfaces, projection consistency, no scene/collage output.
 - Texture: flat orthographic samples, seamless/tileable intent, consistent texel density, no perspective scene, no labels.
-- Asset/prop/icon: consistent set language, scale hierarchy, silhouette, center/pivot, isolated alpha/chroma boundary, no catalog page.
-- VFX: temporal sequence with buildup, peak, decay; alpha-friendly opacity; no chroma-colored cores; consistent emitter anchor.
+- Asset/prop/icon: consistent set language, scale hierarchy, silhouette, center/pivot, isolated alpha/neutral-source boundary, no catalog page.
+- VFX: temporal sequence with buildup, peak, decay; alpha-friendly opacity; no source-background residue; consistent emitter anchor.
 - Custom atlas: write explicit row semantics first. Unknown rows must declare whether frames are animation timing or still variants.
 
 ## Background Removal Standard
 
-- Prefer flat chroma generation when `$imagegen` can produce it reliably. Use border-connected chroma removal so internal magenta-like shirt/costume pixels are neutralized instead of punched transparent.
-- Choose the key by palette distance, not habit. Magenta is risky for purple, violet, pink, and hot orange/pink highlights; green is the fallback when there is no reference, but it must still be checked for green/lime subjects.
-- Run `check_chroma_key_safety.py` on generated sheets with saturated palette families. If subject pixels are close to the key, regenerate with a safer key, split the sheet into per-row/per-group keys, or use local background removal.
-- If `$imagegen` returns a key background with gradients, edge halos, or old-key residue, normalize the border-connected background with `rekey_chroma_background.py` and rerun chroma safety before extraction.
-- Chroma extraction is not just "make the key transparent": final frames need soft edge matting/despill around the border-connected background. Hard-threshold cutouts create jagged rims and should be treated as failed extraction unless they are deliberate one-bit retro art.
-- Full-palette prop/icon/VFX sheets are high risk for one global key. Prefer `rembg/auto`, per-group keys, or alpha-curated slots when assets include purple, pink, orange, green, cyan, and blue in the same sheet.
-- Use `rembg`/BiRefNet-style local cutout for non-chroma references, photos, painterly backgrounds, or soft-edge subjects. Still inspect alpha holes, semitransparent interiors, and edge halos. Do not apply chroma cleanup after `rembg` unless reviewed residue proves it is safe; subject-color over-removal is a production failure.
-- `auto` should choose chroma when borders are clearly keyed and palette-safe; otherwise use local background removal if installed.
-- QA must check both math and pixels on checker, dark, and contrasting solid backgrounds: transparent interior holes, semi-transparent clothing, visible chroma leakage, edge halos, jagged cut edges, and disconnected fragments.
+- Generate new sources on a perfectly flat neutral gray, black, or white background. Do not exclude neutral colors from the subject palette.
+- Preserve trustworthy alpha first. Use edge-connected matte removal only for a clean flat border; this avoids globally deleting white clothing, black outlines, gray materials, highlights, or interior holes.
+- Use `rembg` with `birefnet-general` for ambiguous, soft, dirty, photographic, painterly, or breathing video backgrounds. `birefnet-general-lite` is a speed option, not the quality default.
+- Use BEN2 explicitly for hard/final comparisons where BiRefNet clips hair, fur, spikes, small limbs, or painterly edges. Backend choice is not proof; the best reviewed matte wins.
+- Chroma removal is a legacy-import path only. It must be declared, border-connected, soft-edged, and despilled. Do not generate new green, blue, cyan, or magenta source backgrounds.
+- Do not apply post-chroma cleanup after model-backed removal on neutral sources. Subject-color over-removal is a production failure.
+- QA must check both math and pixels on checker, black, gray, white, and alpha-mask surfaces: transparent interior holes, semi-transparent clothing, source-background residue, edge halos, jagged cut edges, and disconnected fragments.
 
 ## QA Checklist
 

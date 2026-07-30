@@ -10,8 +10,10 @@
 The suite turns game-art requests into repeatable, hash-backed pipelines. Use the focused leaf skills for one asset family and `produce-2d-assets` when a delivery spans several families.
 
 - Prepare structured sprite and tileset runs from presets or custom contracts.
-- Extract frames from generated or imported source sheets.
-- Compose atlas PNGs, manifests, previews, GIFs, and curation exports.
+- Generate on neutral gray/black/white backgrounds and remove them with conservative matte or BiRefNet quality defaults.
+- Use `$imagegen` by default or the optional dry-run-first `$grok-imagine` image/video route.
+- Turn an approved first frame into provider video, then deterministically sample it into the normal verified sprite pipeline.
+- Compose atlas PNGs, manifests, deterministic previews, an interactive review workbench, GIFs, and curation exports.
 - Run checks for provenance, identity, alignment, animation contracts, and tileset placement.
 - Validate static props, layered backgrounds, raster UI states, presentation truth, and aggregate delivery manifests.
 - Keep visual generation separate from deterministic pipeline work.
@@ -64,6 +66,8 @@ npm run check
 - [`references/`](./SKILLS/spritesheet-expert/references): atlas, pixel art, animation, isometric, workflow, and QA notes.
 - [`scripts/`](./SKILLS/spritesheet-expert/scripts): extraction, curation, composition, preview, and validation helpers.
 - [`agents/openai.yaml`](./SKILLS/spritesheet-expert/agents/openai.yaml): optional agent metadata.
+
+Optional runtime extras are isolated by capability: install `SKILLS/spritesheet-expert/scripts/requirements-background.txt` for rembg/BiRefNet cutouts and `SKILLS/spritesheet-expert/scripts/requirements-video.txt` for video-frame ingestion.
 - [`SKILLS/`](./SKILLS/README.md): routing and commands for all six published skills.
 
 ## Status
@@ -72,6 +76,7 @@ Validated multi-skill pack.
 
 - Local smoke pipeline is available.
 - Optional background-removal dependencies are intentionally not bundled.
+- Optional video decoding uses the pinned `scripts/requirements-video.txt`; provider inference is never part of tests.
 - Generated sample art is not included by default; bring your own licensed source images.
 - Rejected motion-reference candidates remain in repository-only `maintenance/` evidence and are never copied into an installed skill.
 

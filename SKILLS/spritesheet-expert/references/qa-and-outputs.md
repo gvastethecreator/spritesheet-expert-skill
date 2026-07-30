@@ -10,10 +10,9 @@ Block done unless:
 - `references/art-direction.json` exists for pixel-art runs, and active row profiles plus `animation_workflows` match the asset kind/state before generation or final review.
 - `frames/frames-manifest.json.sprite_registration.reference_height`, `reference_width`, `reference_scale`, and stable proxy values exist for sprite runs, and jump/crouch/fall/land frame records show reasonable `height_vs_reference`, `width_vs_reference`, `head_width_vs_reference`, `upper_width_vs_reference`, `expected_height_vs_reference`, and `bottom_y` for their pose profile.
 - Crouch/duck/squat transition rows are compared frame-to-frame: early frames can be taller, final frames must be visibly compressed, final width should usually stay at least around 0.78x of idle width, head/upper-body proxies should remain near idle scale, and the sequence must not shrink uniformly as it settles into the crouch.
-- `frames/frames-manifest.json.rows[*].background_method` records `alpha`, `chroma`, `rembg`, or `ben2`, and `background_removal` matches the intended request. `rows[*].method` records whether extraction used `grid-components`, `components`, `projection-strip`, or slot extraction. Chroma rows should use `chroma_mask: border-connected` and be checked for internal alpha holes in clothing/props. `rembg` rows should not use post-chroma cleanup unless `background_removal.post_rembg_chroma_cleanup` is explicitly true and visual QA proves no subject pixels were damaged.
-- `frames/frames-manifest.json.background_matte_review` points to `qa/background-matte-review.png`. Review raw, checker, dark, and alpha-mask panels for over-removal before approving generated rows. `background_method: ben2` is acceptable only when selected explicitly for hard/final cutouts and the BEN2 review beats rembg/chroma visually.
-- Chroma output uses a soft-edge/despill matte, not a hard key threshold. Review extracted frames against checker, dark, and high-contrast solid backgrounds for halos, jagged cut edges, and leftover key-color fringe.
-- `check_chroma_key_safety.py` passes, or any `warn/fail` result is resolved: `fail` requires safer key/rembg/regeneration; `warn` requires alpha preview or curation proof that exact-key islands are not subject pixels.
+- `frames/frames-manifest.json.rows[*].background_method` records `alpha`, `matte`, `rembg`, `ben2`, or legacy `chroma`, and `background_removal` matches the intended request. New generated rows declare `source_family: neutral`; only imported legacy rows may declare `legacy-chroma`. `rows[*].method` records whether extraction used `grid-components`, `components`, `projection-strip`, or slot extraction.
+- `frames/frames-manifest.json.background_matte_review` points to `qa/background-matte-review.png`. Review raw, checker, black, gray, white, and alpha-mask panels for over-removal and fringe before approving generated rows. `background_method: ben2` is acceptable only when selected explicitly and its review beats BiRefNet visually.
+- Legacy chroma output uses a soft-edge/despill matte, not a hard key threshold. Run `check_chroma_key_safety.py`, `rekey_chroma_background.py`, and chroma leakage review only for those declared legacy sources.
 - `sprite-sheet-alpha.report.json.ok` true.
 - `manifest.json.frame_layout` exists and runtime can use rectangles.
 - Imported or irregular whole-sheet candidates have `qa/segmentation-report.json` and `qa/segmentation-overlay.png` from `unpack_atlas_run.py`. Review the overlay before registration; bad boxes mean the matte/segmentation step failed, not that alignment needs tweaking. Auto-detect and projection-repair layout warnings block production packaging until a trusted manifest/grid/authored-box layout replaces them.
@@ -22,8 +21,9 @@ Block done unless:
 - Animated sprite runs have `qa/frame-alignment-report.json.ok` true from `check_frame_alignment.py`, and relevant `qa/<state>-onion.png` overlays are reviewed. This gate compares real extracted frames, not prompts: baseline, bbox, alpha-center/root, takeoff/landing closure, and final ground settlement must make sense.
 - Jump rows require takeoff and landing bottoms on the same shared baseline within tolerance, a visible airborne arc, and no accidental root-x drift unless the state is intentionally a forward/back jump. Crouch/block/idle/locomotion rows keep grounded contact stable. Fall/knockdown rows must settle to the baseline by the final frame.
 - Animated character runs have `qa/identity-consistency-report.json.ok` true from `check_identity_consistency.py`. Head size, upper-body scale, central body-mass width, and opaque-area proxy drift are blocking identity failures unless the row is a deliberate fall/knockdown/crouch pose with visual evidence that the apparent change is pose/orientation, not zoom or redesign.
-- Contact sheet/GIFs reviewed for identity, frame count, direction, loop seam, motion when animated, and pose scale/baseline overlays for jump/crouch/fall/land rows.
-- Runtime animation playback reviewed for animated sprite runs: state changes, frame timing, origin/baseline stability, bbox scale, and input-driven movement must read correctly in a canvas/game loop or equivalent engine preview.
+- Contact sheets and deterministic GIF/PNG runtime evidence are reviewed for identity, frame count, direction, loop seam, timing, and pose scale/baseline overlays.
+- `qa/preview-workbench/index.html` and `qa/preview-workbench/workbench.evidence.json` exist for animated review. The report hashes the atlas, manifest, linked QA evidence, and self-contained HTML. Use pause, step, scrub, speed, zoom, state selection, every filmstrip frame, and checker/black/gray/white backgrounds; keyboard controls and layouts down to 360px must remain usable without page overflow. Initial zoom must fit the measured stage (including high-resolution provider frames), and canvas scaling must honor the manifest's `sampling_policy`: crisp nearest-neighbor for pixel art, smooth linear sampling for illustrated art.
+- Runtime animation playback is reviewed for state changes, frame timing, origin/baseline stability, bbox scale, and input-driven movement. The workbench is the human inspection surface; hash-bound deterministic GIF/PNG evidence remains the machine gate.
 - For pose-sensitive rows, visually review `qa/pose-scale-review.png` when present. Metrics are necessary but not sufficient; if the pose reads wrong, the row fails even when `frames-manifest.json.ok` is true.
 - Visual review includes pose readability, silhouette, line of action, center of mass, grounded contact, plausible joints, and whether the state communicates its gameplay purpose.
 - Fighting/combat rows show clear startup/active/recovery or impact/reaction staging; do not accept pretty poses that are ambiguous as gameplay frames.
@@ -37,7 +37,8 @@ Block done unless:
 - Pixel tiny rows keep missing-information economy: no unnecessary detail, no excessive frames, and one-pixel motion scale where applicable.
 - Pixel VFX rows show buildup/peak/decay, stable emitter/contact point, alpha-safe fade, and loop math without end-to-start pop. Water rows show wave/flow loop closure; wind rows show flow points/propagation instead of random motion.
 - When no base image was provided, `references/identity-anchor.png` exists and later generated rows visibly follow that anchor instead of drifting into a new character.
-- User-facing generated art was backed by `$imagegen` row sources when `$imagegen` was available; synthetic fixtures are labeled as fixtures only.
+- User-facing generated art was backed by the declared `$imagegen` or `$grok-imagine` source media; synthetic fixtures are labeled as fixtures only.
+- Grok video rows have `provider/grok-imagine/<state>/video-source.json` with completed invocation, exact first-frame, video, decoder, sample-index/timestamp, and raw-grid hashes. Video-derived frames still pass the normal extraction, alignment, identity, animation-contract, preview, visual-review, and aggregate gates.
 - Failed provider jobs use blocked sidecars or clear status/log errors instead of fake row images.
 - `qa/motion-variation-report.json.ok` true for walk/run/move sprite rows, unless explicitly waived for non-legged/hovering motion after visual review.
 - Walk/run/move rows also need a visual leg-phase gate. Frame 1 and frame 3 must show opposite support/contact legs, pass/down frames must not repeat the same-side leg pose, and each direction row is reviewed independently at playback speed. Same-side contact legs are a hard failure, not a polish issue. Metrics are a heuristic only; if the legs read wrong, the row fails even when `motion-variation-report.json.ok` is true.
@@ -73,6 +74,8 @@ qa/<state>-contact.png
 qa/<state>.gif
 qa/pose-scale-review.png
 qa/background-matte-review.png
+qa/preview-workbench/index.html
+qa/preview-workbench/workbench.evidence.json
 qa/frame-alignment-report.json
 qa/identity-consistency-report.json
 qa/<state>-onion.png
@@ -95,6 +98,9 @@ qa/isometric-map-review.png
 qa/isometric-depth-review.png
 qa/isometric-runtime-metadata.json
 qa/isometric-calibrated-catalog.json
+provider/grok-imagine/<state>/prompt.txt
+provider/grok-imagine/<state>/job.json
+provider/grok-imagine/<state>/video-source.json
 ```
 
 Use `manifest.json.frame_layout` as runtime SSoT. Do not recover frame rectangles from alpha at runtime.

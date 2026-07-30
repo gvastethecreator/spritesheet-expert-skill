@@ -90,6 +90,16 @@
       "rationale": "La extracción y QA de un atlas o tileset pertenece al pipeline especializado de spritesheets."
     },
     {
+      "id": "spritesheet-grok-first-frame-video",
+      "prompt": "Animate this approved first sprite frame with Grok Imagine, extract a stable loop from the video, align the frames, and deliver a verified spritesheet.",
+      "scope": "production-single-family",
+      "families": ["animated-sprites"],
+      "familyCount": 1,
+      "expectedSkill": "spritesheet-expert",
+      "excludedSkills": ["produce-2d-assets", "build-static-game-assets", "build-game-backgrounds", "build-game-ui-kits", "compose-asset-mockups"],
+      "rationale": "The provider video is only a source; deterministic frame sampling, alignment, atlas composition, previews, and animation QA belong to the spritesheet pipeline."
+    },
+    {
       "id": "mockup-store-board",
       "prompt": "Assemble the already approved sprites, backgrounds, and UI into a store-art review board without modifying any source asset.",
       "scope": "presentation-only",

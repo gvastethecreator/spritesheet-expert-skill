@@ -11,29 +11,37 @@ Build sprites and game asset sheets with the component-row pipeline:
 
 ```text
 preset/custom contract -> sprite-request.json -> layout guides + row/grid prompts
--> Pixel-art direction profiles + animation workflows -> imagegen raw grids/row strips
--> compact raw grids/row strips -> alpha/chroma/matte/rembg/BEN2 background removal + component/projection/grid extraction
+-> Pixel-art direction profiles + animation workflows -> imagegen or approved Grok source media
+-> neutral-background raw grids/row strips -> alpha/matte/BiRefNet/BEN2 removal + component/projection/grid extraction
 -> identity consistency + animation contract + onion-skin alignment QA
--> curated frames -> atlas PNG + manifest.json.frame_layout
+-> curated frames -> atlas PNG + manifest.json.frame_layout -> interactive review workbench
 ```
 
-Use `$imagegen` for visual generation. Use local scripts only for deterministic request prep, layout guides, model-backed/background-key/matte removal, extraction, registration, atlas composition, previews, curation, unpacking, provenance gates, alignment gates, and exports.
+Use `$imagegen` as the default still-image generator. Use `$grok-imagine` only as the explicit optional image/video provider described below. Local scripts own deterministic request prep, neutral-background removal, video-frame ingestion, extraction, registration, atlas composition, previews, curation, unpacking, provenance gates, alignment gates, and exports; they never perform paid inference.
 
-## Mandatory Imagegen Rule
+## Mandatory Imagegen Rule And Grok Exception
 
-`$imagegen` is the internal visual-generation sub-skill and the primary art engine for this skill. `spritesheet-expert` owns contracts, prompts, layout guides, extraction, registration, atlas composition, previews, curation, and QA; `$imagegen` owns bitmap creation.
+`$imagegen` is the primary still-image art engine. `spritesheet-expert` owns contracts, prompts, layout guides, extraction, registration, atlas composition, previews, curation, and QA. `$imagegen` owns default bitmap creation; `$grok-imagine` may own bitmap or video creation only when its route is selected explicitly.
 
-For any user-facing sprite, character, tileset, texture, prop, icon, VFX, or atlas art generation, `$imagegen` is mandatory. Load and follow the `$imagegen` skill rules for generation/editing, save-path handling, chroma-key transparency, and output honesty.
+For ordinary user-facing sprite, character, tileset, texture, prop, icon, VFX, or atlas art generation, load and follow `$imagegen`. Generate on a flat neutral gray, black, or white background; do not request green, blue, cyan, or magenta chroma. Preserve valid neutral colors in the subject and remove only the connected source background or use a model-backed cutout.
 
 Local scripted/PIL/procedural drawing is allowed only for deterministic smoke tests, regression fixtures, and geometry debugging. It must never be presented as representative production art, even when `$imagegen` is unavailable. If `$imagegen` cannot be used, stop the generated-art path, write a blocked status, or continue only with explicit user-provided/imported art.
 
-Pipeline validation for generated art must include `$imagegen`-produced source image or row strips before calling the result visually representative. The local scripts can prepare prompts, guides, extraction, atlas composition, previews, and QA, but they do not replace `$imagegen` for final visual content.
+Pipeline validation for generated art must include provider-produced source media before calling the result visually representative. The local scripts can prepare prompts, guides, decode accepted video, extract frames, compose atlases, and produce previews, but they do not replace `$imagegen` or `$grok-imagine` for final visual content.
 
 Before final QA or packaging, run `scripts/check_generation_provenance.py --run-dir /abs/run`. It must pass for generated production art. Use `--allow-imported-source` only for explicit user-provided or existing sheets. Use `--allow-fixture` only for local smoke/regression fixtures.
 
 When `$imagegen` outputs are meant for the project, copy or move the selected generated image from the default generated-images location into the run folder before extraction. Do not leave project-referenced row art only under `$CODEX_HOME`.
 
-Requires Python with Pillow and jsonschema. From the installed skill directory run `python -m pip install -r scripts/requirements-core.txt`, then `python scripts/check_python_env.py`. Repository maintainers use the root `pyproject.toml` for the complete test gate. `rembg` remains optional for local model-backed background removal.
+Requires Python with Pillow and jsonschema. From the installed skill directory run `python -m pip install -r scripts/requirements-core.txt`, then `python scripts/check_python_env.py`. Repository maintainers use the root `pyproject.toml` for the complete test gate. Install `scripts/requirements-background.txt` when `rembg`/BiRefNet removal is selected; install `scripts/requirements-video.txt` only for video ingestion. Both extras remain optional so core request preparation stays lightweight.
+
+## Optional Grok Imagine Provider
+
+Load and follow `$grok-imagine` when the user selects Grok still generation or the first-frame-to-video animation route. Keep provider execution outside this skill: start with the wrapper `--dry-run`, review its exact source/prompt/counts/output, and add `--ack-run` only with explicit current-task consent. Never call Grok inference from tests.
+
+For video animation, create and approve one exact first frame, then run `scripts/prepare_grok_video_animation.py`. It produces a two-sentence locked-camera prompt and a `$grok-imagine video-from-image` dry-run job. `scripts/ingest_grok_video_animation.py` accepts only the one video named by a completed, successful `invocation.json`; it checks the prompt and first-frame hashes, decodes in bounded two-pass mode, samples deterministic indices, restores the accepted first-frame pixels exactly as frame 1, and writes the normal `raw/<state>.png` grid plus provider provenance. Then run the same extraction, registration, atlas, alignment, identity, animation-contract, runtime-preview, visual-review, and aggregate gates as every other row.
+
+Read `references/grok-video-animation.md` before this route. On Zero Data Retention teams, video generation may require a caller-owned `output.upload_url`; do not retry around that provider boundary or claim completion without copied media and a completed invocation manifest.
 
 ## Local Handoff Runner Contract
 
@@ -69,6 +77,8 @@ Read `references/professional-sprite-animation.md` before generating, repairing,
 
 Read `references/isometric-tilesets.md` when generating, importing, slicing, naming, or reviewing isometric terrain, props, decor, buildings, or tilesets.
 
+Read `references/grok-video-animation.md` when using Grok image generation, image-to-video, video decoding, or video-derived provenance.
+
 Completion criterion: atlas contract names asset kind, extraction mode, background removal, art direction profile(s), animation workflow(s), generation provenance, frame budget if any, QA path, and output manifest before final packaging.
 
 ## Process
@@ -76,7 +86,7 @@ Completion criterion: atlas contract names asset kind, extraction mode, backgrou
 1. Choose preset or custom contract.
    - Read `references/atlas-reference.md` for presets, asset modes, background removal, and frame budgets.
    - Use `references/pixel-art-direction.md` to choose `auto` or explicit profiles such as `pixel-sideview`, `pixel-topdown`, `pixel-isometric`, `pixel-combat`, `pixel-texture`, `pixel-vfx`, `pixel-items-ui`, `pixel-shmup`, or `pixel-tiny`.
-   - Use `references/pixel-animation-workflows.md` to confirm inferred row workflows such as `sideview-locomotion`, `topdown-locomotion`, `combat-quick-strike`, `combat-power-strike`, `topdown-weapon-attack`, `responsive-jump`, `water-loop`, or `wind-ambient-loop`.
+   - Use `references/pixel-animation-workflows.md` to confirm inferred row workflows such as `gesture-loop`, `sideview-locomotion`, `topdown-locomotion`, `combat-quick-strike`, `combat-power-strike`, `topdown-weapon-attack`, `responsive-jump`, `water-loop`, or `wind-ambient-loop`.
 
 2. Prepare run folder and generation prompts.
    - Use `scripts/preset_to_request.py` and `scripts/prepare_sprite_run.py` for deterministic request/layout/art-direction setup.
@@ -85,18 +95,19 @@ Completion criterion: atlas contract names asset kind, extraction mode, backgrou
    - Locomotion rows also produce `prompts/motion-references/<state>.txt`, a machine-readable contract, and a target under `references/motion-references/`. `prepare_sprite_run.py` materializes an approved template automatically when available; generation is only the cache miss path. The mannequin's fixed anatomical colors prove left/right limb continuity; they are motion evidence only and must not leak into character identity or style.
 
 3. Generate or import real row art.
-   - Use `$imagegen` for generated user-facing art. Never substitute procedural drawings, placeholder drawings, SVGs, or PIL sheets for representative art.
+   - Use `$imagegen` by default. Use `$grok-imagine` only through the explicit provider contract above. Never substitute procedural drawings, placeholder drawings, SVGs, or PIL sheets for representative art.
    - Before a locomotion row, run `scripts/check_motion_references.py --run-dir /abs/run`. A missing reference, undersized image, missing sidecar, or provenance other than `art_engine=imagegen` blocks row generation.
-   - Write or preserve `source-provenance.json` with `art_engine: "imagegen"` and selected source paths before extraction. For existing user sheets, record imported/user-provided provenance and keep it separate from generated-art claims.
+   - Write or preserve `source-provenance.json` with the exact provider/source type and accepted source paths before extraction. Grok video rows also require `provider/grok-imagine/<state>/video-source.json`. For existing user sheets, record imported/user-provided provenance and keep it separate from generated-art claims.
 
 4. Extract, curate, compose, preview, and QA.
    - Follow `references/workflows.md` for exact commands for new sheets, imported sheets, atlas unpacking, curation, GIFs, and exports.
    - For imported/generated whole sheets, do not trust a nominal grid when dimensions, gutters, or visual placement drift. Prefer a trusted manifest, explicit grid, authored boxes, or projection-grid repair when the expected rows/columns are known. Auto-detect is diagnostic by default: if `qa/segmentation-report.json` says the boxes are wrong, auto-detected, or projection-repaired, fix layout/background/source or promote reviewed boxes before registration/composition.
-   - Matte conservatively. `auto` may use edge-connected matte removal for simple opaque imagegen checker/white/key-like backgrounds, chroma for clean flat keys, and rembg/BEN2 for complex non-flat backgrounds. `rembg` output must not get chroma-cleaned again unless explicitly requested with `post_rembg_chroma_cleanup`; over-removal of clothing, outlines, props, interiors, or antialiasing is a hard extraction failure. For hard/final cutouts, explicitly compare chroma/matte/rembg/BEN2 candidates and review `qa/background-matte-review.png` before atlas composition.
+   - New generation uses flat neutral gray, black, or white. `auto` preserves existing alpha, uses edge-connected matte removal only for a clean flat source, and falls back to `rembg` with `birefnet-general` for ambiguous backgrounds. Chroma is legacy-import compatibility only and must be declared as `source_family: legacy-chroma`; it is never inferred for new neutral generation. BEN2 is an explicit hard-edge comparison path. Review raw, checker, black, gray, white, and alpha panels in `qa/background-matte-review.png`; over-removal of clothing, outlines, props, interiors, or antialiasing is a hard failure.
+   - Render deterministic runtime playback for every animated state, finish the QA reports, then build or rebuild `qa/preview-workbench/index.html` with `scripts/build_preview_workbench.py --force`. Use its pause/step/scrub/speed/zoom/state controls, full frame strip, and checker/black/gray/white edge microscope for human review. Keeping this order prevents a stale self-contained workbench from omitting late evidence.
    - Use Pixel-art profile and workflow QA as a critique pass: 3x3 tile repetition, full-speed motion, locomotion contact/pass logic, attack phase readability, VFX loop math, tiny-sprite economy, projection uniformity, and palette/cluster discipline where relevant.
    - For isometric tilesets, do not approve isolated slots only. Run `check_asset_slots.py` and `check_isometric_tiles.py`, then review pivot, 2:1 footprint, map-repeat, edge/corner, and depth-sort proof images. Runtime/prototype placement must consume `qa/isometric-runtime-metadata.json` or a reviewed catalog copied from `qa/isometric-calibrated-catalog.json`; never place isometric cells from rectangular top-lefts or stale declared pivots.
 
-Done when source provenance, transparent frames, atlas PNG, manifest, previews, QA reports, and any curation/export artifacts match the requested asset kind.
+Done when source provenance, transparent frames, atlas PNG, manifest, deterministic previews, the interactive workbench, QA reports, and any curation/export artifacts match the requested asset kind.
 
 ## Identity And Motion Rules
 
@@ -121,7 +132,7 @@ Done when source provenance, transparent frames, atlas PNG, manifest, previews, 
 - Run `check_motion_variation.py` for walk/run/move rows. It checks lower-body silhouette change, support-side balance, and body-center drift so frozen joints or same-leg poses get caught before done. Weak support alternation is a failure for locomotion unless deliberately downgraded with `--support-warn-only` for hover/float/no-leg designs.
 - Treat the motion report as a heuristic, never final approval. For every walk/run/move row, inspect playback/contact sheets and confirm frame 1 and frame 3 show opposite support/contact legs; pass/down frames must not keep both legs drifting to the same side. Same-side contact legs are a hard row failure. If visual leg phase fails, the row fails even when the JSON says `ok`.
 - Mirror only when user approves and asymmetric details stay correct.
-- Locomotion is experimental until preview GIF passes motion QA.
+- Locomotion is experimental until the deterministic GIF and interactive workbench playback pass motion QA.
 - If a row partially works, use `compose_selected_cycle.py`; do not pretend full row passed.
 
 ## QA And Outputs

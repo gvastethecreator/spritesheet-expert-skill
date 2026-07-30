@@ -126,7 +126,15 @@ def derive_gate_policy(
     source_type = facts.get("source_type")
     if source_type is not None and (
         not isinstance(source_type, str)
-        or source_type not in {"imagegen", "imported", "fixture"}
+        or source_type
+        not in {
+            "imagegen",
+            "grok-imagine-image",
+            "grok-imagine-video",
+            "imported",
+            "fixture",
+            "mixed",
+        }
     ):
         raise GatePolicyError(f"unknown normalized source_type: {source_type!r}")
     animated = frame_semantics in {"animation", "effects"}
@@ -135,7 +143,12 @@ def derive_gate_policy(
     isometric_tiles, isometric_reason = _isometric_tileset(facts, asset_kind)
 
     categories: list[str] = ["animated" if animated else "static"]
-    if source_type == "imagegen":
+    if source_type in {
+        "imagegen",
+        "grok-imagine-image",
+        "grok-imagine-video",
+        "mixed",
+    }:
         categories.append("generated")
     if asset_kind == "tileset":
         categories.append("tileset")

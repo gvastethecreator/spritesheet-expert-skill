@@ -71,7 +71,7 @@ It must show the right row profiles before image generation. Fix the request or 
 
 It should also show the right `animation_workflows` per animated row. Fix the
 state/action wording or add explicit `animation_workflows` in the request if a
-row is missing its phase contract, for example `sideview-locomotion`,
+row is missing its phase contract, for example `gesture-loop`, `sideview-locomotion`,
 `topdown-locomotion`, `combat-quick-strike`, `combat-power-strike`,
 `topdown-weapon-attack`, `responsive-jump`, `water-loop`, or
 `wind-ambient-loop`.
@@ -81,7 +81,7 @@ state name/action/workflow indicates walk, run, move, advance, retreat, or dash.
 Do not accept a generated locomotion row that skipped these guides unless it is
 an intentional non-legged/hovering motion with a separate visual rationale.
 
-4. Generate one row per state or asset group with `$imagegen`. This is mandatory for generated user-facing art.
+4. Generate one row per state or asset group with `$imagegen` by default. `$grok-imagine` is an explicit optional still/video route; read `grok-video-animation.md`, start with dry-run, and require a completed invocation manifest before ingestion.
    - Prompt: `prompts/<state>.txt`
    - Inputs: accepted base/anchor image plus `references/layout-guides/<state>.png`
    - Output path: `raw/<state>.png`
@@ -90,8 +90,8 @@ an intentional non-legged/hovering motion with a separate visual rationale.
    - For animated body rows, `prepare_sprite_run.py` writes `states.<state>.raw_layout`. Compact grids such as `2x2`, `3x2`, `4x2`, `3x3`, or `4x3` are the default because long raw `1xN` character strips drift and crop more often. The final atlas can still be a runtime row; raw generation and delivery shape are separate contracts.
    - Use `raw_layout_policy: "legacy-strip"` only for explicit low-risk compatibility/import cases, and report that the row is using the weaker long-strip path.
    - For walk/run/advance/retreat rows, prefer 8 frames when quality matters. Use 4 or 6 only when the frame budget is intentional and the motion-phase guide still proves contact/pass/opposite-contact logic.
-   - If `$imagegen` does not expose a local file path in the current turn, report that the imagegen-backed pipeline cannot be completed honestly yet; do not substitute a scripted drawing as if it were the generated row.
-   - After copying accepted imagegen outputs into `raw/`, write `source-provenance.json` with `art_engine: "imagegen"` and the accepted source paths.
+   - If the selected provider does not expose a local accepted file in the current turn, report that the generated-art path cannot be completed honestly yet; do not substitute a scripted drawing.
+   - After copying accepted still outputs into `raw/`, write `source-provenance.json` with the exact provider/source type and accepted source paths.
    - If no user/base image was provided, generate only the neutral `idle` or closest standing identity row first. Review it, copy it to `raw/idle.png`, then promote frame 0 before generating action rows:
 
 ```bash
@@ -113,8 +113,14 @@ python scripts/preview_animation.py --run-dir /abs/run
 python scripts/check_frame_alignment.py --run-dir /abs/run
 python scripts/check_identity_consistency.py --run-dir /abs/run
 python scripts/check_animation_contracts.py --run-dir /abs/run
+python scripts/render_runtime_preview.py --run-dir /abs/run --state idle --kind runtime-playback
+python scripts/build_preview_workbench.py --run-dir /abs/run --force
 python scripts/validate_run.py --run-dir /abs/run --stage post-extract
 ```
+
+Render runtime playback once per animated state, then build or rebuild the
+workbench after the final QA artifacts exist. Otherwise the self-contained
+workbench can omit late reports or playback evidence.
 
 After packaging and recording the hash-bound visual review, run the final gate:
 
@@ -140,7 +146,11 @@ python scripts/extract_sprite_row_frames.py --run-dir /abs/run --background-remo
 ```
 
 Do not treat the backend name as proof. Review `qa/background-matte-review.png`
-on checker, dark, and alpha-mask panels before atlas composition.
+on checker, black, gray, white, and alpha-mask panels before atlas composition.
+
+New generation must use a flat neutral gray, black, or white background. The
+default quality model is `birefnet-general`; `birefnet-general-lite` is an
+explicit speed option. Chroma mode is for declared legacy imports only.
 
 For animated sprites with walk/run/move rows, also run:
 
@@ -171,7 +181,29 @@ jump travel, static hit reactions, flat VFX, and dead ambient loops. The report
 also lists the required visual checks; those checks still need playback/contact
 review before done.
 
-For user-facing animated sprite runs, add a runtime playback smoke before done: load the generated `manifest.json.frame_layout` or extracted frame manifest in a tiny canvas/game-loop prototype, play idle/walk/crouch/jump/attack rows, and show origin/baseline/bbox overlays. The check should prove the animation reads during update/render playback, not only in a static contact sheet.
+For user-facing animated sprite runs, render hash-bound runtime playback evidence for every state and open `qa/preview-workbench/index.html`. Use pause, step, scrub, speed, zoom, state selection, the complete filmstrip, and checker/black/gray/white backgrounds. The check should prove the animation reads during playback, not only in a contact sheet.
+
+## Grok First-Frame Video Workflow
+
+After accepting one exact neutral-background first frame, prepare the provider job:
+
+```bash
+python scripts/prepare_grok_video_animation.py --repo-root /abs/project --run-dir /abs/run --state walk --first-frame provider/grok-imagine/walk/first-frame.png
+```
+
+Run the generated `$grok-imagine` arguments with `--dry-run`. Add `--ack-run`
+only with explicit current-task consent. After the wrapper reports a completed
+run with exactly one copied video, ingest its manifest:
+
+```bash
+python -m pip install -r scripts/requirements-video.txt
+python scripts/ingest_grok_video_animation.py --run-dir /abs/run --state walk --invocation /abs/project/.scratch/agent-cli-delegation/grok-imagine/spritesheet-video/<run>/invocation.json
+```
+
+Then return to step 5. Video extraction does not replace background removal,
+frame registration, identity, alignment, animation-contract, preview, visual,
+or aggregate gates. See `grok-video-animation.md` for the exact provider and
+provenance contract.
 
 For runs with `art_direction.mode: pixel-art`, add the relevant critique pass:
 

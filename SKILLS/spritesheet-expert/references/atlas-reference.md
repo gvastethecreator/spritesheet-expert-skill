@@ -2,29 +2,25 @@
 
 ## Background Removal
 
-Default method is `auto`: existing alpha is preserved, clean key-color sheets use border-connected chroma, simple opaque imagegen matte/checker/white backgrounds use edge-palette border-connected matte removal, and dirty/non-flat/imported sheets use `rembg` when needed. Chroma is deterministic only when `$imagegen` follows the flat key-color contract and the palette is safely far from the key.
+New generation uses one perfectly flat neutral background: gray `#808080`, black `#000000`, or white `#FFFFFF`. `prepare_sprite_run.py` chooses the neutral color with the greatest contrast from the accepted reference, with gray as the no-reference fallback. The prompt forbids gradients, texture, vignettes, floor planes, cast shadows, and background lighting variation. It does not ban black, gray, or white from the subject palette.
 
-Use the matte path when imagegen returns an opaque but simple border background instead of true alpha. It flood-fills only edge-connected palette colors, so white clothing, outlines, and interior subject pixels are not globally erased. Use `rembg` when the source row has a dirty/non-flat background, anti-aliased backdrop, photo/reference input, generated art that cannot be keyed/matted cleanly, or an imported irregular sheet that still has a colored/painted background. Use `auto` when batch input may mix transparent, chroma-keyed, matte/checker, and natural-background rows. `rembg` is a subject cutout model, not an excuse to accept busy source art: if it removes hair, outlines, clothing, props, tile edges, or inner holes, regenerate cleaner imagegen rows or use an explicit manifest/grid with conservative alpha.
+Default method is `auto`:
 
-Do not assume magenta is safe. Purple, violet, pink, and some hot orange/pink highlights can be close enough to `#FF00FF` to damage despill or trigger chroma-adjacent QA. Use palette-aware key selection:
+1. preserve trustworthy source alpha;
+2. for `source_family: neutral`, remove a simple flat border with an edge-connected matte;
+3. otherwise use `rembg` with `birefnet-general`;
+4. use BEN2 only when selected explicitly for a hard/final comparison.
 
-- default fallback key is green `#00FF00` when there is no reference image;
-- use `check_chroma_key_safety.py` on generated sources when the palette includes pink, purple, violet, magenta, neon orange, lime, cyan, or blue;
-- if every practical key conflicts with the art palette, regenerate on a safer key or switch to `background_removal.method: rembg/auto`.
-- full-palette asset packs, VFX sheets, and tilesets often cannot share one safe global key; prefer per-row/per-group keys or `rembg/auto` instead of forcing magenta.
+The matte flood-fill touches only edge-connected palette regions, so neutral clothing, outlines, highlights, inner holes, and props are not erased globally. Ambiguous, dirty, anti-aliased, photographic, or breathing video backgrounds should reach BiRefNet. Model-backed removal is still evidence to review, not an excuse to accept a busy source: if it clips hair, fur, spikes, limbs, outlines, clothing, props, tile edges, or interiors, regenerate a cleaner neutral source or compare a different model.
 
-Imagegen can return a visually solid but numerically dirty key background. If the border background has gradients, compression-like variation, or old-key halos, normalize the border-connected background with `rekey_chroma_background.py` using the same `--from-key` and `--to-key`, then rerun `check_chroma_key_safety.py`. Treat `severity: fail` as regenerate/rembg. Treat `severity: warn` as a required visual review: exact-key islands may be harmless internal background gaps, or they may be clothing/prop pixels that would break alpha.
+Chroma is legacy-import compatibility only. A legacy request must declare `background_removal.source_family: legacy-chroma` or select `background_removal.method: chroma` explicitly in the import/unpack path. New preparation rejects chroma generation and never auto-selects the chroma branch for neutral sources. Legacy chroma still uses a border-connected soft matte/despill; keep `check_chroma_key_safety.py`, `rekey_chroma_background.py`, and `check_visible_magenta.py` only for those old sources.
 
-Chroma removal must use a border-connected matte: only key-colored pixels connected to the outer background become transparent. Key-like pixels inside the character, clothing, props, or effects are neutralized/despilled instead of punched out as alpha holes. This avoids remeras/outfits becoming partially transparent when generated art contains chroma-adjacent texture.
-
-Do not ship hard-threshold chroma cutouts. Chroma extraction must include soft edge matting/despill for border-connected fringe pixels, then be reviewed on checker, dark, and contrasting solid backgrounds. If a visible green/cyan/magenta/blue rim remains, fix the matte, rekey/regenerate the source, or switch to `rembg/auto`; do not accept the atlas because alpha is technically present.
-
-Do not run chroma cleanup after `rembg` by default. Model-backed cutout already creates alpha; a second key-color pass can erase legitimate subject pixels when the character palette overlaps the key family. The scripts now record `post_rembg_chroma_cleanup`; keep it false unless visual QA shows only border-connected key residue and no subject-color risk.
+Do not run chroma cleanup after `rembg` on neutral sources. `post_rembg_chroma_cleanup` is valid only for declared `legacy-chroma` media; applying it to neutral art can erase legitimate subject pixels.
 
 Recommended local model stack:
 
-- `rembg` + `birefnet-general-lite`: default for efficient local iteration.
-- `rembg` + `birefnet-general`: higher-quality final cutouts when runtime cost is acceptable.
+- `rembg` + `birefnet-general`: quality default.
+- `rembg` + `birefnet-general-lite`: explicit speed option for iteration.
 - `rembg` + `birefnet-dis` or `birefnet-hrsod`: hard silhouettes, high-resolution objects, or irregular source sheets where general-lite leaves background.
 - `rembg` + `isnet-anime`: anime/cel character rows when BiRefNet clips linework.
 - `ben2` + `PramaLLC/BEN2`: optional higher-quality local matting/refinement path for hair, fur, spikes, painterly edges, 4K-ish inputs, dirty generated backgrounds, and imported irregular sheets. It is heavier than rembg and needs PyTorch.
@@ -49,11 +45,11 @@ python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id hero --re
 python scripts/extract_sprite_row_frames.py --run-dir /abs/run --background-device auto
 ```
 
-`extract_sprite_row_frames.py` defaults to `auto`: existing alpha first, chroma only for clean key-color rows, edge-palette matte for simple opaque border backgrounds, and `rembg` when the row background does not look like alpha, clean key, or simple matte. Tune the matte fallback with `--matte-threshold` and `--matte-max-colors` when generated backgrounds have slight checker/white variation. If `rembg` is requested or selected by `auto` but not installed, fail clearly instead of silently using bad alpha. Review `frames/frames-manifest.json.background_removal.chroma_mask` and `matte_mask`; generated sprite rows should normally record `border-connected` or `edge-palette-border-connected`.
+`extract_sprite_row_frames.py` defaults to `auto`: existing alpha first, edge-connected matte for simple flat neutral borders, and `rembg` for ambiguous backgrounds. The chroma branch runs only for `source_family: legacy-chroma`. Tune the matte fallback with `--matte-threshold` and `--matte-max-colors` when a neutral source has small numeric variation. If `rembg` is requested or selected by `auto` but not installed, fail clearly instead of silently using bad alpha. Review `frames/frames-manifest.json.background_removal.source_family`, `model`, and `matte_mask`.
 
-`ben2` is never selected silently by `auto`; choose it explicitly for final/high-risk cutouts after a rembg/chroma pass fails visual QA. It writes `background_method: ben2` into manifests and uses `background_removal.device` (`auto`, `cpu`, `cuda`, `cuda:0`, etc.) so slow CPU cutouts are not mistaken for a broken pipeline.
+`ben2` is never selected silently by `auto`; choose it explicitly for final/high-risk cutouts after a BiRefNet pass fails visual QA. It writes `background_method: ben2` into manifests and uses `background_removal.device` (`auto`, `cpu`, `cuda`, `cuda:0`, etc.) so slow CPU cutouts are not mistaken for a broken pipeline.
 
-Every extraction writes `qa/background-matte-review.png`. Review it before judging atlas quality: raw source, processed checker view, processed dark view, and alpha mask should preserve outline pixels, interior holes, props, hair/fur/spikes, and tiny limbs without leftover key-color or scenery.
+Every extraction writes `qa/background-matte-review.png`. Review raw source, checker, black, gray, white, and alpha-mask panels before judging atlas quality. The six surfaces should preserve outline pixels, interior holes, props, hair/fur/spikes, and tiny limbs without background residue.
 
 For imported whole sheets, `unpack_atlas_run.py` defaults to background-removal
 `auto` when using alpha auto-detect. It writes `qa/preprocessed-atlas-alpha.png`,
@@ -66,8 +62,8 @@ exact-grid sheets.
 
 ## Generation Provenance
 
-Generated production art must be backed by `$imagegen`. Procedural/PIL drawing
-is only a fixture path.
+Generated production art must be backed by `$imagegen` or an explicitly selected
+`$grok-imagine` invocation. Procedural/PIL drawing is only a fixture path.
 
 Record accepted source art before extraction:
 
@@ -132,7 +128,7 @@ Built-ins:
 - `vector`: flat vector-like game sprite.
 - `custom`: use `--style` text as the contract.
 
-Keep atlas constraints stable: one row per state or asset group, chroma background where transparency is needed, no text, no scene background, no guide marks, no slot overlap.
+Keep atlas constraints stable: one row per state or asset group, flat neutral source background where transparency is needed, no text, no scene background, no guide marks, no slot overlap.
 
 Sprites use `asset_kind: sprite` and component extraction. Tiles, textures, icons, props, VFX, and full-cell assets use `asset_kind` plus `extraction_mode: slots` so full-cell art does not depend on connected-component detection.
 
@@ -204,6 +200,9 @@ request:
 - `scripts/register_sprite_frames.py`: align extracted/imported frames to a stable runtime pivot before atlas composition; use after unpacking whole-sheet candidates whose sprites drift inside cells.
 - `scripts/compose_sprite_atlas.py`: bake atlas and runtime `manifest.json.frame_layout`.
 - `scripts/preview_animation.py`: write contact sheets and GIF previews under `qa/`.
+- `scripts/build_preview_workbench.py`: write the self-contained, hash-bound interactive review surface under `qa/preview-workbench/`.
+- `scripts/prepare_grok_video_animation.py`: bind one exact first frame to a dry-run-first `$grok-imagine video-from-image` job.
+- `scripts/ingest_grok_video_animation.py`: validate completed Grok media, decode/sample video deterministically, preserve frame 1, write the normal raw grid and provider provenance.
 - `scripts/check_frame_alignment.py`: real-frame onion-skin QA for baseline/root alignment, jump takeoff/landing closure, fall/knockdown settlement, bboxes, and alpha centers.
 - `scripts/check_identity_consistency.py`: head/upper-body/area proxy QA so identity scale drift cannot pass as animation.
 - `scripts/serve_curation.py`: local curation webview; selection + move/scale/rotate/shear saved in `curation.json`.
@@ -211,7 +210,7 @@ request:
 - `scripts/export_curated_pngs.py`: export curated still PNGs from imported/candidate sets.
 - `scripts/compose_selected_cycle.py`: record human-picked frame order for partial locomotion wins.
 - `scripts/compose_sprite_gif.py`: export clean transparent GIFs.
-- `scripts/check_generation_provenance.py`: require imagegen or explicit imported-source provenance before production QA; allow procedural art only as fixtures.
+- `scripts/check_generation_provenance.py`: require verified imagegen, Grok, mixed, or explicit imported-source provenance before production QA; allow procedural art only as fixtures.
 - `scripts/check_visible_magenta.py`: screenshot guard for visible chroma leakage.
 - `scripts/check_chroma_key_safety.py`: palette-distance guard for unsafe key colors before/after generation.
 - `scripts/rekey_chroma_background.py`: replace or normalize a border-connected generated key background before extraction.
@@ -277,7 +276,7 @@ For non-sprite asset modes:
 - tilesets need exact grid fit, edge compatibility, readable collision surfaces, consistent projection, and no scene/collage output;
 - textures need seamless/tileable intent, flat material samples, consistent texel density, and no perspective hero objects;
 - props/icons need centered isolation, readable silhouette, scale hierarchy, and coherent set language;
-- VFX needs buildup/peak/decay frames, stable emitter anchor, alpha-friendly opacity, and no chroma-colored cores.
+- VFX needs buildup/peak/decay frames, stable emitter anchor, alpha-friendly opacity, and no source-background residue.
 
 ## Frame Budget
 

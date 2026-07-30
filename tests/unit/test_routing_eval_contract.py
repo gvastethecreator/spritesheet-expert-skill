@@ -21,7 +21,7 @@ def run_validator(eval_path: Path = EVALS) -> subprocess.CompletedProcess[str]:
 def test_routing_eval_matrix_is_release_ready() -> None:
     result = run_validator()
     assert result.returncode == 0, result.stderr
-    assert "14 cases, 6 candidates" in result.stdout
+    assert "15 cases, 6 candidates" in result.stdout
 
 
 def test_routing_eval_matrix_rejects_a_missing_multi_family_case(tmp_path: Path) -> None:
