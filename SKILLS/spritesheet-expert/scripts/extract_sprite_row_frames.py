@@ -1001,6 +1001,86 @@ def fit_to_cell(
     return target
 
 
+def fit_full_bleed_cell(
+    image: Image.Image,
+    cell_width: int,
+    cell_height: int,
+    *,
+    resize_policy: ResizePolicy | None = None,
+) -> Image.Image:
+    """Fill a tile/texture cell without adding transparent padding.
+
+    Provider grids are often a few pixels short of exact divisibility. Slot
+    crops can therefore differ by one pixel in width or height; the generic
+    contain-fit path preserves that tiny aspect mismatch by adding a transparent
+    row or column. Full-bleed assets need a centered cover crop instead.
+    """
+
+    source = image.convert("RGBA")
+    source_ratio = source.width / source.height
+    target_ratio = cell_width / cell_height
+    if source_ratio > target_ratio:
+        crop_width = max(1, round(source.height * target_ratio))
+        left = max(0, (source.width - crop_width) // 2)
+        source = source.crop((left, 0, left + crop_width, source.height))
+    elif source_ratio < target_ratio:
+        crop_height = max(1, round(source.width / target_ratio))
+        top = max(0, (source.height - crop_height) // 2)
+        source = source.crop((0, top, source.width, top + crop_height))
+    if source.size == (cell_width, cell_height):
+        return source
+    return resize_image(
+        source,
+        (cell_width, cell_height),
+        policy=resize_policy or ResizePolicy(mode=ArtMode.ILLUSTRATED),
+    )
+
+
+def fit_position_locked_canvas(
+    image: Image.Image,
+    cell_width: int,
+    cell_height: int,
+    *,
+    resize_policy: ResizePolicy | None = None,
+) -> Image.Image:
+    """Resize the full provider canvas so frame-to-frame anchors cannot recenter."""
+
+    source = image.convert("RGBA")
+    source_ratio = source.width / source.height
+    target_ratio = cell_width / cell_height
+    if abs(source_ratio - target_ratio) / target_ratio > 0.01:
+        raise ImagePolicyError(
+            "position-locked frame canvas aspect ratio does not match the runtime cell"
+        )
+    if source.size == (cell_width, cell_height):
+        return source
+    return resize_image(
+        source,
+        (cell_width, cell_height),
+        policy=resize_policy or ResizePolicy(mode=ArtMode.ILLUSTRATED),
+    )
+
+
+def full_bleed_slot_flags(
+    asset_kind: str,
+    state_entry: dict[str, Any],
+    catalog: dict[str, Any],
+    frame_count: int,
+) -> list[bool]:
+    """Select only explicit self/adjacency slots for cover-fit normalization."""
+
+    if asset_kind not in {"tileset", "texture"}:
+        return [False] * frame_count
+    labels = state_entry.get("asset_labels", [])
+    flags: list[bool] = []
+    for index in range(frame_count):
+        label = labels[index] if isinstance(labels, list) and index < len(labels) else None
+        metadata = catalog.get(label, {}) if isinstance(label, str) else {}
+        repeat_mode = metadata.get("repeat_mode") if isinstance(metadata, dict) else None
+        flags.append(repeat_mode in {"self", "adjacency"})
+    return flags
+
+
 def central_alpha_run_width(alpha: Image.Image, y: int, center_x: int, min_alpha: int = 16) -> int:
     width, _height = alpha.size
     pixels = alpha.load()
@@ -1619,6 +1699,9 @@ def main() -> int:
     frames_root = run_dir / "frames"
     frames_root.mkdir(parents=True, exist_ok=True)
     asset_kind = str(request.get("asset_kind", "sprite"))
+    asset_catalog = request.get("asset_catalog", {}).get("items", {})
+    if not isinstance(asset_catalog, dict):
+        asset_catalog = {}
     resize_policy = resize_policy_from_sampling_policy(request.get("sampling_policy"))
     args.pixel_art = resize_policy.mode is ArtMode.PIXEL
     args.allow_full_cell = (
@@ -1639,7 +1722,14 @@ def main() -> int:
         if not raw_path.is_file():
             all_errors.append(f"{state}: missing raw strip {raw_path}")
             continue
-        frame_count = int(request["states"][state]["frames"])
+        state_entry = request["states"][state]
+        frame_count = int(state_entry["frames"])
+        workflows = {
+            str(value).strip().lower()
+            for value in state_entry.get("animation_workflows", [])
+            if isinstance(value, str)
+        }
+        position_locked_canvas = "gesture-loop" in workflows
         with Image.open(raw_path) as opened:
             raw_source = opened.convert("RGBA")
             try:
@@ -1683,7 +1773,19 @@ def main() -> int:
                 "columns": columns,
                 "rows": layout_rows,
             }
-            if uses_grid_layout:
+            if position_locked_canvas:
+                sprites = (
+                    extract_grid_slot_sprites(strip, frame_count, columns, layout_rows)
+                    if uses_grid_layout
+                    else extract_slot_sprites(strip, frame_count)
+                )
+                method = (
+                    "grid-slots-position-locked"
+                    if uses_grid_layout
+                    else "slots-position-locked"
+                )
+                segmentation_report["position_locked_canvas"] = True
+            elif uses_grid_layout:
                 sprites = extract_grid_component_sprites(strip, frame_count, columns, layout_rows)
                 method = "grid-components"
             else:
@@ -1724,6 +1826,13 @@ def main() -> int:
                 "sprites": sprites,
                 "pose_geometry": pose_geometry,
                 "segmentation": segmentation_report,
+                "position_locked_canvas": position_locked_canvas,
+                "full_bleed_slots": full_bleed_slot_flags(
+                    asset_kind,
+                    state_entry,
+                    asset_catalog,
+                    frame_count,
+                ),
             }
         )
 
@@ -1736,7 +1845,17 @@ def main() -> int:
         frame_count = pending["frames"]
         pose_geometry = pending["pose_geometry"]
         try:
-            if asset_kind == "sprite":
+            if pending["position_locked_canvas"]:
+                frames = [
+                    fit_position_locked_canvas(
+                        sprite,
+                        cell_width,
+                        cell_height,
+                        resize_policy=resize_policy,
+                    )
+                    for sprite in pending["sprites"]
+                ]
+            elif asset_kind == "sprite":
                 frames = fit_pose_frames(
                     pending["sprites"],
                     pose_geometry,
@@ -1747,6 +1866,29 @@ def main() -> int:
                     safe_margin_y,
                     resize_policy,
                 )
+            elif extraction_mode == "slots" and safe_margin_x == 0 and safe_margin_y == 0:
+                frames = [
+                    (
+                        fit_full_bleed_cell(
+                            sprite,
+                            cell_width,
+                            cell_height,
+                            resize_policy=resize_policy,
+                        )
+                        if full_bleed
+                        else fit_to_cell(
+                            sprite,
+                            cell_width,
+                            cell_height,
+                            safe_margin_x,
+                            safe_margin_y,
+                            resize_policy=resize_policy,
+                        )
+                    )
+                    for sprite, full_bleed in zip(
+                        pending["sprites"], pending["full_bleed_slots"], strict=True
+                    )
+                ]
             else:
                 frames = [
                     fit_to_cell(

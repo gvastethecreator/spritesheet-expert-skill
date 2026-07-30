@@ -17,12 +17,25 @@ from spritecore.video_animation import (
 )
 
 
+def parse_sample_indices(raw: str | None) -> list[int] | None:
+    if raw is None:
+        return None
+    try:
+        return [int(value.strip()) for value in raw.split(",") if value.strip()]
+    except ValueError as exc:
+        raise ValueError("--sample-indices must be comma-separated integers") from exc
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--state", required=True)
     parser.add_argument("--invocation", type=Path, required=True)
     parser.add_argument("--job")
+    parser.add_argument(
+        "--sample-indices",
+        help="reviewed chronological decoder indices, comma-separated; count must match the requested frames",
+    )
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
     try:
@@ -32,6 +45,7 @@ def main() -> int:
             invocation_path=args.invocation,
             job_name=args.job,
             force=args.force,
+            sample_indices=parse_sample_indices(args.sample_indices),
         )
         with acquire_run_lock(result.run_dir, "ingest-grok-video-animation"):
             revalidate_video_sources(result)

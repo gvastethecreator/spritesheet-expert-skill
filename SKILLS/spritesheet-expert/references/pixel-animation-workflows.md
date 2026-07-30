@@ -98,8 +98,17 @@ Required phases:
 3. One clear gesture accent.
 4. Return to the identity anchor before playback wraps.
 
-QA: feet, framing, scale, and identity stay locked; no detached symbols replace
-the pose; the final-to-first transition does not pop an arm, hand, or prop.
+QA: for a planted gesture, freeze pelvis, both legs, knees, ankles, both feet,
+and the contact footprint in the first-frame position. Do not allow weight
+shift, hip/root translation, knee bend, ankle turn, foot rotation, foot
+sliding, or body sway. Only the gesturing shoulder, arm, wrist, and hand should
+carry the action; head and torso motion stay minimal. Framing, scale, and
+identity stay locked; no detached symbols replace the pose; the final-to-first
+transition does not pop an arm, hand, or prop.
+
+`check_animation_contracts.py` treats loop closure and planted-body stability
+as separate requirements. A loop can close cleanly and still fail when its
+lower body travels during the middle frames.
 
 ### `sideview-locomotion`
 
@@ -141,10 +150,10 @@ Required steps:
 
 QA: handedness and asymmetry stay correct; direction changes do not alter body
 volume or projection. Hair, capes, robes, or large costumes cannot hide the
-leg-phase proof; if frame 1 and frame 3 do not visibly alternate support/contact
-legs, the row fails even when automated metrics pass. If both contact frames
-place the legs/support on the same side, regenerate or repair that row before
-reviewing polish.
+leg-phase proof. Frame 1 and the halfway contact frame must visibly use opposite
+anatomical support legs, joined by a crossover or depth swap. Screen-space
+left/right balance cannot prove leg identity. If chronological playback repeats
+the same anatomical contact leg, regenerate or repair that row before polish.
 
 ### `combat-quick-strike`
 
@@ -251,8 +260,9 @@ Required phases:
 3. Decay/cooling.
 4. Fade or loop return.
 
-QA: emitter/contact anchor is stable; alpha and chroma colors are safe; motion
-does not steal focus from the gameplay subject.
+QA: emitter/contact anchor is stable; neutral-background removal preserves
+intentional alpha and translucent colors; motion does not steal focus from the
+gameplay subject.
 
 ### `water-loop`
 
@@ -315,8 +325,8 @@ QA: no frame exists only to be smooth; each frame changes the runtime read.
 
 Before done, map every animated row to its active workflow:
 
-- locomotion: contact/pass logic, frame 1 vs frame 3 opposite support, loop
-  seam, foot/support alternation;
+- locomotion: contact/pass logic, frame 1 vs halfway contact using opposite
+  anatomical support legs, visible crossover/depth swap, loop seam;
 - character gesture: identity anchor, readable limb/body accent, stable feet,
   and clean final-to-first return;
 - combat: stance, startup/load if needed, smear direction, hit/contact,

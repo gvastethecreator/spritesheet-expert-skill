@@ -129,8 +129,21 @@ def test_every_builtin_preset_emits_complete_family_contract(
                     "edge_role"
                 )
                 assert catalog[label]["collision"]
+                assert catalog[label]["repeat_mode"] in {
+                    "self",
+                    "adjacency",
+                    "overlay",
+                }
+            if request["asset_kind"] == "texture":
+                assert catalog[label]["repeat_mode"] == "self"
             if request["asset_kind"] == "asset":
                 assert catalog[label]["strategy_class"]
+        adjacency_roles = [
+            catalog[label]["tile_role"]
+            for label in labels
+            if catalog[label].get("repeat_mode") == "adjacency"
+        ]
+        assert len(adjacency_roles) == len(set(adjacency_roles))
 
 
 def test_builtin_preset_catalog_passes_semantic_validation() -> None:

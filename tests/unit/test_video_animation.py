@@ -18,6 +18,7 @@ from spritecore.video_animation import (
     prepare_video_job,
     revalidate_prepared_sources,
     revalidate_video_sources,
+    reviewed_sample_indices,
     uniform_sample_indices,
 )
 
@@ -94,6 +95,26 @@ def test_cyclic_sampling_stays_half_open_to_avoid_a_duplicate_contact() -> None:
     ) == [0, 2, 4, 6]
 
 
+def test_reviewed_sampling_accepts_a_chronological_phase_selection() -> None:
+    assert reviewed_sample_indices(145, 4, [0, 7, 14, 21]) == [0, 7, 14, 21]
+
+
+@pytest.mark.parametrize(
+    "indices, message",
+    [
+        ([1, 7, 14, 21], "start"),
+        ([0, 7, 7, 21], "duplicate"),
+        ([0, 14, 7, 21], "chronological"),
+        ([0, 7, 14, 145], "inside"),
+    ],
+)
+def test_reviewed_sampling_rejects_unverifiable_indices(
+    indices: list[int], message: str
+) -> None:
+    with pytest.raises(VideoAnimationError, match=message):
+        reviewed_sample_indices(145, 4, indices)
+
+
 def test_character_wave_uses_bookended_sampling_not_a_cyclic_water_policy() -> None:
     assert _video_sampling_mode(
         "wave",
@@ -102,6 +123,74 @@ def test_character_wave_uses_bookended_sampling_not_a_cyclic_water_policy() -> N
             "action": "six-frame planted friendly hand wave loop",
         },
     ) == "bookended-inclusive"
+
+
+def test_gesture_video_prompt_freezes_the_entire_lower_body(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    request = _request()
+    request["states"] = {
+        "wave": {
+            "frames": 6,
+            "fps": 6,
+            "loop": True,
+            "action": "planted friendly hand wave loop",
+            "animation_workflows": ["gesture-loop"],
+            "raw_layout": {
+                "kind": "compact-grid",
+                "columns": 3,
+                "rows": 2,
+                "order": "row-major",
+                "delivery": "compose-runtime-row",
+            },
+        }
+    }
+    (run_dir / "sprite-request.json").write_text(
+        json.dumps(request), encoding="utf-8"
+    )
+    Image.new("RGBA", (32, 32), (128, 128, 128, 255)).save(
+        run_dir / "first-frame.png"
+    )
+
+    prepared = prepare_video_job(
+        repo_root=tmp_path,
+        run_dir=run_dir,
+        state="wave",
+        first_frame_name="first-frame.png",
+    )
+    prompt = prepared.prompt_text.lower()
+
+    assert "pelvis, both legs, knees, ankles, both feet, and the contact footprint" in prompt
+    assert "pixel-for-pixel fixed" in prompt
+    assert "only the waving shoulder, arm, wrist, and hand" in prompt
+    assert "do not add blush, cheek dots, new markings" in prompt
+
+
+def test_sideview_locomotion_prompt_requires_opposite_support_legs(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    request = _request()
+    request["states"]["walk"]["animation_workflows"] = ["sideview-locomotion"]
+    (run_dir / "sprite-request.json").write_text(
+        json.dumps(request), encoding="utf-8"
+    )
+    Image.new("RGBA", (32, 32), (128, 128, 128, 255)).save(
+        run_dir / "first-frame.png"
+    )
+
+    prepared = prepare_video_job(
+        repo_root=tmp_path,
+        run_dir=run_dir,
+        state="walk",
+        first_frame_name="first-frame.png",
+    )
+    prompt = prepared.prompt_text.lower()
+
+    assert "two unmistakably opposite anatomical contact phases" in prompt
+    assert "same leg and foot must be visibly lifted" in prompt
+    assert "other anatomical leg is extended forward and planted" in prompt
+    assert "never repeat the same support limb" in prompt
+    assert "without forward root travel or foot sliding" in prompt
 
 
 def test_decode_selected_validates_unselected_second_pass_frames() -> None:

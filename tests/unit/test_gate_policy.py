@@ -102,6 +102,50 @@ def test_texture_policy_applies_slot_review_without_animation_gates() -> None:
     assert "asset_kind=texture" in policy.applied_reasons["asset-slots"]
 
 
+def test_static_multiframe_sprite_variants_require_identity_consistency() -> None:
+    policy = derive_gate_policy(
+        _normalized_request(
+            frame_semantics="variants",
+            extraction_mode="components",
+            states={"poses": {"frames": 9, "fps": 1, "loop": False}},
+        ),
+        workflow="production",
+    )
+
+    assert policy.categories == ("static", "generated")
+    assert policy.required_gate_ids == (
+        "generation-provenance",
+        "identity-consistency",
+    )
+    assert "multi-frame static" in policy.applied_reasons["identity-consistency"]
+
+
+def test_single_static_sprite_reference_does_not_require_identity_sequence_gate() -> None:
+    policy = derive_gate_policy(
+        _normalized_request(
+            frame_semantics="variants",
+            extraction_mode="components",
+            states={"anchor": {"frames": 1, "fps": 1, "loop": False}},
+        ),
+        workflow="production",
+    )
+
+    assert "identity-consistency" not in policy.required_gate_ids
+
+
+def test_static_identity_policy_ignores_non_numeric_frame_facts() -> None:
+    policy = derive_gate_policy(
+        _normalized_request(
+            frame_semantics="variants",
+            extraction_mode="components",
+            states={"anchor": {"frames": "unknown", "fps": 1}},
+        ),
+        workflow="production",
+    )
+
+    assert "identity-consistency" not in policy.required_gate_ids
+
+
 def test_import_diagnostic_uses_report_gates_not_production_gates() -> None:
     policy = derive_gate_policy(
         _normalized_request(source_type="imported"),

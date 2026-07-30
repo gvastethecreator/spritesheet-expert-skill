@@ -125,10 +125,15 @@ def inspect_row(row: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]
             errors.append(f"{key} shrinks to {minimum:.2f}x reference; expected >= {floor:.2f}x")
         if maximum > ceiling:
             errors.append(f"{key} grows to {maximum:.2f}x reference; expected <= {ceiling:.2f}x")
-        if key != "opaque_area_vs_reference" and spread > args.max_proxy_spread:
+        spread_limit = (
+            args.max_body_mass_spread
+            if key == "body_mass_width_80_vs_reference"
+            else args.max_proxy_spread
+        )
+        if key != "opaque_area_vs_reference" and spread > spread_limit:
             errors.append(
                 f"{key} varies by {spread:.2f}x across row; "
-                f"expected <= {args.max_proxy_spread:.2f}x"
+                f"expected <= {spread_limit:.2f}x"
             )
 
     return {
@@ -160,6 +165,12 @@ def main() -> int:
     parser.add_argument("--min-knockdown-upper", type=float, default=0.58)
     parser.add_argument("--min-knockdown-body-mass-width", type=float, default=0.50)
     parser.add_argument("--max-proxy-spread", type=float, default=0.42)
+    parser.add_argument(
+        "--max-body-mass-spread",
+        type=float,
+        default=0.60,
+        help="Wider pose-aware spread for the 80%% body-mass proxy; head/upper-body keep --max-proxy-spread.",
+    )
     parser.add_argument("--allow-missing-proxies", action="store_true")
     parser.add_argument("--warn-only", action="store_true")
     args = parser.parse_args()

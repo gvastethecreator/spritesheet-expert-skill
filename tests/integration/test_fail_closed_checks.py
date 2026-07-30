@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from check_animation_contracts import infer_workflows
 
@@ -90,6 +90,34 @@ def test_identity_inflation_and_excessive_spread_block_by_default(tmp_path: Path
     assert any("varies" in error for error in report["errors"])
 
 
+def test_identity_allows_pose_width_change_when_head_and_upper_body_stay_stable(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    (run_dir / "frames").mkdir(parents=True)
+    (run_dir / "sprite-request.json").write_text(
+        json.dumps({"states": {"poses": {"frames": 2, "fps": 1}}}),
+        encoding="utf-8",
+    )
+    records = [
+        {
+            "head_width_vs_reference": 1.0,
+            "upper_width_vs_reference": 1.0,
+            "body_mass_width_80_vs_reference": body_width,
+            "opaque_area_vs_reference": 1.0,
+        }
+        for body_width in (0.85, 1.36)
+    ]
+    (run_dir / "frames" / "frames-manifest.json").write_text(
+        json.dumps({"ok": True, "rows": [{"state": "poses", "frame_records": records}]}),
+        encoding="utf-8",
+    )
+
+    result = _run("check_identity_consistency.py", "--run-dir", str(run_dir))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_animation_gate_rejects_unknown_explicit_workflow(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
     (run_dir / "frames").mkdir(parents=True)
@@ -149,6 +177,75 @@ def test_character_wave_infers_gesture_loop_not_water_loop() -> None:
     }
 
     assert infer_workflows(request, "wave", entry) == ["gesture-loop"]
+
+
+def _write_gesture_run(run_dir: Path, *, drifting_lower_body: bool) -> None:
+    (run_dir / "frames" / "wave").mkdir(parents=True)
+    request = {
+        "asset_kind": "sprite",
+        "frame_semantics": "animation",
+        "cell": {"width": 64, "height": 64},
+        "states": {
+            "wave": {
+                "frames": 6,
+                "fps": 6,
+                "loop": True,
+                "action": "planted friendly wave loop",
+                "animation_workflows": ["gesture-loop"],
+            }
+        },
+    }
+    (run_dir / "sprite-request.json").write_text(
+        json.dumps(request), encoding="utf-8"
+    )
+    files = []
+    arm_tips = [(46, 30), (51, 24), (53, 16), (49, 12), (46, 20), (46, 30)]
+    for index, arm_tip in enumerate(arm_tips):
+        frame = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(frame)
+        draw.ellipse((22, 8, 42, 28), fill=(150, 220, 30, 255))
+        draw.rectangle((25, 27, 39, 43), fill=(140, 210, 25, 255))
+        draw.line((37, 29, *arm_tip), fill=(140, 210, 25, 255), width=5)
+        lower_shift = 8 if drifting_lower_body and index in {2, 3, 4} else 0
+        draw.rectangle((26 + lower_shift, 41, 31 + lower_shift, 57), fill=(130, 195, 20, 255))
+        draw.rectangle((34 + lower_shift, 41, 39 + lower_shift, 57), fill=(130, 195, 20, 255))
+        draw.rectangle((23 + lower_shift, 55, 31 + lower_shift, 59), fill=(130, 195, 20, 255))
+        draw.rectangle((34 + lower_shift, 55, 42 + lower_shift, 59), fill=(130, 195, 20, 255))
+        path = run_dir / "frames" / "wave" / f"frame-{index}.png"
+        frame.save(path)
+        files.append(path.relative_to(run_dir).as_posix())
+    (run_dir / "frames" / "frames-manifest.json").write_text(
+        json.dumps({"ok": True, "rows": [{"state": "wave", "files": files}]}),
+        encoding="utf-8",
+    )
+
+
+def test_gesture_contract_passes_when_only_the_upper_limb_moves(tmp_path: Path) -> None:
+    run_dir = tmp_path / "planted"
+    _write_gesture_run(run_dir, drifting_lower_body=False)
+
+    result = _run("check_animation_contracts.py", "--run-dir", str(run_dir))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = json.loads((run_dir / "qa" / "animation-contract-report.json").read_text())
+    planted = report["results"][0]["metrics"]["gesture_planted_lower_body"]
+    assert planted["ok"] is True
+    assert planted["max_anchor_diff"] == 0.0
+    assert planted["lower_center_x_range"] == 0.0
+
+
+def test_gesture_contract_rejects_leg_and_contact_footprint_drift(tmp_path: Path) -> None:
+    run_dir = tmp_path / "drifting"
+    _write_gesture_run(run_dir, drifting_lower_body=True)
+
+    result = _run("check_animation_contracts.py", "--run-dir", str(run_dir))
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    report = json.loads((run_dir / "qa" / "animation-contract-report.json").read_text())
+    assert any("lower body" in error.lower() for error in report["errors"])
+    planted = report["results"][0]["metrics"]["gesture_planted_lower_body"]
+    assert planted["ok"] is False
+    assert planted["lower_center_x_range"] > planted["max_center_x_range"]
 
 
 def test_environment_wave_still_infers_water_loop() -> None:
