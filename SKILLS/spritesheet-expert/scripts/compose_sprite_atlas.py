@@ -334,7 +334,19 @@ def main() -> int:
         "animation": animation,
         "frame_layout": frame_layout,
     }
-    for key in ("preset", "output", "asset_kind", "extraction_mode", "frame_budget", "background_removal", "asset_catalog", "iso", "tile"):
+    for key in (
+        "preset",
+        "output",
+        "asset_kind",
+        "extraction_mode",
+        "frame_budget",
+        "sampling_policy",
+        "generation_background",
+        "background_removal",
+        "asset_catalog",
+        "iso",
+        "tile",
+    ):
         if key in request:
             manifest[key] = request[key]
     atomic_write_text(run_dir / args.manifest, json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")

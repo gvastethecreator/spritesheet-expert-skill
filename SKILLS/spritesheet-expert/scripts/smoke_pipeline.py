@@ -15,8 +15,11 @@ from PIL import Image, ImageDraw
 from prepare_sprite_run import row_prompt, state_motion_phases, state_pose_geometry, wants_motion_phase_guides
 
 
+NEUTRAL_GRAY_RGBA = (128, 128, 128, 255)
+
+
 def make_strip(path: Path, frames: int, cell: int, color: tuple[int, int, int]) -> None:
-    image = Image.new("RGBA", (frames * cell, cell), (255, 0, 255, 255))
+    image = Image.new("RGBA", (frames * cell, cell), NEUTRAL_GRAY_RGBA)
     draw = ImageDraw.Draw(image)
     for index in range(frames):
         left = index * cell + 10 + index
@@ -26,7 +29,7 @@ def make_strip(path: Path, frames: int, cell: int, color: tuple[int, int, int]) 
 
 
 def make_full_cell_strip(path: Path, frames: int, cell: int) -> None:
-    image = Image.new("RGBA", (frames * cell, cell), (255, 0, 255, 255))
+    image = Image.new("RGBA", (frames * cell, cell), NEUTRAL_GRAY_RGBA)
     draw = ImageDraw.Draw(image)
     for index in range(frames):
         left = index * cell
@@ -53,7 +56,7 @@ def make_internal_chroma_patch_strip(path: Path, cell: int) -> None:
 
 
 def make_pose_strip(path: Path, frames: int, cell: int, height: int, width: int, bottom: int) -> None:
-    image = Image.new("RGBA", (frames * cell, cell), (255, 0, 255, 255))
+    image = Image.new("RGBA", (frames * cell, cell), NEUTRAL_GRAY_RGBA)
     draw = ImageDraw.Draw(image)
     for index in range(frames):
         center_x = index * cell + cell // 2
@@ -65,7 +68,7 @@ def make_pose_strip(path: Path, frames: int, cell: int, height: int, width: int,
 
 
 def make_pose_sequence_strip(path: Path, cell: int, heights: list[int], widths: list[int], bottom: int) -> None:
-    image = Image.new("RGBA", (len(heights) * cell, cell), (255, 0, 255, 255))
+    image = Image.new("RGBA", (len(heights) * cell, cell), NEUTRAL_GRAY_RGBA)
     draw = ImageDraw.Draw(image)
     for index, (height, width) in enumerate(zip(heights, widths)):
         center_x = index * cell + cell // 2
@@ -117,7 +120,9 @@ def main() -> int:
             "engine": "component-row",
             "character": {"id": "smoke", "description": "synthetic", "base_image": None},
             "cell": {"shape": "square", "width": 48, "height": 48, "safe_margin_x": 4, "safe_margin_y": 4, "size": 48, "safe_margin": 4},
-            "chroma_key": {"name": "magenta", "hex": "#FF00FF", "rgb": [255, 0, 255]},
+            "chroma_key": {"name": "legacy-magenta", "hex": "#FF00FF", "rgb": [255, 0, 255]},
+            "generation_background": {"family": "neutral", "name": "gray", "hex": "#808080", "rgb": [128, 128, 128]},
+            "background_removal": {"method": "auto", "model": "birefnet-general", "source_family": "neutral", "alpha_matting": True, "post_rembg_chroma_cleanup": False},
             "states": {
                 "idle": {"frames": 3, "fps": 4, "loop": True, "action": "synthetic idle"},
                 "attack": {"frames": 2, "fps": 8, "loop": False, "action": "synthetic attack"},
@@ -137,6 +142,9 @@ def main() -> int:
         anchor_meta = json.loads((run_dir / "references" / "identity-anchor.json").read_text(encoding="utf-8"))
         assert anchor_meta["state"] == "idle"
         run("compose_sprite_atlas.py", "--run-dir", str(run_dir), "--min-used-pixels", "100")
+        run("build_preview_workbench.py", "--run-dir", str(run_dir))
+        assert (run_dir / "qa" / "preview-workbench" / "index.html").is_file()
+        assert (run_dir / "qa" / "preview-workbench" / "workbench.evidence.json").is_file()
 
         manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
         assert manifest["frame_layout"]["sheetWidth"] == 144
@@ -199,7 +207,9 @@ def main() -> int:
             "extraction_mode": "slots",
             "character": {"id": "materials", "description": "synthetic materials", "base_image": None},
             "cell": {"shape": "square", "width": 32, "height": 32, "safe_margin_x": 0, "safe_margin_y": 0, "size": 32, "safe_margin": 0},
-            "chroma_key": {"name": "magenta", "hex": "#FF00FF", "rgb": [255, 0, 255]},
+            "chroma_key": {"name": "legacy-magenta", "hex": "#FF00FF", "rgb": [255, 0, 255]},
+            "generation_background": {"family": "neutral", "name": "gray", "hex": "#808080", "rgb": [128, 128, 128]},
+            "background_removal": {"method": "none", "model": "birefnet-general", "source_family": "neutral", "alpha_matting": False, "post_rembg_chroma_cleanup": False},
             "states": {"stone": {"frames": 2, "fps": 1, "loop": False, "action": "stone material samples"}},
             "style": "synthetic texture",
             "style_preset": "custom",
@@ -411,7 +421,9 @@ def remove(data, session=None, alpha_matting=False, force_return_bytes=False, **
             "preset": {"id": "synthetic-fighter", "camera": "side"},
             "character": {"id": "jumper", "description": "pose scale check", "base_image": None},
             "cell": {"shape": "square", "width": 64, "height": 64, "safe_margin_x": 4, "safe_margin_y": 4},
-            "chroma_key": {"name": "magenta", "hex": "#FF00FF", "rgb": [255, 0, 255]},
+            "chroma_key": {"name": "legacy-magenta", "hex": "#FF00FF", "rgb": [255, 0, 255]},
+            "generation_background": {"family": "neutral", "name": "gray", "hex": "#808080", "rgb": [128, 128, 128]},
+            "background_removal": {"method": "auto", "model": "birefnet-general", "source_family": "neutral", "alpha_matting": True, "post_rembg_chroma_cleanup": False},
             "states": {
                 "idle": {"frames": 3, "fps": 4, "loop": True, "action": "standing idle reference"},
                 "run": {"frames": 4, "fps": 8, "loop": True, "action": "side run full-body locomotion cycle"},

@@ -146,6 +146,33 @@ def test_compose_uses_scale_aware_validation_for_tiny_frames(
     ]
 
 
+def test_compose_preserves_explicit_sampling_policy_in_runtime_manifest(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "illustrated-run"
+    _write_run(
+        run_dir,
+        size=(32, 32),
+        rectangle=(8, 5, 23, 28),
+        style_preset="illustrated",
+    )
+    request_path = run_dir / "sprite-request.json"
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    request["sampling_policy"] = {
+        "filter": "linear",
+        "wrap": "clamp-to-edge",
+        "mipmaps": False,
+        "pixel_snap": False,
+    }
+    _write_json(request_path, request)
+
+    result = _compose(run_dir)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["sampling_policy"] == request["sampling_policy"]
+
+
 def test_explicit_min_used_pixels_remains_a_compatibility_override(
     tmp_path: Path,
 ) -> None:
