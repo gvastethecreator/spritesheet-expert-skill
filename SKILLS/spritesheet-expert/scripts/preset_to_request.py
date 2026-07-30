@@ -183,7 +183,13 @@ def build_asset_catalog(
         for label in labels:
             if label in items:
                 raise SystemExit(f"duplicate asset label {label!r}")
-            items[label] = dict(metadata)
+            item = dict(metadata)
+            if item.get("repeat_mode") == "adjacency":
+                family = item.get("tile_role") or item.get("edge_role")
+                if family:
+                    item["tile_family"] = family
+                item["tile_role"] = label
+            items[label] = item
     catalog["items"] = items
     return catalog
 

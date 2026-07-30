@@ -290,6 +290,8 @@ def test_full_cell_texture_may_intentionally_fill_and_touch_edges(
     request_path = run_dir / "sprite-request.json"
     request = json.loads(request_path.read_text(encoding="utf-8"))
     request["asset_kind"] = "texture"
+    request["sampling_policy"]["wrap"] = "repeat"
+    request["asset_catalog"]["items"]["tiny-prop"]["repeat_mode"] = "self"
     request_path.write_text(json.dumps(request), encoding="utf-8")
 
     checked = run_script("check_asset_slots.py", "--run-dir", str(run_dir))
@@ -300,6 +302,7 @@ def test_full_cell_texture_may_intentionally_fill_and_touch_edges(
     )
     assert report["records"][0]["occupancy"] == 1.0
     assert report["records"][0]["edge_touch"] is True
+    assert report["repeat_validation"]["ok"] is True
 
 
 def test_full_cell_texture_edges_survive_extract_register_and_slot_qa(
@@ -312,7 +315,9 @@ def test_full_cell_texture_edges_survive_extract_register_and_slot_qa(
     request = json.loads(request_path.read_text(encoding="utf-8"))
     request["asset_kind"] = "texture"
     request["cell"]["safe_margin"] = 0
+    request["sampling_policy"]["wrap"] = "repeat"
     request["asset_catalog"]["items"]["tiny-prop"]["pivot"] = [4, 8]
+    request["asset_catalog"]["items"]["tiny-prop"]["repeat_mode"] = "self"
     request_path.write_text(json.dumps(request), encoding="utf-8")
     Image.new("RGBA", (8, 8), (24, 88, 160, 255)).save(
         run_dir / "raw" / "props.png"

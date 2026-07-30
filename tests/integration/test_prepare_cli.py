@@ -314,6 +314,162 @@ def test_prepare_routes_character_wave_to_gesture_loop(tmp_path: Path) -> None:
     workflows = summary["rows"]["wave"]["animation_workflows"]
     assert "gesture-loop" in workflows
     assert "water-loop" not in workflows
+    prompt = (run_dir / "prompts" / "wave.txt").read_text(encoding="utf-8").lower()
+    assert "pelvis, both legs, knees, ankles, feet, and contact footprint" in prompt
+    assert "only the gesturing shoulder, arm, wrist, and hand" in prompt
+
+
+@pytest.mark.parametrize(
+    ("preset_id", "camera", "expected_workflow", "prompt_fragment"),
+    [
+        (
+            "topdown-character",
+            "topdown",
+            "topdown-direction-set",
+            "visible crown and top surfaces",
+        ),
+        (
+            "isometric-character",
+            "isometric",
+            "isometric-direction-set",
+            "2:1 dimetric screen axes",
+        ),
+    ],
+)
+def test_prepare_records_static_direction_workflows_and_projection_contracts(
+    tmp_path: Path,
+    preset_id: str,
+    camera: str,
+    expected_workflow: str,
+    prompt_fragment: str,
+) -> None:
+    run_dir = tmp_path / preset_id
+    labels = [
+        "north-contact-a",
+        "north-contact-b",
+        "east-contact-a",
+        "east-contact-b",
+        "south-contact-a",
+        "south-contact-b",
+        "west-contact-a",
+        "west-contact-b",
+    ]
+    request = {
+        "asset_kind": "sprite",
+        "frame_semantics": "variants",
+        "preset": {"id": preset_id, "camera": camera},
+        "states": {
+            "direction-keys": {
+                "frames": 8,
+                "fps": 1,
+                "loop": False,
+                "action": "four directional keys with opposite contact pairs",
+                "asset_labels": labels,
+            }
+        },
+    }
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(PREPARE),
+            "--out-dir",
+            str(run_dir),
+            "--character-id",
+            "projection-contract",
+            "--request-json",
+            json.dumps(request),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = json.loads(
+        (run_dir / "references" / "art-direction.json").read_text(encoding="utf-8")
+    )
+    production_workflows = summary["rows"]["direction-keys"]["production_workflows"]
+    assert production_workflows == ["character-pose-set", expected_workflow]
+    prompt = (run_dir / "prompts" / "direction-keys.txt").read_text(encoding="utf-8").lower()
+    assert prompt_fragment in prompt
+    assert "slot 1: north-contact-a" in prompt
+    assert "slot 8: west-contact-b" in prompt
+
+
+@pytest.mark.parametrize(
+    ("asset_kind", "frame_semantics", "expected_workflow", "prompt_fragment"),
+    [
+        ("tileset", "tiles", "tileset-adjacency", "repeat_mode"),
+        ("texture", "seamless-textures", "seamless-material-set", "opposite edge strips"),
+    ],
+)
+def test_prepare_records_repeat_workflows_and_full_bleed_contracts(
+    tmp_path: Path,
+    asset_kind: str,
+    frame_semantics: str,
+    expected_workflow: str,
+    prompt_fragment: str,
+) -> None:
+    run_dir = tmp_path / asset_kind
+    request = {
+        "asset_kind": asset_kind,
+        "frame_semantics": frame_semantics,
+        "extraction_mode": "slots",
+        "cell": {"width": 64, "height": 64, "safe_margin": 0},
+        "states": {
+            "surfaces": {
+                "frames": 2,
+                "fps": 1,
+                "loop": False,
+                "action": "runtime surface samples",
+                "asset_labels": ["moss-surface", "stone-surface"],
+            }
+        },
+        "asset_catalog": {
+            "items": {
+                "moss-surface": {
+                    "category": "surface",
+                    "pivot": [32, 32],
+                    "tile_role": "base",
+                    "repeat_mode": "self" if asset_kind == "texture" else "adjacency",
+                },
+                "stone-surface": {
+                    "category": "surface",
+                    "pivot": [32, 32],
+                    "tile_role": "base",
+                    "repeat_mode": "self" if asset_kind == "texture" else "adjacency",
+                },
+            }
+        },
+    }
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(PREPARE),
+            "--out-dir",
+            str(run_dir),
+            "--character-id",
+            "repeat-contract",
+            "--request-json",
+            json.dumps(request),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = json.loads(
+        (run_dir / "references" / "art-direction.json").read_text(encoding="utf-8")
+    )
+    assert summary["rows"]["surfaces"]["production_workflows"] == [expected_workflow]
+    prompt = (run_dir / "prompts" / "surfaces.txt").read_text(encoding="utf-8").lower()
+    assert prompt_fragment in prompt
+    assert "fill each runtime cell edge-to-edge" in prompt
 
 
 def test_prepare_rejects_temporal_workflow_on_static_semantics(tmp_path: Path) -> None:

@@ -138,6 +138,21 @@ def derive_gate_policy(
     ):
         raise GatePolicyError(f"unknown normalized source_type: {source_type!r}")
     animated = frame_semantics in {"animation", "effects"}
+    states = facts.get("states")
+    static_sprite_frame_count = 0
+    if isinstance(states, Mapping):
+        static_sprite_frame_count = sum(
+            max(0, frames)
+            for entry in states.values()
+            if isinstance(entry, Mapping)
+            and isinstance((frames := entry.get("frames")), int)
+            and not isinstance(frames, bool)
+        )
+    multi_frame_static_sprite = (
+        not animated
+        and asset_kind == "sprite"
+        and static_sprite_frame_count > 1
+    )
     workflows = _explicit_animation_workflows(facts)
     locomotion = sorted(workflows & _LOCOMOTION_WORKFLOWS)
     isometric_tiles, isometric_reason = _isometric_tileset(facts, asset_kind)
@@ -177,10 +192,18 @@ def derive_gate_policy(
             else "requires animated asset_kind=sprite",
         ),
         "identity-consistency": (
-            workflow == "production" and animated and asset_kind == "sprite",
-            "animated asset_kind=sprite requires identity consistency"
-            if animated and asset_kind == "sprite"
-            else "requires animated asset_kind=sprite",
+            workflow == "production"
+            and asset_kind == "sprite"
+            and (animated or multi_frame_static_sprite),
+            (
+                "animated asset_kind=sprite requires identity consistency"
+                if animated
+                else (
+                    "multi-frame static asset_kind=sprite requires pose-set identity consistency"
+                    if multi_frame_static_sprite
+                    else "requires animated or multi-frame static asset_kind=sprite"
+                )
+            ),
         ),
         "motion-variation": (
             workflow == "production" and bool(locomotion),

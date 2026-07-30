@@ -133,6 +133,42 @@ def _video_sampling_mode(state: str, entry: Mapping[str, Any]) -> str:
     return "bookended-inclusive"
 
 
+def _video_motion_lock(entry: Mapping[str, Any]) -> str:
+    workflows = {
+        str(value).strip().lower()
+        for value in entry.get("animation_workflows", [])
+        if isinstance(value, str)
+    }
+    if "gesture-loop" in workflows:
+        return (
+            " Keep the pelvis, both legs, knees, ankles, both feet, and the contact footprint "
+            "pixel-for-pixel fixed in their first-frame positions for the entire video: no step, "
+            "weight shift, hip translation, knee bend, ankle turn, foot rotation, foot slide, body "
+            "sway, or root travel. Only the waving shoulder, arm, wrist, and hand may perform the "
+            "gesture; keep torso and head motion minimal."
+        )
+    if "sideview-locomotion" in workflows:
+        return (
+            " Preserve the side-view ground line and animate one complete in-place locomotion "
+            "cycle with two unmistakably opposite anatomical contact phases. Frame 0 starts with "
+            "the reference support leg planted. At the midpoint, that same leg and foot must be "
+            "visibly lifted while the other anatomical leg is extended forward and planted as the "
+            "sole support foot. Show a clear leg pass/crossover, near-leg versus far-leg depth swap, "
+            "and opposite arm counter-swing between those contacts. Never repeat the same support "
+            "limb on both contacts, never mirror the whole character, and keep the pelvis centered "
+            "without forward root travel or foot sliding."
+        )
+    return ""
+
+
+def _video_identity_lock() -> str:
+    return (
+        "Keep facial topology and markings identical to the first frame for the entire video: "
+        "same eyes and eye colors, eyebrows, nose, mouth shape, teeth, and surface marks; do not "
+        "add blush, cheek dots, new markings, or substitute a different expression design."
+    )
+
+
 def prepare_video_job(
     *,
     repo_root: Path,
@@ -202,8 +238,11 @@ def prepare_video_job(
     background_name = str(background["name"])
     background_hex = str(background["hex"])
     loop_text = "that returns naturally to the starting pose" if entry.get("loop", True) else "with a clean final settle"
+    motion_lock = _video_motion_lock(entry)
+    identity_lock = _video_identity_lock()
     prompt_text = (
         f"Animate this exact full-body first frame as one continuous {duration_seconds}-second {action}, {loop_text}; use a locked camera, fixed framing and scale, stable character identity, and clear readable motion with no cuts, zooms, pans, text, extra objects, detached effects, motion blur, or cast shadows. "
+        f"{motion_lock} {identity_lock} "
         f"Keep the flat neutral {background_name} {background_hex} background perfectly unchanged across the full shot, keep every body part inside frame, and do not redesign the subject.\n"
     )
     prompt_bytes = prompt_text.encode("utf-8")
@@ -310,6 +349,28 @@ def uniform_sample_indices(
     if len(set(indices)) != len(indices):
         raise VideoAnimationError("video sampling did not produce unique frame indices")
     return indices
+
+
+def reviewed_sample_indices(
+    total_frames: int,
+    requested_frames: int,
+    indices: list[int],
+) -> list[int]:
+    if len(indices) != requested_frames:
+        raise VideoAnimationError(
+            f"reviewed selection has {len(indices)} indices; expected {requested_frames}"
+        )
+    if not indices or indices[0] != 0:
+        raise VideoAnimationError("reviewed selection must start at video frame 0")
+    if len(set(indices)) != len(indices):
+        raise VideoAnimationError("reviewed selection contains duplicate frame indices")
+    if indices != sorted(indices):
+        raise VideoAnimationError("reviewed selection must be in chronological order")
+    if any(index < 0 or index >= total_frames for index in indices):
+        raise VideoAnimationError(
+            f"reviewed selection indices must stay inside 0..{total_frames - 1}"
+        )
+    return list(indices)
 
 
 def _reader_metadata(metadata: Any) -> tuple[tuple[int, int], float, float | None]:
@@ -515,6 +576,7 @@ def ingest_video(
     job_name: str | None = None,
     force: bool = False,
     decoder: Any | None = None,
+    sample_indices: list[int] | None = None,
 ) -> VideoIngestResult:
     run_root = Path(run_dir).expanduser().resolve()
     if not run_root.is_dir():
@@ -627,11 +689,19 @@ def ingest_video(
             ) from exc
     decoded_size, fps, duration, total_frames = _inspect_decoded_video(decoder, video_path)
     sampling_mode = str(job.get("sampling_mode") or _video_sampling_mode(state, request["states"][state]))
-    indices = uniform_sample_indices(
-        total_frames,
-        int(job["requested_frames"]),
-        sampling_mode=sampling_mode,
-    )
+    if sample_indices is None:
+        indices = uniform_sample_indices(
+            total_frames,
+            int(job["requested_frames"]),
+            sampling_mode=sampling_mode,
+        )
+    else:
+        indices = reviewed_sample_indices(
+            total_frames,
+            int(job["requested_frames"]),
+            sample_indices,
+        )
+        sampling_mode = "reviewed-explicit"
     selected = _decode_selected(decoder, video_path, indices, decoded_size, total_frames)
     with Image.open(first_frame_path) as opened:
         opened.load()
@@ -689,6 +759,7 @@ def ingest_video(
         },
         "sampled_video_indices": indices,
         "sampling_mode": sampling_mode,
+        "selection_reviewed": sample_indices is not None,
         "sampled_timestamps_seconds": [round(index / fps, 6) for index in indices],
         "exact_first_frame_preserved": True,
         "output": output_record,
@@ -772,5 +843,6 @@ __all__ = [
     "prepare_video_job",
     "revalidate_prepared_sources",
     "revalidate_video_sources",
+    "reviewed_sample_indices",
     "uniform_sample_indices",
 ]

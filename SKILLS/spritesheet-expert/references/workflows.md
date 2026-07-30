@@ -76,6 +76,31 @@ row is missing its phase contract, for example `gesture-loop`, `sideview-locomot
 `topdown-weapon-attack`, `responsive-jump`, `water-loop`, or
 `wind-ambient-loop`.
 
+Static/set rows use a separate `production_workflows` field; they are never
+misrepresented as temporal animation. Preparation infers and injects these
+blocking contracts:
+
+- `character-pose-set`: one camera/scale/identity and no blank declared slots;
+- `topdown-direction-set`: elevated orthographic projection plus exact
+  direction/contact order;
+- `isometric-direction-set`: 2:1 dimetric projection plus diagonal order;
+- `tileset-adjacency`: catalog `repeat_mode`, self-repeat proof, and role-aware
+  adjacency review;
+- `seamless-material-set`: full-bleed materials with numeric opposite-edge and
+  3x3 repeat proof.
+
+If a provider retry still misses mathematical self-repeat edges, run
+`repair_repeat_edges.py` as an explicit post-process. For an existing frame it
+backs up the provider art, leaves the semantic center unchanged, and harmonizes
+only the edge band. For a targeted Imagegen/Grok slot retry, pass
+`--phase-source-dir`: the tool preserves an immutable provider copy, finds a
+periodic crop, then applies a narrow edge band. Both routes write hash evidence
+and still require the labeled per-item 3x3 review. This is not a replacement for
+provider generation.
+
+When `asset_labels` are present, the generated prompt contains an exact
+numbered slot inventory. A duplicate or blank slot does not satisfy the count.
+
 Locomotion phase guides are generated for 4-, 6-, and 8-frame cycles when the
 state name/action/workflow indicates walk, run, move, advance, retreat, or dash.
 Do not accept a generated locomotion row that skipped these guides unless it is
@@ -176,10 +201,11 @@ animation with changing head size is a failed row, not a polish issue.
 
 `check_animation_contracts.py` is the broad workflow gate. It should pass for
 every animated row that has or infers an `animation_workflow`. It catches hard
-phase failures such as same-side locomotion contacts, static attacks, missing
-jump travel, static hit reactions, flat VFX, and dead ambient loops. The report
-also lists the required visual checks; those checks still need playback/contact
-review before done.
+phase failures such as duplicated locomotion contacts, static attacks, missing
+jump travel, static hit reactions, flat VFX, and dead ambient loops. Lower-body
+screen-side balance is only a freeze/variation diagnostic: confirm opposite
+anatomical support legs through chronological playback and crossover/depth-swap
+continuity. The report lists those required visual checks.
 
 For user-facing animated sprite runs, render hash-bound runtime playback evidence for every state and open `qa/preview-workbench/index.html`. Use pause, step, scrub, speed, zoom, state selection, the complete filmstrip, and checker/black/gray/white backgrounds. The check should prove the animation reads during playback, not only in a contact sheet.
 
@@ -353,7 +379,14 @@ Required visual review:
 
 - `qa/segmentation-overlay.png`: grid/cuts match the source.
 - `qa/asset-slot-overlay.png`: each label, bbox, and pivot is correct.
-- `qa/tile-repeat-review.png`: repeated tiles do not reveal edge seams.
+- `qa/tile-repeat-review.png` and `qa/tile-repeat-items/<label>.png`: every
+  self-repeat item is shown in both overview and labeled 3x3 isolation.
+- `qa/asset-slot-review.json.repeat_validation`: numeric edge coverage and
+  opposite-edge error for every `repeat_mode=self` tile/texture. `adjacency`
+  and `overlay` remain explicit hash-bound visual-review work instead of being
+  silently treated as approved by the montage.
+- `qa/tile-adjacency-review.png`: distinct catalog `tile_role` values are used
+  to build a role-aware edge/corner/slope/platform review for adjacency tiles.
 - `qa/isometric-pivot-overlay.png`: every tile has a 2:1 footprint on the visual floor.
 - `qa/isometric-map-review.png`: base/detail/hazard tiles compose into a coherent map.
 - `qa/isometric-depth-review.png`: raised/height tiles sort correctly.

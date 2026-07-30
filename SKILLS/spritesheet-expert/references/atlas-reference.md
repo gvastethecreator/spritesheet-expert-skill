@@ -216,7 +216,7 @@ request:
 - `scripts/rekey_chroma_background.py`: replace or normalize a border-connected generated key background before extraction.
 - `scripts/check_animation_contracts.py`: generic animation workflow QA for locomotion, combat, jumps, reactions, VFX, water, wind, pickups, idles, and tiny sprites.
 - `scripts/check_motion_variation.py`: heuristic locomotion QA for frozen legs/body-part positions.
-- `scripts/check_asset_slots.py`: still/tileset/texture slot QA for labels, catalog metadata, pivots, clipping, and repeat overlays.
+- `scripts/check_asset_slots.py`: still/tileset/texture slot QA for labels, catalog metadata, pivots, clipping, per-item `repeat_mode`, numeric self-repeat edge coverage/error, labeled per-item 3x3 previews, and role-aware adjacency assembly. Overlay mode remains an explicit isolation-review obligation.
 - `scripts/check_isometric_tiles.py`: isometric tileset QA for 2:1 footprint, runtime cell, pivots, edge/corner roles, map composition, depth-sort previews, calibrated runtime metadata, and candidate catalog fixes.
 - `scripts/smoke_pipeline.py`: tiny local smoke check.
 - `scripts/smoke_presets_from_reference.py`: run every preset through deterministic pipeline using a reference sheet.

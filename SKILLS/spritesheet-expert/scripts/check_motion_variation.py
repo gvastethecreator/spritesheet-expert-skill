@@ -112,26 +112,23 @@ def support_side(value: float, threshold: float) -> str:
     return "center/ambiguous"
 
 
-def contact_phase_check(balances: list[float], args: argparse.Namespace) -> dict[str, Any] | None:
-    if len(balances) < 4:
+def contact_phase_check(frames: list[Image.Image], args: argparse.Namespace) -> dict[str, Any] | None:
+    if len(frames) < 4:
         return None
-    opposite_index = len(balances) // 2 if len(balances) >= 6 else 2
+    balances = [support_balance(frame) for frame in frames]
+    opposite_index = len(frames) // 2 if len(frames) >= 6 else 2
     first = balances[0]
     opposite = balances[opposite_index]
     first_side = support_side(first, args.min_contact_balance_abs)
     opposite_side = support_side(opposite, args.min_contact_balance_abs)
     contact_delta = abs(opposite - first)
-    ambiguous = "center/ambiguous" in (first_side, opposite_side)
-    same_side = first_side == opposite_side and not ambiguous
-    opposite_contacts = first_side != opposite_side and not ambiguous
-    ok = opposite_contacts and contact_delta >= args.min_contact_opposition
-    reason = "opposite contacts"
-    if ambiguous:
-        reason = "contact support side is ambiguous"
-    elif same_side:
-        reason = "contact frames use the same support side"
-    elif contact_delta < args.min_contact_opposition:
-        reason = "contact support-side separation is too small"
+    contact_pose_diff = lower_mask_diff(
+        frames[0], frames[opposite_index], args.lower_body_start
+    )
+    ok = contact_pose_diff >= args.min_opposite_contact_pose_diff
+    reason = "distinct opposite-contact lower-body poses"
+    if not ok:
+        reason = "opposite contact lower-body pose is duplicated or too similar"
     return {
         "ok": ok,
         "opposite_contact_index": opposite_index,
@@ -141,8 +138,12 @@ def contact_phase_check(balances: list[float], args: argparse.Namespace) -> dict
         "opposite_contact_support_balance": round(opposite, 4),
         "opposite_contact_support_side": opposite_side,
         "contact_delta": round(contact_delta, 4),
+        "opposite_contact_pose_diff": round(contact_pose_diff, 4),
+        "min_opposite_contact_pose_diff": args.min_opposite_contact_pose_diff,
         "min_contact_balance_abs": args.min_contact_balance_abs,
         "min_contact_opposition": args.min_contact_opposition,
+        "screen_side_is_diagnostic_only": True,
+        "anatomical_leg_alternation_requires_visual_review": True,
         "reason": reason,
     }
 
@@ -157,7 +158,7 @@ def inspect_state(
     warnings: list[str] = []
     diffs: list[float] = []
     balances = [support_balance(frame) for frame in frames]
-    phase_check = contact_phase_check(balances, args)
+    phase_check = contact_phase_check(frames, args)
     centers = [body_center(frame) for frame in frames]
     pairs = len(frames) if entry.get("loop", True) and len(frames) > 2 else max(0, len(frames) - 1)
 
@@ -184,18 +185,16 @@ def inspect_state(
         )
 
     if len(frames) >= 3 and support_range < args.min_support_range:
-        message = f"foot/support balance barely alternates (range {support_range:.3f}; target >= {args.min_support_range:.3f})"
-        if is_locomotion_state(state, entry) and not args.support_warn_only:
-            errors.append(message)
-        else:
-            warnings.append(message)
+        warnings.append(
+            f"lower-body screen-space balance barely varies (range {support_range:.3f}; "
+            f"diagnostic target >= {args.min_support_range:.3f})"
+        )
     if is_locomotion_state(state, entry) and phase_check and not phase_check["ok"]:
         message = (
-            "contact frames do not alternate support legs "
-            f"(frame 1: {phase_check['frame_1_support_side']} {phase_check['frame_1_support_balance']:.3f}; "
-            f"frame {phase_check['opposite_contact_frame']}: "
-            f"{phase_check['opposite_contact_support_side']} {phase_check['opposite_contact_support_balance']:.3f}; "
-            f"{phase_check['reason']})"
+            "opposite-contact candidate duplicates the first lower-body pose "
+            f"(frame 1 vs frame {phase_check['opposite_contact_frame']} lower-body diff "
+            f"{phase_check['opposite_contact_pose_diff']:.3f}; expected >= "
+            f"{phase_check['min_opposite_contact_pose_diff']:.3f}; {phase_check['reason']})"
         )
         if args.support_warn_only:
             warnings.append(message)
@@ -214,7 +213,7 @@ def inspect_state(
         "semantic_review_required": is_locomotion_state(state, entry),
         "semantic_review": [
             "inspect playback/contact sheet; metric pass is not final approval",
-            "frame 1 and the opposite contact frame must show opposite support/contact legs",
+            "frame 1 and the opposite contact frame must show opposite anatomical support/contact legs",
             "pass/down frames must not keep both legs drifting to the same side",
         ]
         if is_locomotion_state(state, entry)
@@ -242,11 +241,12 @@ def main() -> int:
     parser.add_argument("--min-support-range", type=float, default=0.045)
     parser.add_argument("--min-contact-balance-abs", type=float, default=0.012)
     parser.add_argument("--min-contact-opposition", type=float, default=0.035)
+    parser.add_argument("--min-opposite-contact-pose-diff", type=float, default=0.08)
     parser.add_argument("--min-center-range", type=float, default=0.015)
     parser.add_argument(
         "--support-warn-only",
         action="store_true",
-        help="downgrade weak support-side alternation to a warning for deliberate hover/float/no-leg motion",
+        help="deprecated compatibility flag; screen-space balance is always diagnostic-only",
     )
     parser.add_argument("--warn-only", action="store_true")
     args = parser.parse_args()

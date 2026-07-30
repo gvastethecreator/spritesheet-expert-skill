@@ -44,7 +44,7 @@ DEFAULT_STATES: dict[str, dict[str, Any]] = {
         "frames": 4,
         "fps": 6,
         "loop": False,
-        "action": "friendly hand wave gesture; arm changes clearly while feet stay planted",
+        "action": "friendly hand wave gesture; only the waving arm changes while pelvis, legs, and both feet stay planted",
     },
 }
 
@@ -194,7 +194,7 @@ ASSET_PRODUCTION_RULES = {
     ],
     "vfx": [
         "Treat frames as a temporal VFX sequence: buildup, peak, decay, and fade must be readable without labels or motion arrows.",
-        "Keep opacity alpha-friendly, avoid chroma-colored cores, and preserve a stable emitter/contact anchor across frames.",
+        "Keep opacity alpha-friendly, preserve intentional translucent cores during neutral-background removal, and keep a stable emitter/contact anchor across frames.",
     ],
 }
 
@@ -513,7 +513,8 @@ ANIMATION_WORKFLOWS: dict[str, dict[str, Any]] = {
         "sources": ["08-intro-to-animation"],
         "rules": [
             "Start from the accepted identity anchor, stage one readable limb/body gesture, and return to that anchor before the loop closes.",
-            "Keep feet, camera, framing, and character scale locked unless the gesture explicitly requires a step.",
+            "Freeze the pelvis, both legs, knees, ankles, feet, and contact footprint in the exact first-frame position: no step, weight shift, hip translation, knee bend, ankle turn, foot rotation, foot slide, body sway, or root travel.",
+            "Only the gesturing shoulder, arm, wrist, and hand should carry the action; keep torso and head motion minimal unless the state explicitly requires more.",
             "Do not use motion marks, symbols, detached effects, or camera movement to substitute for the gesture pose.",
             "Review the final-to-first transition at playback speed; an arm or prop pop is a failed loop.",
         ],
@@ -607,7 +608,7 @@ ANIMATION_WORKFLOWS: dict[str, dict[str, Any]] = {
         "rules": [
             "Stage effects as buildup, peak, decay, and fade/cooling; avoid linear growth where every frame has equal energy.",
             "Keep emitter/contact anchor stable so the effect reads as attached to the source or impact point.",
-            "Use alpha-friendly opacity and colors that will not collide with the chroma key.",
+            "Use alpha-friendly opacity and require neutral-background removal to preserve intentional translucent color.",
             "Review at playback speed for pop, focus stealing, and end-to-start discontinuity.",
         ],
     },
@@ -654,6 +655,60 @@ ANIMATION_WORKFLOWS: dict[str, dict[str, Any]] = {
 }
 ANIMATION_WORKFLOW_ORDER = list(ANIMATION_WORKFLOWS)
 ANIMATION_WORKFLOW_CHOICES = {ANIMATION_WORKFLOW_AUTO, *ANIMATION_WORKFLOWS}
+
+PRODUCTION_WORKFLOWS: dict[str, dict[str, Any]] = {
+    "character-pose-set": {
+        "label": "Static character pose-set workflow",
+        "sources": ["professional-sprite-animation", "qa-and-outputs"],
+        "rules": [
+            "Lock camera distance, framing, baseline, head diameter, torso volume, limb thickness, hands, and feet to one canonical character scale across every slot.",
+            "Spend variation only on pose, facing, expression, and action; never resize or redesign the character to fill a slot.",
+            "Treat every declared slot as required. No blank cell, duplicate pose, merged pair, cropped body, or substituted inventory item is allowed.",
+            "Review the set as one identity turntable: face construction, brow curls, eye spacing, grin, material, palette, and body proportions must remain the same character.",
+        ],
+    },
+    "topdown-direction-set": {
+        "label": "Top-down directional key workflow",
+        "sources": ["pixel-animation-workflows", "professional-sprite-animation"],
+        "rules": [
+            "Use one locked orthographic elevated top-down camera for every slot, with visible crown and top surfaces of the head, shoulders, arms, and feet.",
+            "Do not substitute side view, eye-level front view, portrait view, or unrelated three-quarter poster poses for the top-down projection.",
+            "Use the declared north/east/south/west slot order exactly; each direction pair must show contact A then the opposite support/contact leg in contact B.",
+            "Turn the same body around a shared vertical axis while preserving head diameter, body volume, ground footprint, lighting, and handed details.",
+        ],
+    },
+    "isometric-direction-set": {
+        "label": "Isometric directional key workflow",
+        "sources": ["isometric-tilesets", "professional-sprite-animation"],
+        "rules": [
+            "Use one locked orthographic elevated dimetric camera aligned to 2:1 dimetric screen axes; show the top plane of head, shoulders, hands, and feet.",
+            "Do not use side-view, eye-level three-quarter, perspective, or front-facing poster poses as isometric substitutes.",
+            "Use the declared NE/SE/SW/NW or equivalent diagonal slot order exactly; paired keys must alternate the support/contact leg.",
+            "Keep the ground contact pivot and scale fixed while rotating the same character through the four diagonal facings.",
+        ],
+    },
+    "tileset-adjacency": {
+        "label": "Tileset adjacency workflow",
+        "sources": ["isometric-tilesets", "qa-and-outputs"],
+        "rules": [
+            "Follow each catalog item's repeat_mode: self tiles must wrap against themselves, adjacency tiles must expose the declared partner edges, and overlay tiles may keep removable flat neutral outside space.",
+            "Fill self and adjacency runtime cells edge-to-edge with no decorative per-cell frame, neutral gutter, rounded card, bevel border, or cast shadow around the tile.",
+            "Keep texel density, projection, lighting, collision surface, edge thickness, and material phase consistent across compatible neighbors.",
+            "Approval requires a 3x3 self-repeat proof for self tiles and a role-aware assembled map review for adjacency tiles; a contact sheet alone is not proof.",
+        ],
+    },
+    "seamless-material-set": {
+        "label": "Seamless material workflow",
+        "sources": ["qa-and-outputs", "professional-sprite-animation"],
+        "rules": [
+            "Every slot is an independent full-bleed material sample, not a framed swatch, object, scene, or card.",
+            "The left and right opposite edge strips must match, and the top and bottom opposite edge strips must match, including color, alpha, motif continuation, lighting, and texel density.",
+            "Avoid unique center features and edge-darkening that expose the tile boundary when repeated 3x3.",
+            "Approval requires numeric opposite-edge validation plus a zoomed-out 3x3 repeat review for every delivered material.",
+        ],
+    },
+}
+PRODUCTION_WORKFLOW_ORDER = list(PRODUCTION_WORKFLOWS)
 
 RUN_PHASE_CYCLE = [
     {
@@ -1322,17 +1377,70 @@ def animation_workflow_requirements_for_row(request: dict[str, Any], state: str,
     return dedupe_ordered(requirements)
 
 
+def active_production_workflows(
+    request: dict[str, Any],
+    state: str,
+    entry: dict[str, Any],
+    asset_kind: str,
+) -> list[str]:
+    descriptor = request_descriptor(request, state, entry)
+    frame_semantics = str(request.get("frame_semantics", "animation"))
+    raw_frames = entry.get("frames", 0)
+    frames = raw_frames if isinstance(raw_frames, int) and not isinstance(raw_frames, bool) else 0
+    workflows: list[str] = []
+    if (
+        asset_kind == "sprite"
+        and frame_semantics not in TEMPORAL_FRAME_SEMANTICS
+        and frames > 1
+    ):
+        workflows.append("character-pose-set")
+        if "isometric" in descriptor or "dimetric" in descriptor:
+            workflows.append("isometric-direction-set")
+        elif "topdown" in descriptor or "top-down" in descriptor:
+            workflows.append("topdown-direction-set")
+    elif asset_kind == "tileset":
+        workflows.append("tileset-adjacency")
+    elif asset_kind == "texture":
+        workflows.append("seamless-material-set")
+    return [workflow for workflow in PRODUCTION_WORKFLOW_ORDER if workflow in workflows]
+
+
+def production_workflow_requirements_for_row(
+    request: dict[str, Any],
+    state: str,
+    entry: dict[str, Any],
+    asset_kind: str,
+) -> list[str]:
+    requirements: list[str] = []
+    for workflow_id in active_production_workflows(request, state, entry, asset_kind):
+        workflow = PRODUCTION_WORKFLOWS[workflow_id]
+        label = workflow["label"]
+        requirements.extend(f"{label}: {rule}" for rule in workflow["rules"])
+    return dedupe_ordered(requirements)
+
+
 def art_direction_summary(request: dict[str, Any], states: dict[str, dict[str, Any]], asset_kind: str) -> dict[str, Any]:
     art_direction = request.get("art_direction") if isinstance(request.get("art_direction"), dict) else {"mode": "none", "profiles": []}
     rows: dict[str, Any] = {}
     for state, entry in states.items():
         profiles = active_art_profiles(request, state, entry, asset_kind)
         workflows = active_animation_workflows(request, state, entry, asset_kind)
+        production_workflows = active_production_workflows(
+            request, state, entry, asset_kind
+        )
         rows[state] = {
             "profiles": profiles,
             "sources": dedupe_ordered([source for profile_id in profiles for source in ART_PROFILES[profile_id]["sources"]]),
             "animation_workflows": workflows,
             "workflow_sources": dedupe_ordered([source for workflow_id in workflows for source in ANIMATION_WORKFLOWS[workflow_id]["sources"]]),
+            "production_workflows": production_workflows,
+            "production_workflow_sources": dedupe_ordered(
+                [
+                    source
+                    for workflow_id in production_workflows
+                    for source in PRODUCTION_WORKFLOWS[workflow_id]["sources"]
+                ]
+            ),
         }
     return {
         "mode": art_direction.get("mode", "none"),
@@ -2042,6 +2150,22 @@ def row_prompt(request: dict[str, Any], state: str, entry: dict[str, Any]) -> st
             "Use these as row-specific phase and playback constraints. Preserve the user's subject and gameplay intent.\n"
             + "\n".join(f"- {requirement}" for requirement in workflow_requirements)
         )
+    production_workflow_requirements = production_workflow_requirements_for_row(
+        request, state, entry, asset_kind
+    )
+    production_workflow_text = ""
+    if production_workflow_requirements:
+        active_production = ", ".join(
+            active_production_workflows(request, state, entry, asset_kind)
+        )
+        production_workflow_text = (
+            f"\n\nStatic/set production workflows: {active_production}.\n"
+            "These are blocking layout, projection, identity, and runtime-use contracts.\n"
+            + "\n".join(
+                f"- {requirement}"
+                for requirement in production_workflow_requirements
+            )
+        )
     state_requirement_text = ""
     if state_requirements:
         state_requirement_text = "\n\nState-specific requirements:\n" + "\n".join(
@@ -2134,7 +2258,26 @@ def row_prompt(request: dict[str, Any], state: str, entry: dict[str, Any]) -> st
             "- The layout guide shows a green 2:1 diamond and red floor/contact pivot. Use it only to align the tile or object; do not draw the guide.\n"
             "- Place terrain so the bottom point of the diamond sits on the pivot. Place props/buildings so their ground-contact point sits on the same pivot.\n"
             "- Do not center by the rectangular image cell, do not make a full scene, and do not let shadows or silhouettes cross slot borders.\n"
-            "- Leave enough transparent/chroma padding above and around tall geometry while keeping the contact point stable."
+            "- Leave enough flat neutral-background padding above and around tall geometry while keeping the contact point stable."
+        )
+    labels = entry_asset_labels(entry)
+    inventory_text = ""
+    if labels:
+        catalog = request.get("asset_catalog") if isinstance(request.get("asset_catalog"), dict) else {}
+        catalog_items = catalog.get("items") if isinstance(catalog.get("items"), dict) else {}
+        inventory_lines: list[str] = []
+        for index, label in enumerate(labels):
+            meta = catalog_items.get(label) if isinstance(catalog_items.get(label), dict) else {}
+            meta_parts = [
+                f"{key}={meta[key]}"
+                for key in ("repeat_mode", "tile_role", "edge_role", "collision")
+                if meta.get(key) not in (None, "")
+            ]
+            suffix = f" ({', '.join(meta_parts)})" if meta_parts else ""
+            inventory_lines.append(f"- slot {index + 1}: {label}{suffix}")
+        inventory_text = (
+            "\n\nExact slot inventory (blocking; use this order and fill every entry once):\n"
+            + "\n".join(inventory_lines)
         )
     transparency_artifact_text = "\n".join(f"- {rule}" for rule in (TRANSPARENCY_ARTIFACT_RULES if is_sprite else ASSET_ARTIFACT_RULES))
     runtime_size = f"{cell_width}x{cell_height}"
@@ -2221,11 +2364,13 @@ Row action: {entry["action"]}.
 {production_requirement_text}
 {art_direction_text}
 {animation_workflow_text}
+{production_workflow_text}
 {state_requirement_text}
 {phase_prompt_text}
 {frame_economy_text}
 {pose_geometry_text}
 {isometric_asset_text}
+{inventory_text}
 
 Transparency and artifact rules:
 {transparency_artifact_text}
@@ -2239,10 +2384,10 @@ Layout requirements:
 - Treat the image as {frames} equal-width invisible {runtime_size} frame slots. Fill every slot: each requested slot must contain exactly one {slot_fill}.
 - Spread the {frames} items evenly across the declared layout. Do not leave any requested slot blank or create large empty gaps between slots.
 - Center one {slot_fill} in each slot. No item may cross into the neighboring slot.
-- Use a perfectly flat pure neutral {generation_background["name"]} {generation_background["hex"]} background across the whole image, with no gradient, texture, vignette, floor, cast shadow, or lighting variation.
+- {"Fill each runtime cell edge-to-edge. Self-repeat and adjacency tiles/textures must reach every required cell edge with no neutral gutter, safe padding, framed swatch, rounded card, or per-cell border; only catalog items with repeat_mode=overlay may retain the declared flat neutral background outside the artwork for later removal." if asset_kind in {"tileset", "texture"} else f'Use a perfectly flat pure neutral {generation_background["name"]} {generation_background["hex"]} background across the whole image, with no gradient, texture, vignette, floor, cast shadow, or lighting variation.'}
 - The neutral background is a removable source constraint only. Preserve legitimate black, white, and gray colors inside the artwork, outlines, highlights, props, and effects.
 - {rendering_note}
-- Keep every frame self-contained with at least {safe_margin_x} px horizontal and {safe_margin_y} px vertical safe padding. {clip_text}
+- {f'Keep every frame self-contained with at least {safe_margin_x} px horizontal and {safe_margin_y} px vertical safe padding. {clip_text}' if asset_kind not in {"tileset", "texture"} else 'For repeat_mode=self or adjacency, zero safe margin is intentional and the cell boundary is the runtime edge. For repeat_mode=overlay, preserve the intentional flat neutral outside space so background removal can produce alpha instead of cover-fitting the art.'}
 - Avoid motion blur. Use clear pose changes readable at {runtime_size}.
 - {preserve_text}
 

@@ -14,7 +14,7 @@ Tests, smoke checks, and fixtures must never call inference. A provider timeout 
 
 ## First Frame To Video
 
-The first frame is an approved production image, not a layout guide or procedural placeholder. It must show the full subject at the intended scale on the same flat neutral gray, black, or white background declared by `sprite-request.json`.
+The first frame is an approved production image, not a layout guide or procedural placeholder. It must show the full subject at the intended scale on the same flat neutral gray, black, or white background declared by `sprite-request.json`. Locomotion must start from a visually approved grounded contact pose with one support foot and a readable trailing leg; an airborne split or ambiguous double-contact pose is a hard failure before video generation.
 
 Prepare one state:
 
@@ -34,6 +34,13 @@ provider/grok-imagine/walk/job.json
 ```
 
 The prompt keeps the camera, framing, subject scale, identity, and neutral background fixed. It requests one continuous 6-second action with no cuts, camera motion, text, extra objects, detached effects, motion blur, or cast shadow. Do not force an output aspect ratio; image-to-video should inherit the first frame instead of stretching it.
+
+For `gesture-loop`, prompt preparation adds a planted-body lock. Pelvis, legs,
+knees, ankles, both feet, and the contact footprint remain pixel-for-pixel
+fixed; only the waving shoulder, arm, wrist, and hand carry the gesture, with
+minimal torso/head motion. Post-extraction QA still measures lower-body
+silhouette and center-x travel. A clean loop closure does not waive movement in
+the middle frames.
 
 After `$grok-imagine` completes, ingest its exact invocation manifest:
 
@@ -63,6 +70,12 @@ the effective mode. Frame 1 is then replaced with the approved first frame at
 exact pixel content. Video frames must match its aspect ratio and are normalized
 to its canvas before the compact raw grid is written.
 
+Uniform sampling is only the first pass. If contact or playback review exposes
+phase aliasing, rerun ingestion with reviewed chronological decoder indices,
+for example `--sample-indices 0,7,14,21`. The count must match the requested
+frames, index 0 stays first, and the source report records
+`sampling_mode: reviewed-explicit` plus `selection_reviewed: true`.
+
 Outputs:
 
 ```text
@@ -81,6 +94,11 @@ and raw-grid hash. `source-provenance.json` uses
 ## Normal Atlas And QA Path
 
 Video ingestion does not approve animation or align frames. It only produces the normal raw grid. Continue with the same authoritative pipeline:
+
+`gesture-loop` extraction preserves each provider frame's full canvas and uses
+one shared canvas-to-cell transform. Do not crop and recenter each gesture
+silhouette independently: an extending arm changes the bounding box and would
+otherwise create false pelvis/foot travel.
 
 ```bash
 python scripts/check_generation_provenance.py --run-dir /abs/project/.scratch/sprite-run

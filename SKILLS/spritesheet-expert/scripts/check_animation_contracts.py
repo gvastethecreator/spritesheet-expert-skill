@@ -76,7 +76,7 @@ WORKFLOW_CONTRACTS: dict[str, dict[str, Any]] = {
         "min_frames": 4,
         "phases": ["contact A", "down/pass", "contact B", "up/pass"],
         "visual_checks": [
-            "frame 1 and the opposite contact frame show opposite support legs",
+            "frame 1 and the opposite contact frame show opposite anatomical support legs",
             "pass/down frames do not keep both legs drifting to the same side",
             "foot sliding, frozen knees, and loop seam are reviewed at playback speed",
         ],
@@ -527,16 +527,13 @@ def contact_phase_check(frames: list[Image.Image], args: argparse.Namespace) -> 
     first_side = support_side(first, args.min_contact_balance_abs)
     opposite_side = support_side(opposite, args.min_contact_balance_abs)
     contact_delta = abs(opposite - first)
-    ambiguous = "center/ambiguous" in (first_side, opposite_side)
-    same_side = first_side == opposite_side and not ambiguous
-    ok = not ambiguous and not same_side and contact_delta >= args.min_contact_opposition
-    reason = "opposite contacts"
-    if ambiguous:
-        reason = "contact support side is ambiguous"
-    elif same_side:
-        reason = "opposite contact frames use the same support side"
-    elif contact_delta < args.min_contact_opposition:
-        reason = "contact support-side separation is too small"
+    contact_pose_diff = normalized_pair_diff(
+        frames[0], frames[opposite_index], args.lower_body_start
+    )
+    ok = contact_pose_diff >= args.min_opposite_contact_pose_diff
+    reason = "distinct opposite-contact lower-body poses"
+    if not ok:
+        reason = "opposite contact lower-body pose is duplicated or too similar"
     return {
         "ok": ok,
         "frame_1_index": 0,
@@ -547,8 +544,12 @@ def contact_phase_check(frames: list[Image.Image], args: argparse.Namespace) -> 
         "opposite_contact_support_balance": round(opposite, 4),
         "opposite_contact_support_side": opposite_side,
         "contact_delta": round(contact_delta, 4),
+        "opposite_contact_pose_diff": round(contact_pose_diff, 4),
+        "min_opposite_contact_pose_diff": args.min_opposite_contact_pose_diff,
         "min_contact_balance_abs": args.min_contact_balance_abs,
         "min_contact_opposition": args.min_contact_opposition,
+        "screen_side_is_diagnostic_only": True,
+        "anatomical_leg_alternation_requires_visual_review": True,
         "reason": reason,
     }
 
@@ -587,13 +588,16 @@ def inspect_locomotion(
         )
     if len(frames) >= 4 and phase and not phase["ok"]:
         errors.append(
-            "contact phases fail leg alternation "
-            f"(frame 1: {phase['frame_1_support_side']} {phase['frame_1_support_balance']:.3f}; "
-            f"frame {phase['opposite_contact_frame']}: {phase['opposite_contact_support_side']} "
-            f"{phase['opposite_contact_support_balance']:.3f}; {phase['reason']})"
+            "opposite-contact candidate duplicates the first lower-body pose "
+            f"(frame 1 vs frame {phase['opposite_contact_frame']} lower-body diff "
+            f"{phase['opposite_contact_pose_diff']:.3f}; expected >= "
+            f"{phase['min_opposite_contact_pose_diff']:.3f}; {phase['reason']})"
         )
     if len(frames) >= 3 and support_range < args.min_support_range:
-        errors.append(f"foot/support balance barely alternates (range {support_range:.3f}; target >= {args.min_support_range:.3f})")
+        warnings.append(
+            f"lower-body screen-space balance barely varies (range {support_range:.3f}; "
+            f"diagnostic target >= {args.min_support_range:.3f})"
+        )
     if "run-gun-layered-motion" in workflows and metric_range(metrics, "center_y") < args.min_center_range:
         warnings.append("run-gun row has little torso/body bob; verify upper-body layer is not frozen")
 
@@ -791,6 +795,66 @@ def inspect_loop(
     }
 
 
+def lower_body_center_x(frame: Image.Image, y_start_ratio: float) -> float | None:
+    width, height = frame.size
+    y_start = max(0, min(height - 1, round(height * y_start_ratio)))
+    bbox = alpha_bbox(frame.crop((0, y_start, width, height)))
+    if not bbox:
+        return None
+    return (bbox[0] + bbox[2]) / (2 * width)
+
+
+def inspect_gesture_planted_lower_body(
+    frames: list[Image.Image],
+    args: argparse.Namespace,
+) -> tuple[list[str], list[str], dict[str, Any]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    anchor_diffs = [
+        normalized_pair_diff(
+            frames[0], frame, args.gesture_lower_body_start
+        )
+        for frame in frames
+    ] if frames else []
+    centers = [
+        lower_body_center_x(frame, args.gesture_lower_body_start)
+        for frame in frames
+    ]
+    valid_centers = [value for value in centers if value is not None]
+    max_anchor_diff = max(anchor_diffs) if anchor_diffs else 0.0
+    center_range = (
+        max(valid_centers) - min(valid_centers)
+        if valid_centers
+        else 0.0
+    )
+    if len(valid_centers) != len(frames):
+        errors.append("gesture lower body disappears in one or more frames")
+    if max_anchor_diff > args.max_gesture_lower_body_diff:
+        errors.append(
+            "gesture lower body changes or travels away from the planted first-frame pose "
+            f"(max anchor diff {max_anchor_diff:.3f}; expected <= "
+            f"{args.max_gesture_lower_body_diff:.3f})"
+        )
+    if center_range > args.max_gesture_lower_center_range:
+        errors.append(
+            "gesture lower body/contact footprint slides horizontally "
+            f"(center-x range {center_range:.3f}; expected <= "
+            f"{args.max_gesture_lower_center_range:.3f})"
+        )
+    return errors, warnings, {
+        "ok": not errors,
+        "lower_body_start": args.gesture_lower_body_start,
+        "max_anchor_diff": round(max_anchor_diff, 4),
+        "anchor_diffs": [round(value, 4) for value in anchor_diffs],
+        "lower_center_x_range": round(center_range, 4),
+        "lower_center_x": [
+            None if value is None else round(value, 4) for value in centers
+        ],
+        "max_lower_body_diff": args.max_gesture_lower_body_diff,
+        "max_center_x_range": args.max_gesture_lower_center_range,
+    }
+
+
 def inspect_tiny(
     frames: list[Image.Image],
     pair_diffs: list[float],
@@ -875,6 +939,13 @@ def inspect_state(
             errors.extend(step_errors)
             warnings.extend(step_warnings)
             metric_blocks["loop"] = step_metrics
+        if "gesture-loop" in workflows:
+            step_errors, step_warnings, step_metrics = (
+                inspect_gesture_planted_lower_body(frames, args)
+            )
+            errors.extend(step_errors)
+            warnings.extend(step_warnings)
+            metric_blocks["gesture_planted_lower_body"] = step_metrics
         if "tiny-motion" in workflows:
             step_errors, step_warnings, step_metrics = inspect_tiny(frames, pair_diffs, args)
             errors.extend(step_errors)
@@ -914,6 +985,7 @@ def main() -> int:
     parser.add_argument("--min-support-range", type=float, default=0.045)
     parser.add_argument("--min-contact-balance-abs", type=float, default=0.012)
     parser.add_argument("--min-contact-opposition", type=float, default=0.035)
+    parser.add_argument("--min-opposite-contact-pose-diff", type=float, default=0.08)
     parser.add_argument("--min-center-range", type=float, default=0.015)
     parser.add_argument("--min-action-motion-range", type=float, default=0.045)
     parser.add_argument("--min-action-pair-diff", type=float, default=0.055)
@@ -925,6 +997,9 @@ def main() -> int:
     parser.add_argument("--max-scale-range", type=float, default=0.25)
     parser.add_argument("--max-loop-closure-diff", type=float, default=0.55)
     parser.add_argument("--max-ambient-area-range", type=float, default=0.65)
+    parser.add_argument("--gesture-lower-body-start", type=float, default=0.55)
+    parser.add_argument("--max-gesture-lower-body-diff", type=float, default=0.25)
+    parser.add_argument("--max-gesture-lower-center-range", type=float, default=0.025)
     parser.add_argument("--warn-only", action="store_true")
     args = parser.parse_args()
 
