@@ -25,6 +25,8 @@ WORKFLOW_ORDER = [
     "idle-breath",
     "fighting-stance-idle",
     "gesture-loop",
+    "front-fps-creature-locomotion",
+    "front-fps-creature-attack",
     "sideview-locomotion",
     "topdown-locomotion",
     "combat-quick-strike",
@@ -40,8 +42,13 @@ WORKFLOW_ORDER = [
     "tiny-motion",
 ]
 
-LOCOMOTION_WORKFLOWS = {"sideview-locomotion", "topdown-locomotion", "run-gun-layered-motion"}
-ACTION_WORKFLOWS = {"combat-quick-strike", "combat-power-strike", "topdown-weapon-attack"}
+LOCOMOTION_WORKFLOWS = {
+    "front-fps-creature-locomotion",
+    "sideview-locomotion",
+    "topdown-locomotion",
+    "run-gun-layered-motion",
+}
+ACTION_WORKFLOWS = {"front-fps-creature-attack", "combat-quick-strike", "combat-power-strike", "topdown-weapon-attack"}
 LOOP_WORKFLOWS = {"idle-breath", "fighting-stance-idle", "gesture-loop", "water-loop", "wind-ambient-loop", "pickup-feedback"}
 
 WORKFLOW_CONTRACTS: dict[str, dict[str, Any]] = {
@@ -70,6 +77,24 @@ WORKFLOW_CONTRACTS: dict[str, dict[str, Any]] = {
             "the gesture reads from body and limb motion without detached symbols",
             "feet, camera, scale, and character identity remain stable",
             "the final-to-first transition returns cleanly without an arm or prop pop",
+        ],
+    },
+    "front-fps-creature-locomotion": {
+        "min_frames": 4,
+        "phases": ["idle anchor", "contact or pressure A", "idle anchor", "opposite contact or pressure B"],
+        "visual_checks": [
+            "the creature remains full frontal without camera rotation, scale change, or whole-body mirror sway",
+            "the two active poses use opposite anatomy appropriate to the creature, not a generic biped leg mirror",
+            "grounded limbs, crawling body mass, wings, tails, or lower bodies follow the declared movement source",
+        ],
+    },
+    "front-fps-creature-attack": {
+        "min_frames": 4,
+        "phases": ["idle anchor", "anatomical anticipation", "frontal contact", "idle recovery"],
+        "visual_checks": [
+            "the attack uses the creature's declared anatomy instead of a generic one-hand strike",
+            "anticipation and contact remain fully frontal and preserve body identity, scale, and limb count",
+            "the contact pose is threatening and the final frame returns to the exact idle anchor",
         ],
     },
     "sideview-locomotion": {
@@ -517,26 +542,41 @@ def support_side(value: float, threshold: float) -> str:
     return "center/ambiguous"
 
 
-def contact_phase_check(frames: list[Image.Image], args: argparse.Namespace) -> dict[str, Any] | None:
+def contact_phase_check(
+    frames: list[Image.Image],
+    args: argparse.Namespace,
+    *,
+    shared_idle: bool = False,
+    min_pose_diff: float | None = None,
+) -> dict[str, Any] | None:
     if len(frames) < 4:
         return None
     balances = [support_balance(frame) for frame in frames]
-    opposite_index = len(frames) // 2 if len(frames) >= 6 else 2
-    first = balances[0]
+    first_index = 1 if shared_idle and len(frames) == 4 else 0
+    opposite_index = 3 if shared_idle and len(frames) == 4 else (
+        len(frames) // 2 if len(frames) >= 6 else 2
+    )
+    first = balances[first_index]
     opposite = balances[opposite_index]
     first_side = support_side(first, args.min_contact_balance_abs)
     opposite_side = support_side(opposite, args.min_contact_balance_abs)
     contact_delta = abs(opposite - first)
     contact_pose_diff = normalized_pair_diff(
-        frames[0], frames[opposite_index], args.lower_body_start
+        frames[first_index], frames[opposite_index], args.lower_body_start
     )
-    ok = contact_pose_diff >= args.min_opposite_contact_pose_diff
+    effective_min_pose_diff = (
+        args.min_opposite_contact_pose_diff if min_pose_diff is None else min_pose_diff
+    )
+    ok = contact_pose_diff >= effective_min_pose_diff
     reason = "distinct opposite-contact lower-body poses"
     if not ok:
         reason = "opposite contact lower-body pose is duplicated or too similar"
     return {
         "ok": ok,
-        "frame_1_index": 0,
+        "phase_layout": "idle-phase-a-idle-phase-b" if first_index == 1 else "standard-contact-cycle",
+        "first_contact_index": first_index,
+        "first_contact_frame": first_index + 1,
+        "frame_1_index": first_index,
         "frame_1_support_balance": round(first, 4),
         "frame_1_support_side": first_side,
         "opposite_contact_index": opposite_index,
@@ -545,7 +585,7 @@ def contact_phase_check(frames: list[Image.Image], args: argparse.Namespace) -> 
         "opposite_contact_support_side": opposite_side,
         "contact_delta": round(contact_delta, 4),
         "opposite_contact_pose_diff": round(contact_pose_diff, 4),
-        "min_opposite_contact_pose_diff": args.min_opposite_contact_pose_diff,
+        "min_opposite_contact_pose_diff": effective_min_pose_diff,
         "min_contact_balance_abs": args.min_contact_balance_abs,
         "min_contact_opposition": args.min_contact_opposition,
         "screen_side_is_diagnostic_only": True,
@@ -565,6 +605,8 @@ def inspect_locomotion(
     frames: list[Image.Image],
     metrics: list[dict[str, float]],
     args: argparse.Namespace,
+    shared_idle: bool = False,
+    creature_motion: dict[str, Any] | None = None,
 ) -> tuple[list[str], list[str], dict[str, Any]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -574,22 +616,37 @@ def inspect_locomotion(
     ] if len(frames) > 1 else []
     balances = [support_balance(frame) for frame in frames]
     support_range = max(balances) - min(balances) if balances else 0.0
-    phase = contact_phase_check(frames, args)
+    anatomy = str((creature_motion or {}).get("anatomy", "")).strip().lower()
+    locomotion = str((creature_motion or {}).get("locomotion", "")).strip().lower()
+    is_amorphous_pulse = anatomy == "amorphous" and locomotion == "pulse"
+    min_average_lower_diff = 0.05 if is_amorphous_pulse else args.min_average_lower_diff
+    min_pair_lower_diff = 0.03 if is_amorphous_pulse else args.min_pair_lower_diff
+    min_opposite_contact_pose_diff = (
+        0.05 if is_amorphous_pulse else args.min_opposite_contact_pose_diff
+    )
+    threshold_policy = "amorphous-pulse" if is_amorphous_pulse else "default"
+    phase = contact_phase_check(
+        frames,
+        args,
+        shared_idle=shared_idle,
+        min_pose_diff=min_opposite_contact_pose_diff,
+    )
 
     average_lower = sum(lower_diffs) / len(lower_diffs) if lower_diffs else 0.0
     min_lower = min(lower_diffs) if lower_diffs else 0.0
-    if len(frames) >= 2 and average_lower < args.min_average_lower_diff:
+    if len(frames) >= 2 and average_lower < min_average_lower_diff:
         errors.append(
-            f"lower-body silhouette barely changes (avg {average_lower:.3f}; expected >= {args.min_average_lower_diff:.3f})"
+            f"lower-body silhouette barely changes (avg {average_lower:.3f}; expected >= {min_average_lower_diff:.3f})"
         )
-    if len(frames) >= 3 and min_lower < args.min_pair_lower_diff:
+    if len(frames) >= 3 and min_lower < min_pair_lower_diff:
         errors.append(
-            f"one or more lower-body transitions are too similar (min {min_lower:.3f}; expected >= {args.min_pair_lower_diff:.3f})"
+            f"one or more lower-body transitions are too similar (min {min_lower:.3f}; expected >= {min_pair_lower_diff:.3f})"
         )
     if len(frames) >= 4 and phase and not phase["ok"]:
         errors.append(
             "opposite-contact candidate duplicates the first lower-body pose "
-            f"(frame 1 vs frame {phase['opposite_contact_frame']} lower-body diff "
+            f"(frame {phase['first_contact_frame']} vs frame "
+            f"{phase['opposite_contact_frame']} lower-body diff "
             f"{phase['opposite_contact_pose_diff']:.3f}; expected >= "
             f"{phase['min_opposite_contact_pose_diff']:.3f}; {phase['reason']})"
         )
@@ -607,6 +664,11 @@ def inspect_locomotion(
         "support_balance_range": round(support_range, 4),
         "support_balances": [round(value, 4) for value in balances],
         "contact_phase_check": phase,
+        "threshold_policy": threshold_policy,
+        "creature_anatomy": anatomy or None,
+        "creature_locomotion": locomotion or None,
+        "min_average_lower_diff": min_average_lower_diff,
+        "min_pair_lower_diff": min_pair_lower_diff,
     }
 
 
@@ -624,7 +686,7 @@ def inspect_action(
     center_y_range = metric_range(metrics, "center_y")
     area_range = alpha_area_range_ratio(metrics)
     area_values = [metric["alpha_area"] for metric in metrics]
-    extent_scores = [max(metric["width"], metric["height"]) for metric in metrics]
+    extent_scores = [metric["width"] * metric["height"] for metric in metrics]
     peak_area_index = area_values.index(max(area_values)) if area_values else None
     peak_extent_index = extent_scores.index(max(extent_scores)) if extent_scores else None
     average_diff = sum(pair_diffs) / len(pair_diffs) if pair_diffs else 0.0
@@ -877,6 +939,8 @@ def inspect_state(
     workflow_source: str,
     frames: list[Image.Image],
     args: argparse.Namespace,
+    shared_idle: bool = False,
+    creature_motion: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -910,7 +974,14 @@ def inspect_state(
 
     if frames:
         if LOCOMOTION_WORKFLOWS & set(workflows):
-            step_errors, step_warnings, step_metrics = inspect_locomotion(workflows, frames, metrics, args)
+            step_errors, step_warnings, step_metrics = inspect_locomotion(
+                workflows,
+                frames,
+                metrics,
+                args,
+                shared_idle=shared_idle,
+                creature_motion=creature_motion,
+            )
             errors.extend(step_errors)
             warnings.extend(step_warnings)
             metric_blocks["locomotion"] = step_metrics
@@ -1005,6 +1076,10 @@ def main() -> int:
 
     run_dir = args.run_dir.expanduser().resolve()
     request = load_json(run_dir / "sprite-request.json", {})
+    creature_motion = request.get("creature_motion")
+    shared_idle = bool(
+        isinstance(creature_motion, dict) and creature_motion.get("shared_idle")
+    )
     frames_manifest = load_json(run_dir / "frames" / "frames-manifest.json", {})
     art_direction = load_json(run_dir / "references" / "art-direction.json", {})
     if not request:
@@ -1046,6 +1121,8 @@ def main() -> int:
             workflow_source,
             load_frames(run_dir, rows_by_state[state]),
             args,
+            shared_idle=shared_idle,
+            creature_motion=creature_motion if isinstance(creature_motion, dict) else None,
         )
         results.append(result)
         errors.extend(f"{state}: {error}" for error in result["errors"])

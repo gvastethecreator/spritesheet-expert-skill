@@ -44,6 +44,20 @@ def test_production_policy_applies_generated_animated_sprite_gates() -> None:
     assert "extraction_mode=components" in policy.skipped_reasons["asset-slots"]
 
 
+def test_front_fps_creature_locomotion_requires_motion_variation_gate() -> None:
+    request = _normalized_request()
+    request["states"]["walk"]["animation_workflows"] = [
+        "front-fps-creature-locomotion"
+    ]
+
+    policy = derive_gate_policy(request, workflow="production")
+
+    assert "motion-variation" in policy.required_gate_ids
+    assert "front-fps-creature-locomotion" in policy.applied_reasons[
+        "motion-variation"
+    ]
+
+
 @pytest.mark.parametrize("source_type", ["grok-imagine-image", "grok-imagine-video", "mixed"])
 def test_production_policy_treats_grok_and_mixed_sources_as_generated(
     source_type: str,

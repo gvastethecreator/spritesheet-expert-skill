@@ -134,6 +134,18 @@ def row_kind(state: str, row: dict[str, Any], request: dict[str, Any]) -> str:
     kind = str(geometry.get("kind", "")).strip()
     if kind:
         return kind
+    creature_motion = (
+        request.get("creature_motion")
+        if isinstance(request.get("creature_motion"), dict)
+        else {}
+    )
+    locomotion = str(creature_motion.get("locomotion", "")).strip().lower()
+    anatomy = str(creature_motion.get("anatomy", "")).strip().lower()
+    if state not in {"attack", "hit", "death"} and (
+        locomotion in {"fly", "hover"}
+        or anatomy in {"winged", "hovering", "flying"}
+    ):
+        return "airborne"
     text = f"{state} {row.get('action', '')}".lower()
     if any(token in text for token in ("advance", "retreat", "walk", "run")):
         return "grounded-locomotion"

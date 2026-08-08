@@ -30,6 +30,91 @@ def _fingerprint(*documents: Mapping[str, Any]) -> str:
     return sha256(payload).hexdigest()
 
 
+def _validate_video_selector(
+    run_root: Path,
+    *,
+    source_entry: Mapping[str, Any],
+    source_index: int,
+) -> tuple[list[str], dict[str, Any] | None]:
+    upstream = source_entry.get("upstream_report")
+    if not isinstance(upstream, str):
+        return [], None
+    try:
+        report_path = resolve_run_path(run_root, upstream)
+    except PathSafetyError as exc:
+        return [f"accepted_sources[{source_index}].upstream_report is unsafe: {exc}"], None
+    if not report_path.is_file():
+        return [f"video source report does not exist: {upstream}"], None
+    try:
+        report_bytes = report_path.read_bytes()
+        report = json.loads(report_bytes.decode("utf-8"))
+    except (OSError, UnicodeError, ValueError) as exc:
+        return [f"video source report is unreadable: {upstream}: {exc}"], None
+    if report.get("kind") not in {"sprite-video-source", "sprite-grok-video-source"}:
+        return [], None
+    states = source_entry.get("states")
+    state = report.get("state")
+    errors: list[str] = []
+    if not isinstance(states, (list, tuple)) or state not in states:
+        errors.append(f"video source report state does not match accepted source: {upstream}")
+        return errors, None
+    output = report.get("output")
+    if not isinstance(output, Mapping):
+        errors.append(f"video source report has no output record: {upstream}")
+    elif (
+        output.get("path") != source_entry.get("path")
+        or output.get("sha256") != source_entry.get("sha256")
+    ):
+        errors.append(f"video source report output does not match accepted source: {upstream}")
+    selector_relative = f"qa/{state}-video-frame-selector/selector.evidence.json"
+    selector_path = run_root / selector_relative
+    if not selector_path.is_file():
+        errors.append(f"required video frame selector is missing: {selector_relative}")
+        return errors, None
+    try:
+        selector = json.loads(selector_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        errors.append(f"video frame selector evidence is unreadable: {selector_relative}: {exc}")
+        return errors, None
+    expected_report_hash = _file_sha256(report_path)
+    if (
+        selector.get("kind") != "sprite-video-frame-selector-evidence"
+        or selector.get("status") != "pass"
+        or selector.get("state") != state
+    ):
+        errors.append(f"video frame selector evidence is invalid: {selector_relative}")
+    source_report = selector.get("source_report")
+    if not isinstance(source_report, Mapping) or source_report.get("sha256") != expected_report_hash:
+        errors.append(f"video frame selector is stale for source report: {upstream}")
+    if selector.get("selected_indices") != report.get("sampled_video_indices"):
+        errors.append(f"video frame selector selection is stale for state {state}")
+    candidate_count = selector.get("candidate_count")
+    decoded = report.get("decoded")
+    decoded_count = decoded.get("frame_count") if isinstance(decoded, Mapping) else None
+    requested_count = len(report.get("sampled_video_indices", []))
+    minimum_candidates = 2 if isinstance(decoded_count, int) and decoded_count > requested_count else 1
+    if not isinstance(candidate_count, int) or candidate_count < minimum_candidates:
+        errors.append(f"video frame selector has fewer than two candidate cycles for state {state}")
+    html_record = selector.get("html")
+    if isinstance(html_record, Mapping) and isinstance(html_record.get("path"), str):
+        try:
+            html_path = resolve_run_path(run_root, html_record["path"])
+        except PathSafetyError as exc:
+            errors.append(f"video frame selector HTML path is unsafe: {exc}")
+        else:
+            if not html_path.is_file() or _file_sha256(html_path) != html_record.get("sha256"):
+                errors.append(f"video frame selector HTML is missing or changed: {html_record['path']}")
+    else:
+        errors.append(f"video frame selector evidence has no HTML record: {selector_relative}")
+    return errors, {
+        "state": state,
+        "source_report": upstream,
+        "selector": selector_relative,
+        "candidate_count": candidate_count,
+        "selected_indices": selector.get("selected_indices"),
+    }
+
+
 def validate_provenance(
     run_dir: Path,
     *,
@@ -46,6 +131,7 @@ def validate_provenance(
     errors: list[str] = []
     warnings: list[str] = []
     evidence_sources: list[dict[str, Any]] = []
+    video_selectors: list[dict[str, Any]] = []
     expected_states: tuple[str, ...] = ()
 
     try:
@@ -127,6 +213,14 @@ def validate_provenance(
                 "states": list(entry["states"]),
             }
         )
+        selector_errors, selector_evidence = _validate_video_selector(
+            run_root,
+            source_entry=entry,
+            source_index=index,
+        )
+        errors.extend(selector_errors)
+        if selector_evidence is not None:
+            video_selectors.append(selector_evidence)
 
     fingerprint = _fingerprint(request.to_dict(), provenance.to_dict())
     return CheckResult(
@@ -139,6 +233,7 @@ def validate_provenance(
             "provenance": str((run_root / "source-provenance.json").resolve()),
             "source_type": source_type,
             "sources": evidence_sources,
+            "video_selectors": video_selectors,
         },
         input_fingerprint=fingerprint,
         complete=True,

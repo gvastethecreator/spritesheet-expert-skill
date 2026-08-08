@@ -77,6 +77,29 @@ def test_background_pack_validates_and_renders_composite_and_scroll_proofs(tmp_p
     assert (tmp_path / "qa" / "background-scroll.gif").is_file()
 
 
+def test_scroll_proof_moves_non_repeating_layers(tmp_path: Path) -> None:
+    from background_pack import validate_background_pack
+
+    pack = _pack(tmp_path)
+    for layer in pack["layers"]:
+        layer["repeat_x"] = False
+
+    validate_background_pack(
+        pack,
+        root=tmp_path,
+        scroll_path=tmp_path / "qa" / "background-scroll.gif",
+    )
+
+    with Image.open(tmp_path / "qa" / "background-scroll.gif") as scroll:
+        frames = [scroll.convert("RGBA").copy()]
+        for index in range(1, getattr(scroll, "n_frames", 1)):
+            scroll.seek(index)
+            frames.append(scroll.convert("RGBA").copy())
+
+    assert len(frames) == 4
+    assert any(frames[0].tobytes() != frame.tobytes() for frame in frames[1:])
+
+
 def test_background_pack_rejects_stale_hash_and_wrong_dimensions(tmp_path: Path) -> None:
     from background_pack import BackgroundPackError, validate_background_pack
 

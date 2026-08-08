@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+from hashlib import sha256
 import io
 import json
 import math
@@ -14,7 +15,7 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 from runio import acquire_run_dir_lock, atomic_save_image, atomic_write_text
 from spritecore.image_ops import (
@@ -32,12 +33,34 @@ from segmentation import alpha_mass_extent_80, projection_sprites
 
 DEFAULT_REMBG_MODEL = "birefnet-general"
 DEFAULT_BEN2_MODEL = "PramaLLC/BEN2"
-BACKGROUND_REMOVAL_METHODS = {"none", "chroma", "matte", "rembg", "ben2", "auto"}
+DEFAULT_LUCIDA_MODEL = "egeorcun/lucida"
+DEFAULT_LUCIDA_REVISION = "6ee11122534c8de59402a589d2293c198cfbf848"
+DEFAULT_LUCIDA_INPUT_SIZE = 1024
+DEFAULT_LUCIDA_HARD_ALPHA_THRESHOLD = 64
+DEFAULT_LUCIDA_EDGE_CLEANUP_THRESHOLD = 12.0
+BACKGROUND_REMOVAL_METHODS = {
+    "none",
+    "chroma",
+    "matte",
+    "rembg",
+    "ben2",
+    "lucida",
+    "auto",
+}
+GRID_SEGMENTATION_METHODS = {"fixed", "adaptive"}
 STABLE_FEATURE_KEYS = ("head_width", "upper_width", "torso_width", "opaque_area", "body_mass_width_80", "body_mass_height_80")
 
 
 def default_background_model(method: str) -> str:
-    return DEFAULT_BEN2_MODEL if method == "ben2" else DEFAULT_REMBG_MODEL
+    if method == "ben2":
+        return DEFAULT_BEN2_MODEL
+    if method == "lucida":
+        return DEFAULT_LUCIDA_MODEL
+    return DEFAULT_REMBG_MODEL
+
+
+def default_background_revision(method: str) -> str | None:
+    return DEFAULT_LUCIDA_REVISION if method == "lucida" else None
 
 
 def color_distance(left: tuple[int, int, int], right: tuple[int, int, int]) -> float:
@@ -419,8 +442,21 @@ def normalize_background_removal(request: dict[str, Any], args: argparse.Namespa
     if args.background_removal != "request":
         method = args.background_removal
     if method not in BACKGROUND_REMOVAL_METHODS:
-        raise SystemExit("background_removal.method must be none, chroma, matte, rembg, ben2, or auto")
+        raise SystemExit(
+            "background_removal.method must be none, chroma, matte, rembg, ben2, lucida, or auto"
+        )
     model = args.background_model or str(config.get("model", default_background_model(method)))
+    revision = getattr(args, "background_revision", None) or config.get(
+        "revision", default_background_revision(method)
+    )
+    if method == "lucida":
+        revision = str(revision or DEFAULT_LUCIDA_REVISION)
+        if not re.fullmatch(r"[0-9a-f]{40}", revision):
+            raise SystemExit(
+                "background_removal.revision must be a 40-character lowercase commit SHA for Lucida"
+            )
+    else:
+        revision = None
     device = str(config.get("device", "auto"))
     if args.background_device:
         device = args.background_device
@@ -450,11 +486,53 @@ def normalize_background_removal(request: dict[str, Any], args: argparse.Namespa
         raise SystemExit(
             "post_rembg_chroma_cleanup is valid only for legacy-chroma sources"
         )
+    alpha_mode = getattr(args, "alpha_mode", None) or config.get("alpha_mode")
+    if alpha_mode is None:
+        alpha_mode = (
+            "hard"
+            if method == "lucida" and bool(getattr(args, "pixel_art", False))
+            else "soft"
+        )
+    alpha_mode = str(alpha_mode)
+    if alpha_mode not in {"soft", "hard"}:
+        raise SystemExit("background_removal.alpha_mode must be soft or hard")
+    cli_threshold = getattr(args, "hard_alpha_threshold", None)
+    hard_alpha_threshold = (
+        cli_threshold
+        if cli_threshold is not None
+        else config.get("hard_alpha_threshold")
+    )
+    if method == "lucida" and alpha_mode == "hard" and hard_alpha_threshold is None:
+        hard_alpha_threshold = DEFAULT_LUCIDA_HARD_ALPHA_THRESHOLD
+    if hard_alpha_threshold is not None and (
+        isinstance(hard_alpha_threshold, bool)
+        or not isinstance(hard_alpha_threshold, int)
+        or not 1 <= hard_alpha_threshold <= 255
+    ):
+        raise SystemExit(
+            "background_removal.hard_alpha_threshold must be an integer from 1 to 255"
+        )
+    input_size = config.get("input_size", DEFAULT_LUCIDA_INPUT_SIZE)
+    cli_input_size = getattr(args, "background_input_size", None)
+    if cli_input_size is not None:
+        input_size = cli_input_size
+    if method == "lucida" and (
+        isinstance(input_size, bool)
+        or not isinstance(input_size, int)
+        or not 256 <= input_size <= 2048
+    ):
+        raise SystemExit(
+            "background_removal.input_size must be an integer from 256 to 2048 for Lucida"
+        )
     return {
         "method": method,
         "model": model,
+        "revision": revision,
         "device": device,
         "alpha_matting": alpha_matting,
+        "alpha_mode": alpha_mode,
+        "hard_alpha_threshold": hard_alpha_threshold,
+        "input_size": input_size if method == "lucida" else None,
         "post_rembg_chroma_cleanup": post_rembg_chroma_cleanup,
         "source_family": source_family,
         "matte_threshold": args.matte_threshold,
@@ -467,6 +545,29 @@ def normalize_background_removal(request: dict[str, Any], args: argparse.Namespa
         "chroma_matte": "soft-edge-despill",
         "matte_mask": "edge-palette-border-connected",
     }
+
+
+def normalize_grid_segmentation(
+    request: dict[str, Any],
+    args: argparse.Namespace,
+    extraction_mode: str,
+) -> str:
+    default = (
+        "adaptive"
+        if extraction_mode == "components"
+        and str(request.get("asset_kind", "sprite")) == "sprite"
+        and str(request.get("raw_layout_policy", "compact-body-grids"))
+        == "compact-body-grids"
+        else "fixed"
+    )
+    method = str(request.get("grid_segmentation", default))
+    if args.grid_segmentation != "request":
+        method = args.grid_segmentation
+    if method not in GRID_SEGMENTATION_METHODS:
+        raise SystemExit("grid_segmentation must be fixed or adaptive")
+    if method == "adaptive" and extraction_mode != "components":
+        raise SystemExit("grid_segmentation=adaptive requires extraction_mode=components")
+    return method
 
 
 def remove_rembg_background(
@@ -525,6 +626,180 @@ def remove_ben2_background(
     with torch.inference_mode():
         cutout = sessions[session_key].inference(image.convert("RGB"))
     return cutout.convert("RGBA")
+
+
+def remove_lucida_background(
+    image: Image.Image,
+    config: dict[str, Any],
+    sessions: dict[str, Any],
+) -> Image.Image:
+    try:
+        import torch
+        from torchvision import transforms
+        from transformers import AutoModelForImageSegmentation
+    except ImportError as exc:
+        raise RuntimeError(
+            "background_removal=lucida requires the Lucida dependencies; install with: "
+            "pip install -r scripts/requirements-lucida.txt"
+        ) from exc
+
+    model = str(config.get("model") or DEFAULT_LUCIDA_MODEL)
+    revision = str(config.get("revision") or DEFAULT_LUCIDA_REVISION)
+    device = resolve_torch_device(str(config.get("device") or "auto"), torch)
+    input_size = int(config.get("input_size") or DEFAULT_LUCIDA_INPUT_SIZE)
+    session_key = f"lucida:{model}:{revision}:{device}:{input_size}"
+    if session_key not in sessions:
+        loaded = AutoModelForImageSegmentation.from_pretrained(
+            model,
+            revision=revision,
+            trust_remote_code=True,
+        )
+        loaded.to(device).eval()
+        sessions[session_key] = loaded
+
+    preprocess = transforms.Compose(
+        [
+            transforms.Resize((input_size, input_size)),
+            transforms.ToTensor(),
+            transforms.Normalize(
+                [0.485, 0.456, 0.406],
+                [0.229, 0.224, 0.225],
+            ),
+        ]
+    )
+    rgb = image.convert("RGB")
+    with torch.inference_mode():
+        prediction = sessions[session_key](
+            preprocess(rgb).unsqueeze(0).to(device)
+        )[-1].sigmoid()
+    alpha_tensor = prediction.detach().float().cpu()[0]
+    alpha_tensor = transforms.functional.resize(
+        alpha_tensor,
+        [rgb.height, rgb.width],
+        antialias=True,
+    ).clamp(0.0, 1.0)
+    alpha = transforms.functional.to_pil_image(alpha_tensor).convert("L")
+    output = rgb.convert("RGBA")
+    output.putalpha(alpha)
+    return output
+
+
+def apply_alpha_policy(image: Image.Image, config: dict[str, Any]) -> Image.Image:
+    if str(config.get("alpha_mode", "soft")) != "hard":
+        return image.convert("RGBA")
+    threshold = int(
+        config.get("hard_alpha_threshold")
+        or DEFAULT_LUCIDA_HARD_ALPHA_THRESHOLD
+    )
+    output = image.convert("RGBA")
+    output.putalpha(
+        output.getchannel("A").point(
+            [0 if value < threshold else 255 for value in range(256)]
+        )
+    )
+    return output
+
+
+def restore_source_foreground_regions(
+    source: Image.Image,
+    cutout: Image.Image,
+    background_colors: list[tuple[int, int, int]],
+    *,
+    color_threshold: float = 36.0,
+    min_source_pixels: int | None = None,
+) -> tuple[Image.Image, int]:
+    """Recover source-colored subject regions that a matte model erased.
+
+    Candidate pixels must be clearly distinct from the sampled border matte.
+    A candidate component is restored only when it substantially overlaps the
+    model's accepted foreground, so real matte-colored holes between limbs stay
+    transparent. This also handles black torsos that open between horns and are
+    therefore not topologically enclosed.
+    """
+
+    rgba_source = source.convert("RGBA")
+    output = cutout.convert("RGBA").copy()
+    if not background_colors:
+        return output, 0
+    alpha = output.getchannel("A")
+    width, height = output.size
+    threshold = (
+        max(64, round(width * height * 0.0005))
+        if min_source_pixels is None
+        else max(1, int(min_source_pixels))
+    )
+    alpha_data = alpha.tobytes()
+    near_alpha_data = alpha.filter(ImageFilter.MaxFilter(17)).tobytes()
+    foreground_bbox = alpha.getbbox()
+    visited = bytearray(width * height)
+    source_pixels = rgba_source.load()
+    output_pixels = output.load()
+    candidate = bytearray(width * height)
+    for index in range(width * height):
+        x = index % width
+        y = index // width
+        red, green, blue, _alpha = source_pixels[x, y]
+        if all(
+            color_distance((red, green, blue), matte) > color_threshold
+            for matte in background_colors
+        ):
+            candidate[index] = 1
+    restored = 0
+
+    for start, is_candidate in enumerate(candidate):
+        if not is_candidate or visited[start]:
+            continue
+        stack = [start]
+        visited[start] = 1
+        component: list[int] = []
+        while stack:
+            index = stack.pop()
+            component.append(index)
+            x = index % width
+            y = index // width
+            for neighbor in (
+                index - 1 if x > 0 else -1,
+                index + 1 if x + 1 < width else -1,
+                index - width if y > 0 else -1,
+                index + width if y + 1 < height else -1,
+            ):
+                if (
+                    neighbor >= 0
+                    and not visited[neighbor]
+                    and candidate[neighbor]
+                ):
+                    visited[neighbor] = 1
+                    stack.append(neighbor)
+        if len(component) < threshold:
+            continue
+        accepted_overlap = sum(alpha_data[index] > 16 for index in component)
+        min_x = min(index % width for index in component)
+        max_x = max(index % width for index in component)
+        min_y = min(index // width for index in component)
+        max_y = max(index // width for index in component)
+        contained_by_foreground = bool(
+            foreground_bbox
+            and min_x >= foreground_bbox[0] - 8
+            and min_y >= foreground_bbox[1] - 8
+            and max_x < foreground_bbox[2] + 8
+            and max_y < foreground_bbox[3] + 8
+        )
+        accepted_near = sum(near_alpha_data[index] > 16 for index in component)
+        overlaps_model = accepted_overlap >= max(8, round(len(component) * 0.05))
+        bounded_by_model = contained_by_foreground and accepted_near >= max(
+            16, round(len(component) * 0.03)
+        )
+        if not overlaps_model and not bounded_by_model:
+            continue
+        for index in component:
+            if alpha_data[index] > 16:
+                continue
+            x = index % width
+            y = index // width
+            red, green, blue, _alpha = source_pixels[x, y]
+            output_pixels[x, y] = (red, green, blue, 255)
+            restored += 1
+    return output, restored
 
 
 def remove_background(
@@ -591,6 +866,39 @@ def remove_background(
                 args.edge_refine_passes,
             )
         return cutout, "ben2"
+    if method == "lucida":
+        cutout = remove_lucida_background(source, config, sessions)
+        if args.edge_refine == "conservative":
+            # Lucida can leave a thin opaque trace of a neutral matte next to
+            # otherwise transparent pixels. Clean only near-transparent edges
+            # and cap the colour distance well below the general halo setting;
+            # dark subject interiors and genuine source-boundary contact must
+            # remain available to the clipping gate below.
+            cutout = refine_cutout_edges(
+                cutout,
+                edge_palette_colors(
+                    source,
+                    args.matte_threshold,
+                    args.matte_max_colors,
+                ),
+                min(
+                    float(args.edge_refine_threshold),
+                    DEFAULT_LUCIDA_EDGE_CLEANUP_THRESHOLD,
+                ),
+                0.0,
+                max(1, int(args.edge_refine_passes)),
+            )
+        cutout = apply_alpha_policy(cutout, config)
+        cutout, _restored_source_pixels = restore_source_foreground_regions(
+            source,
+            cutout,
+            edge_palette_colors(
+                source,
+                args.matte_threshold,
+                args.matte_max_colors,
+            ),
+        )
+        return cutout, "lucida"
     cutout = remove_chroma_background(
         source,
         chroma_key,
@@ -906,11 +1214,9 @@ def locks_reference_scale(pose_geometry: dict[str, Any] | None) -> bool:
 
 
 def pose_top_margin(pose_geometry: dict[str, Any] | None, safe_margin_y: int) -> int:
-    if not pose_geometry:
-        return safe_margin_y
-    kind = str(pose_geometry.get("kind", ""))
-    if kind in {"jump", "fall"}:
-        return 0
+    # The reserved cell margin is a runtime packing contract, including for
+    # airborne poses. The jump arc must fit inside it instead of borrowing
+    # pixels that the atlas gate promises will stay transparent.
     return safe_margin_y
 
 
@@ -1168,6 +1474,288 @@ def raw_cell_rect(sheet: Image.Image, columns: int, rows: int, index: int) -> tu
     return left, top, right, bottom
 
 
+def exact_idle_copy_pairs(
+    raw_source: Image.Image,
+    *,
+    state: str,
+    frame_count: int,
+    columns: int,
+    rows: int,
+    shared_idle: bool,
+) -> list[tuple[int, int]]:
+    """Return exact-idle slot pairs only when their provider cells match."""
+
+    if not shared_idle or frame_count != 4:
+        return []
+    candidate = (0, 3) if state == "attack" else (0, 2) if state == "idle-step" else None
+    if candidate is None:
+        return []
+    source_index, target_index = candidate
+    source_cell = raw_source.crop(raw_cell_rect(raw_source, columns, rows, source_index))
+    target_cell = raw_source.crop(raw_cell_rect(raw_source, columns, rows, target_index))
+    if source_cell.size != target_cell.size or source_cell.tobytes() != target_cell.tobytes():
+        return []
+    return [candidate]
+
+
+def file_sha256(path: Path) -> str:
+    digest = sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def find_video_source_report(
+    run_dir: Path,
+    state: str,
+    raw_path: Path,
+) -> tuple[Path, dict[str, Any]] | None:
+    provider_root = run_dir / "provider"
+    if not provider_root.is_dir():
+        return None
+    raw_relative = raw_path.relative_to(run_dir).as_posix()
+    raw_hash = file_sha256(raw_path)
+    matches: list[tuple[Path, dict[str, Any]]] = []
+    for candidate in provider_root.glob(f"**/{state}/video-source.json"):
+        try:
+            report = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        output = report.get("output")
+        if (
+            report.get("kind") in {"sprite-video-source", "sprite-grok-video-source"}
+            and report.get("state") == state
+            and report.get("independent_frame_background_removal") is True
+            and isinstance(output, dict)
+            and output.get("path") == raw_relative
+            and output.get("sha256") == raw_hash
+        ):
+            matches.append((candidate.resolve(), report))
+    if len(matches) > 1:
+        raise RuntimeError(f"{state}: multiple video source reports match {raw_relative}")
+    return matches[0] if matches else None
+
+
+def alpha_margin_count(
+    image: Image.Image,
+    margin_x: int,
+    margin_y: int,
+) -> int:
+    rgba = image.convert("RGBA")
+    alpha = rgba.getchannel("A")
+    width, height = rgba.size
+    left = max(0, min(width, margin_x))
+    right = max(left, min(width, width - margin_x))
+    top = max(0, min(height, margin_y))
+    bottom = max(top, min(height, height - margin_y))
+    pixels = alpha.load()
+    return sum(
+        1
+        for y in range(height)
+        for x in range(width)
+        if pixels[x, y] and not (left <= x < right and top <= y < bottom)
+    )
+
+
+def safe_alpha_crop(
+    cutout: Image.Image,
+    *,
+    crop_padding: int,
+) -> tuple[Image.Image | None, list[int] | None, list[str]]:
+    rgba = cutout.convert("RGBA")
+    components = connected_components(rgba)
+    if not components:
+        return None, None, []
+    largest_area = max(component["area"] for component in components)
+    keep_threshold = max(8, round(largest_area * 0.00025))
+    kept = [component for component in components if component["area"] >= keep_threshold]
+    left = min(component["bbox"][0] for component in kept)
+    top = min(component["bbox"][1] for component in kept)
+    right = max(component["bbox"][2] for component in kept)
+    bottom = max(component["bbox"][3] for component in kept)
+    bbox = (left, top, right, bottom)
+    contacts: list[str] = []
+    if left <= 0:
+        contacts.append("left")
+    if top <= 0:
+        contacts.append("top")
+    if right >= rgba.width:
+        contacts.append("right")
+    if bottom >= rgba.height:
+        contacts.append("bottom")
+    padding = max(1, crop_padding)
+    safe = Image.new(
+        "RGBA",
+        (right - left + padding * 2, bottom - top + padding * 2),
+        (0, 0, 0, 0),
+    )
+    source_pixels = rgba.load()
+    safe_pixels = safe.load()
+    for component in kept:
+        for pixel_index in component["pixels"]:
+            x = pixel_index % rgba.width
+            y = pixel_index // rgba.width
+            safe_pixels[x - left + padding, y - top + padding] = source_pixels[x, y]
+    return safe, [left, top, right, bottom], contacts
+
+
+def clean_significant_alpha(image: Image.Image) -> tuple[Image.Image, int]:
+    rgba = image.convert("RGBA")
+    components = connected_components(rgba)
+    if not components:
+        return Image.new("RGBA", rgba.size, (0, 0, 0, 0)), 0
+    largest_area = max(component["area"] for component in components)
+    keep_threshold = max(8, round(largest_area * 0.00025))
+    kept = [component for component in components if component["area"] >= keep_threshold]
+    output = Image.new("RGBA", rgba.size, (0, 0, 0, 0))
+    source_pixels = rgba.load()
+    output_pixels = output.load()
+    kept_ids = {id(component) for component in kept}
+    discarded_pixels = 0
+    for component in components:
+        if id(component) not in kept_ids:
+            discarded_pixels += int(component["area"])
+            continue
+        for pixel_index in component["pixels"]:
+            x = pixel_index % rgba.width
+            y = pixel_index // rgba.width
+            output_pixels[x, y] = source_pixels[x, y]
+    return output, discarded_pixels
+
+
+def extract_video_frame_sprites(
+    raw_source: Image.Image,
+    *,
+    frame_count: int,
+    columns: int,
+    rows: int,
+    background_rgb: tuple[int, int, int],
+    chroma_key: tuple[int, int, int],
+    background_removal: dict[str, Any],
+    args: argparse.Namespace,
+    sessions: dict[str, Any],
+    position_locked_canvas: bool,
+) -> tuple[list[Image.Image] | None, Image.Image, str, dict[str, Any], list[str]]:
+    """Remove the matte per selected video frame, then crop its alpha bounds."""
+
+    sprites: list[Image.Image] = []
+    processed_grid = Image.new("RGBA", raw_source.size, (0, 0, 0, 0))
+    spans: list[dict[str, Any]] = []
+    errors: list[str] = []
+    cache: dict[str, tuple[Image.Image, str]] = {}
+    background_methods: set[str] = set()
+    for index in range(frame_count):
+        cell_rect = raw_cell_rect(raw_source, columns, rows, index)
+        cell = raw_source.crop(cell_rect).convert("RGBA")
+        context_padding = max(12, min(48, round(min(cell.size) * 0.04)))
+        crop_padding = max(4, min(32, round(min(cell.size) * 0.02)))
+        padded = Image.new(
+            "RGBA",
+            (cell.width + context_padding * 2, cell.height + context_padding * 2),
+            (*background_rgb, 255),
+        )
+        padded.alpha_composite(cell, (context_padding, context_padding))
+        cache_key = sha256(cell.tobytes()).hexdigest()
+        try:
+            if cache_key in cache:
+                padded_cutout, background_method = cache[cache_key]
+                padded_cutout = padded_cutout.copy()
+            else:
+                padded_cutout, background_method = remove_background(
+                    padded,
+                    chroma_key,
+                    background_removal,
+                    args,
+                    sessions,
+                )
+                cache[cache_key] = (padded_cutout.copy(), background_method)
+        except RuntimeError as exc:
+            errors.append(f"frame {index:02d}: {exc}")
+            continue
+        background_methods.add(background_method)
+        original_cutout = padded_cutout.crop(
+            (
+                context_padding,
+                context_padding,
+                context_padding + cell.width,
+                context_padding + cell.height,
+            )
+        )
+        original_cutout, discarded_noise_pixels = clean_significant_alpha(original_cutout)
+        processed_grid.alpha_composite(original_cutout, (cell_rect[0], cell_rect[1]))
+        if position_locked_canvas:
+            sprite = original_cutout
+            bbox = original_cutout.getbbox()
+            contacts = []
+            if bbox:
+                contacts = [
+                    side
+                    for side, touched in (
+                        ("left", bbox[0] <= 0),
+                        ("top", bbox[1] <= 0),
+                        ("right", bbox[2] >= original_cutout.width),
+                        ("bottom", bbox[3] >= original_cutout.height),
+                    )
+                    if touched
+                ]
+            source_bbox = list(bbox) if bbox else None
+        else:
+            sprite, source_bbox, contacts = safe_alpha_crop(
+                original_cutout,
+                crop_padding=crop_padding,
+            )
+        if sprite is None or source_bbox is None:
+            errors.append(f"frame {index:02d}: background removal produced an empty silhouette")
+            continue
+        if contacts:
+            errors.append(
+                f"frame {index:02d}: source silhouette touches {', '.join(contacts)} boundary; "
+                "the video frame can already be clipped"
+            )
+        global_bbox = [
+            cell_rect[0] + source_bbox[0],
+            cell_rect[1] + source_bbox[1],
+            cell_rect[0] + source_bbox[2],
+            cell_rect[1] + source_bbox[3],
+        ]
+        spans.append(
+            {
+                "frame": index,
+                "source_cell": list(cell_rect),
+                "source_bbox": global_bbox,
+                "source_bbox_in_cell": source_bbox,
+                "crop_padding_px": crop_padding,
+                "model_context_padding_px": context_padding,
+                "source_edge_contacts": contacts,
+                "discarded_noise_pixels": discarded_noise_pixels,
+                "width": sprite.width,
+                "height": sprite.height,
+            }
+        )
+        sprites.append(sprite)
+    background_method = (
+        next(iter(background_methods)) if len(background_methods) == 1 else "mixed"
+    )
+    report = {
+        "layout": "independent-video-frames",
+        "segmentation": "adaptive-alpha-bounds",
+        "columns": columns,
+        "rows": rows,
+        "ok": len(sprites) == frame_count and not errors,
+        "assignment": "one-video-frame-per-source-cell",
+        "spans": spans,
+        "boundary_policy": "fail-on-source-edge-contact",
+    }
+    return (
+        sprites if len(sprites) == frame_count else None,
+        processed_grid,
+        background_method,
+        report,
+        errors,
+    )
+
+
 def sprite_from_cell(cell: Image.Image) -> Image.Image | None:
     components = connected_components(cell)
     if not components:
@@ -1188,6 +1776,166 @@ def extract_grid_component_sprites(sheet: Image.Image, frame_count: int, columns
             return None
         sprites.append(sprite)
     return sprites
+
+
+def extract_grid_adaptive_sprites(
+    sheet: Image.Image,
+    frame_count: int,
+    columns: int,
+    rows: int,
+) -> tuple[list[Image.Image] | None, dict[str, Any]]:
+    """Segment each raw grid row by content instead of fixed cell boundaries.
+
+    Image generators frequently leave uneven gutters or let an arm/glow cross a
+    nominal cell edge.  We still use the declared grid only to identify the
+    visual rows and frame order; the x extents are then recovered from alpha
+    components (with projection cuts as a deterministic fallback).  This keeps
+    disconnected limbs/effects attached to the nearest pose while avoiding
+    hard half-cell cuts.
+    """
+
+    components = connected_components(sheet)
+    if not components:
+        return None, {
+            "layout": "grid",
+            "segmentation": "adaptive",
+            "columns": columns,
+            "rows": rows,
+            "ok": False,
+            "reason": "no alpha components",
+        }
+    largest_area = max(component["area"] for component in components)
+    seed_threshold = max(120, largest_area * 0.20)
+    seeds = [component for component in components if component["area"] >= seed_threshold]
+    if len(seeds) < frame_count:
+        seeds = sorted(components, key=lambda component: component["area"], reverse=True)[:frame_count]
+    if len(seeds) < frame_count:
+        return None, {
+            "layout": "grid",
+            "segmentation": "adaptive",
+            "columns": columns,
+            "rows": rows,
+            "ok": False,
+            "reason": f"only {len(seeds)} body components for {frame_count} frames",
+        }
+
+    # Component centres give us a stable 2D ordering even when effects bleed
+    # over a nominal row boundary.  The declared grid remains the expected
+    # order/capacity, not a crop rectangle.
+    seeds = sorted(seeds, key=lambda component: component["area"], reverse=True)[:frame_count]
+    # Assign by the nearest declared row, then sort left-to-right within that
+    # row.  Sorting by raw y alone can swap two valid poses when one pose is
+    # taller/shorter than its neighbour.
+    row_buckets: list[list[dict[str, Any]]] = [[] for _ in range(rows)]
+    for seed in seeds:
+        center_y = (seed["bbox"][1] + seed["bbox"][3]) / 2
+        row_index = min(
+            range(rows),
+            key=lambda row: abs(center_y - ((row + 0.5) * sheet.height / rows)),
+        )
+        row_buckets[row_index].append(seed)
+    expected_row_counts = [min(columns, max(0, frame_count - row * columns)) for row in range(rows)]
+    if [len(bucket) for bucket in row_buckets] != expected_row_counts:
+        ordered_seeds = sorted(
+            seeds,
+            key=lambda component: (
+                (component["bbox"][1] + component["bbox"][3]) / 2,
+                component["center_x"],
+            ),
+        )
+    else:
+        ordered_seeds = [
+            seed
+            for bucket in row_buckets
+            for seed in sorted(bucket, key=lambda component: component["center_x"])
+        ]
+    seeds = ordered_seeds
+    seed_ids = {id(seed) for seed in seeds}
+    groups: list[list[dict[str, Any]]] = [[seed] for seed in seeds]
+    noise_threshold = max(12, largest_area * 0.002)
+    for component in components:
+        if id(component) in seed_ids or component["area"] < noise_threshold:
+            continue
+        component_center_y = (component["bbox"][1] + component["bbox"][3]) / 2
+        nearest_index = min(
+            range(len(seeds)),
+            key=lambda index: (
+                (seeds[index]["center_x"] - component["center_x"]) ** 2
+                + ((seeds[index]["bbox"][1] + seeds[index]["bbox"][3]) / 2 - component_center_y) ** 2
+            ),
+        )
+        groups[nearest_index].append(component)
+
+    sprites = [component_group_image(sheet, group) for group in groups]
+    source_bboxes = [
+        [
+            min(component["bbox"][0] for component in group),
+            min(component["bbox"][1] for component in group),
+            max(component["bbox"][2] for component in group),
+            max(component["bbox"][3] for component in group),
+        ]
+        for group in groups
+    ]
+    row_counts = expected_row_counts
+    return sprites if len(sprites) == frame_count else None, {
+        "layout": "grid",
+        "segmentation": "adaptive",
+        "columns": columns,
+        "rows": rows,
+        "ok": len(sprites) == frame_count,
+        "assignment": "nearest-component-center-2d",
+        "row_counts": row_counts,
+        "spans": [
+            {
+                "source_bbox": source_bbox,
+                "width": sprite.width,
+                "height": sprite.height,
+                "bbox": list(sprite.getbbox()) if sprite.getbbox() else None,
+            }
+            for sprite, source_bbox in zip(sprites, source_bboxes, strict=True)
+        ],
+    }
+
+
+def save_adaptive_segmentation_overlay(
+    source: Image.Image,
+    report: dict[str, Any],
+    state: str,
+    run_dir: Path,
+) -> str | None:
+    spans = report.get("spans")
+    if not isinstance(spans, list) or not spans:
+        return None
+    overlay = composite_on_color(source.convert("RGBA"), (24, 24, 28))
+    draw = ImageDraw.Draw(overlay)
+    palette = (
+        (255, 99, 99, 255),
+        (102, 217, 255, 255),
+        (255, 207, 92, 255),
+        (156, 231, 129, 255),
+        (205, 144, 255, 255),
+    )
+    for index, span in enumerate(spans):
+        if not isinstance(span, dict):
+            continue
+        bbox = span.get("source_bbox")
+        if not isinstance(bbox, list) or len(bbox) != 4:
+            continue
+        left, top, right, bottom = (int(value) for value in bbox)
+        color = palette[index % len(palette)]
+        draw.rectangle((left, top, right - 1, bottom - 1), outline=color, width=3)
+        label = str(index + 1)
+        label_box = draw.textbbox((left + 3, top + 2), label)
+        draw.rectangle(
+            (label_box[0] - 2, label_box[1] - 1, label_box[2] + 2, label_box[3] + 1),
+            fill=(0, 0, 0, 220),
+        )
+        draw.text((left + 3, top + 2), label, fill=color)
+    qa_dir = run_dir / "qa"
+    qa_dir.mkdir(parents=True, exist_ok=True)
+    path = qa_dir / f"{state}-adaptive-segmentation.png"
+    atomic_save_image(overlay, path)
+    return path.relative_to(run_dir).as_posix()
 
 
 def extract_grid_slot_sprites(sheet: Image.Image, frame_count: int, columns: int, rows: int) -> list[Image.Image]:
@@ -1414,6 +2162,7 @@ def fit_pose_frames(
     safe_margin_x: int,
     safe_margin_y: int,
     resize_policy: ResizePolicy | None = None,
+    registration: dict[str, Any] | None = None,
 ) -> list[Image.Image]:
     frames = []
     reference_height = int(reference_metrics.get("height", 0)) if reference_metrics else None
@@ -1431,6 +2180,15 @@ def fit_pose_frames(
             if top_margin == safe_margin_y:
                 arc_height_limit = max(1, bottom_y - safe_margin_y)
                 max_height = min(max_height if max_height is not None else cell_height - safe_margin_y * 2, arc_height_limit)
+        elif registration and str(registration.get("anchor", "")) in {
+            "body-bottom",
+            "feet",
+            "baseline",
+            "ground",
+        }:
+            raw_bottom = registration.get("target_bottom", cell_height - safe_margin_y)
+            if isinstance(raw_bottom, (int, float)) and not isinstance(raw_bottom, bool):
+                bottom_y = round(raw_bottom)
         frames.append(
             fit_to_cell(
                 sprite,
@@ -1554,7 +2312,9 @@ def inspect_frames(
     pose_geometry: dict[str, Any] | None = None,
     reference_metrics: dict[str, float] | None = None,
     cell_height: int | None = None,
+    safe_margin_x: int | None = None,
     safe_margin_y: int | None = None,
+    check_chroma: bool = True,
 ) -> tuple[list[str], list[str], list[dict[str, Any]]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -1566,7 +2326,16 @@ def inspect_frames(
     for index, frame in enumerate(frames):
         nontransparent = areas[index]
         edge = edge_alpha_count(frame, args.edge_margin)
-        adjacent = chroma_adjacent_count(frame, chroma_key, args.chroma_adjacent_threshold)
+        adjacent = (
+            chroma_adjacent_count(frame, chroma_key, args.chroma_adjacent_threshold)
+            if check_chroma
+            else None
+        )
+        margin_pixels = (
+            alpha_margin_count(frame, safe_margin_x, safe_margin_y)
+            if safe_margin_x is not None and safe_margin_y is not None
+            else None
+        )
         bbox = frame.getbbox()
         feature_metrics = stable_feature_metrics(frame)
         height = bbox[3] - bbox[1] if bbox else 0
@@ -1595,6 +2364,7 @@ def inspect_frames(
                 "bottom_y": bottom,
                 "edge_pixels": edge,
                 "chroma_adjacent_pixels": adjacent,
+                "safe_margin_pixels": margin_pixels,
             }
         )
         validation = validate_frame(
@@ -1618,8 +2388,12 @@ def inspect_frames(
         errors.extend(f"frame {index:02d} {failure}" for failure in profile_failures)
         if edge > args.edge_pixel_threshold:
             warnings.append(f"frame {index:02d} has {edge} non-transparent edge pixels")
-        if adjacent > args.chroma_adjacent_pixel_threshold:
+        if adjacent is not None and adjacent > args.chroma_adjacent_pixel_threshold:
             errors.append(f"frame {index:02d} has {adjacent} chroma-adjacent pixels")
+        if margin_pixels:
+            errors.append(
+                f"frame {index:02d} has {margin_pixels} opaque pixels inside the reserved safe margin"
+            )
         if frame_median and nontransparent < frame_median * args.small_outlier_ratio:
             warnings.append(f"frame {index:02d} is much smaller than median ({nontransparent} vs {frame_median:.0f})")
         if frame_median and nontransparent > frame_median * args.large_outlier_ratio:
@@ -1663,9 +2437,36 @@ def main() -> int:
     parser.add_argument("--pose-width-floor-ratio", type=float, default=0.78)
     parser.add_argument("--pose-feature-tolerance", type=float, default=0.04)
     parser.add_argument("--baseline-tolerance-px", type=int, default=4)
-    parser.add_argument("--background-removal", choices=["request", "none", "chroma", "matte", "rembg", "ben2", "auto"], default="request")
-    parser.add_argument("--background-model", help=f"model name; rembg default {DEFAULT_REMBG_MODEL}; ben2 default {DEFAULT_BEN2_MODEL}")
+    parser.add_argument(
+        "--grid-segmentation",
+        choices=["request", "fixed", "adaptive"],
+        default="request",
+        help="use the request contract, fixed cells, or content-aware variable frame bounds",
+    )
+    parser.add_argument(
+        "--background-removal",
+        choices=["request", *sorted(BACKGROUND_REMOVAL_METHODS)],
+        default="request",
+    )
+    parser.add_argument(
+        "--background-model",
+        help=(
+            f"model name; lucida default {DEFAULT_LUCIDA_MODEL}; "
+            f"rembg default {DEFAULT_REMBG_MODEL}; ben2 default {DEFAULT_BEN2_MODEL}"
+        ),
+    )
+    parser.add_argument(
+        "--background-revision",
+        help="immutable 40-character model commit SHA; required for Lucida overrides",
+    )
+    parser.add_argument(
+        "--background-input-size",
+        type=int,
+        help=f"Lucida square inference size; default {DEFAULT_LUCIDA_INPUT_SIZE}",
+    )
     parser.add_argument("--background-device", help="model-backed background removal device: auto, cpu, cuda, cuda:0, etc.")
+    parser.add_argument("--alpha-mode", choices=["soft", "hard"], default=None)
+    parser.add_argument("--hard-alpha-threshold", type=int, default=None)
     parser.add_argument("--alpha-matting", dest="alpha_matting", action="store_true", default=None)
     parser.add_argument("--no-alpha-matting", dest="alpha_matting", action="store_false")
     parser.add_argument("--post-rembg-chroma-cleanup", dest="post_rembg_chroma_cleanup", action="store_true", default=None)
@@ -1695,7 +2496,12 @@ def main() -> int:
         and safe_margin_y == 0
     ):
         args.edge_pixel_threshold = max(args.edge_pixel_threshold, 4 * (cell_width + cell_height))
-    chroma_key = tuple(int(value) for value in request["chroma_key"]["rgb"])
+    background_key = request.get("chroma_key") or request.get("generation_background")
+    if not isinstance(background_key, dict) or not isinstance(background_key.get("rgb"), list):
+        raise SystemExit(
+            "sprite-request.json requires chroma_key.rgb or generation_background.rgb"
+        )
+    chroma_key = tuple(int(value) for value in background_key["rgb"])
     frames_root = run_dir / "frames"
     frames_root.mkdir(parents=True, exist_ok=True)
     asset_kind = str(request.get("asset_kind", "sprite"))
@@ -1708,7 +2514,8 @@ def main() -> int:
         extraction_mode == "slots" and asset_kind in {"texture", "tileset"}
     )
     background_removal = normalize_background_removal(request, args)
-    rembg_sessions: dict[str, Any] = {}
+    grid_segmentation = normalize_grid_segmentation(request, args, extraction_mode)
+    background_sessions: dict[str, Any] = {}
     matte_review_entries: list[dict[str, Any]] = []
     pending_rows: list[dict[str, Any]] = []
     rows = []
@@ -1730,19 +2537,64 @@ def main() -> int:
             if isinstance(value, str)
         }
         position_locked_canvas = "gesture-loop" in workflows
+        columns, layout_rows = raw_layout_grid(state_entry, frame_count)
+        uses_grid_layout = layout_rows > 1 or columns != frame_count
+        independent_sprites: list[Image.Image] | None = None
+        independent_report: dict[str, Any] | None = None
+        video_source = find_video_source_report(run_dir, state, raw_path)
         with Image.open(raw_path) as opened:
             raw_source = opened.convert("RGBA")
-            try:
-                strip, background_method = remove_background(
-                    raw_source,
-                    chroma_key,
-                    background_removal,
-                    args,
-                    rembg_sessions,
+            shared_idle = bool(
+                isinstance(request.get("creature_motion"), dict)
+                and request["creature_motion"].get("shared_idle") is True
+            )
+            exact_idle_pairs = exact_idle_copy_pairs(
+                raw_source,
+                state=state,
+                frame_count=frame_count,
+                columns=columns,
+                rows=layout_rows,
+                shared_idle=shared_idle,
+            )
+            if video_source is not None:
+                generation_background = request.get("generation_background")
+                background_rgb = (
+                    tuple(int(value) for value in generation_background["rgb"])
+                    if isinstance(generation_background, dict)
+                    and isinstance(generation_background.get("rgb"), list)
+                    else chroma_key
                 )
-            except RuntimeError as exc:
-                all_errors.append(f"{state}: {exc}")
-                continue
+                (
+                    independent_sprites,
+                    strip,
+                    background_method,
+                    independent_report,
+                    independent_errors,
+                ) = extract_video_frame_sprites(
+                    raw_source,
+                    frame_count=frame_count,
+                    columns=columns,
+                    rows=layout_rows,
+                    background_rgb=background_rgb,
+                    chroma_key=chroma_key,
+                    background_removal=background_removal,
+                    args=args,
+                    sessions=background_sessions,
+                    position_locked_canvas=position_locked_canvas,
+                )
+                all_errors.extend(f"{state}: {error}" for error in independent_errors)
+            else:
+                try:
+                    strip, background_method = remove_background(
+                        raw_source,
+                        chroma_key,
+                        background_removal,
+                        args,
+                        background_sessions,
+                    )
+                except RuntimeError as exc:
+                    all_errors.append(f"{state}: {exc}")
+                    continue
             matte_review_entries.append(
                 {
                     "state": state,
@@ -1751,9 +2603,19 @@ def main() -> int:
                     "processed": strip.copy(),
                 }
             )
-        if extraction_mode == "slots":
-            columns, layout_rows = raw_layout_grid(request["states"][state], frame_count)
-            uses_grid_layout = layout_rows > 1 or columns != frame_count
+        if independent_report is not None:
+            sprites = independent_sprites
+            segmentation_report = independent_report
+            adaptive_review = save_adaptive_segmentation_overlay(
+                strip,
+                segmentation_report,
+                state,
+                run_dir,
+            )
+            if adaptive_review:
+                segmentation_report["review"] = adaptive_review
+            method = "video-independent-adaptive"
+        elif extraction_mode == "slots":
             sprites = (
                 extract_grid_slot_sprites(strip, frame_count, columns, layout_rows)
                 if uses_grid_layout
@@ -1766,8 +2628,6 @@ def main() -> int:
                 "rows": layout_rows,
             }
         else:
-            columns, layout_rows = raw_layout_grid(request["states"][state], frame_count)
-            uses_grid_layout = layout_rows > 1 or columns != frame_count
             segmentation_report = {
                 "layout": "grid" if uses_grid_layout else "strip",
                 "columns": columns,
@@ -1786,8 +2646,23 @@ def main() -> int:
                 )
                 segmentation_report["position_locked_canvas"] = True
             elif uses_grid_layout:
-                sprites = extract_grid_component_sprites(strip, frame_count, columns, layout_rows)
-                method = "grid-components"
+                if grid_segmentation == "adaptive":
+                    sprites, adaptive_report = extract_grid_adaptive_sprites(
+                        strip, frame_count, columns, layout_rows
+                    )
+                    adaptive_review = save_adaptive_segmentation_overlay(
+                        strip,
+                        adaptive_report,
+                        state,
+                        run_dir,
+                    )
+                    if adaptive_review:
+                        adaptive_report["review"] = adaptive_review
+                    segmentation_report.update(adaptive_report)
+                    method = "grid-adaptive-components"
+                else:
+                    sprites = extract_grid_component_sprites(strip, frame_count, columns, layout_rows)
+                    method = "grid-components"
             else:
                 sprites = extract_component_sprites(strip, frame_count)
                 method = "components"
@@ -1833,12 +2708,25 @@ def main() -> int:
                     asset_catalog,
                     frame_count,
                 ),
+                "exact_idle_pairs": exact_idle_pairs,
             }
         )
 
     reference_metrics = reference_metrics_for_rows(request, pending_rows, cell_width, cell_height, safe_margin_x, safe_margin_y)
     if reference_metrics is None:
         reference_metrics = existing_reference_metrics(request, run_dir)
+    registration = (
+        dict(request["registration"])
+        if isinstance(request.get("registration"), dict)
+        else {}
+    )
+    creature_motion = request.get("creature_motion")
+    if (
+        "anchor" not in registration
+        and isinstance(creature_motion, dict)
+        and creature_motion.get("registration_anchor")
+    ):
+        registration["anchor"] = creature_motion["registration_anchor"]
 
     for pending in pending_rows:
         state = pending["state"]
@@ -1865,6 +2753,7 @@ def main() -> int:
                     safe_margin_x,
                     safe_margin_y,
                     resize_policy,
+                    registration,
                 )
             elif extraction_mode == "slots" and safe_margin_x == 0 and safe_margin_y == 0:
                 frames = [
@@ -1905,6 +2794,9 @@ def main() -> int:
             all_errors.append(f"{state}: {exc}")
             continue
 
+        for source_index, target_index in pending.get("exact_idle_pairs", []):
+            frames[target_index] = frames[source_index].copy()
+
         state_dir = frames_root / state
         state_dir.mkdir(parents=True, exist_ok=True)
         output_paths = []
@@ -1921,7 +2813,12 @@ def main() -> int:
             pose_geometry=pose_geometry,
             reference_metrics=reference_metrics,
             cell_height=cell_height,
+            safe_margin_x=safe_margin_x,
             safe_margin_y=safe_margin_y,
+            check_chroma=(
+                background_removal.get("source_family") == "legacy-chroma"
+                or pending["background_method"] == "chroma"
+            ),
         )
         all_errors.extend(f"{state}: {error}" for error in errors)
         all_warnings.extend(f"{state}: {warning}" for warning in warnings)
@@ -1936,6 +2833,11 @@ def main() -> int:
         }
         if pending.get("segmentation"):
             row_record["segmentation"] = pending["segmentation"]
+        if pending.get("exact_idle_pairs"):
+            row_record["exact_idle_copy_pairs"] = [
+                [source, target]
+                for source, target in pending["exact_idle_pairs"]
+            ]
         if pose_geometry:
             row_record["pose_geometry"] = pose_geometry
         rows.append(row_record)
@@ -1946,8 +2848,9 @@ def main() -> int:
         "engine": "component-row",
         "run_dir": str(run_dir),
         "cell": request["cell"],
-        "chroma_key": request["chroma_key"],
+        "chroma_key": request.get("chroma_key"),
         "generation_background": request.get("generation_background"),
+        "grid_segmentation": grid_segmentation,
         "background_removal": background_removal,
         "background_matte_review": matte_review,
         "sprite_registration": {

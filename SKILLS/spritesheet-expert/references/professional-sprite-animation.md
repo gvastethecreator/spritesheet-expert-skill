@@ -59,6 +59,7 @@ Use this reference when improving prompts, presets, curation, QA, or generated a
 
 - Generate new sources on a perfectly flat neutral gray, black, or white background. Do not exclude neutral colors from the subject palette.
 - Preserve trustworthy alpha first. Use edge-connected matte removal only for a clean flat border; this avoids globally deleting white clothing, black outlines, gray materials, highlights, or interior holes.
+- Use the pinned Lucida model for new Imagegen character and creature grids. Prefer black when there is no identity image. Use adaptive frame bounds after matting. Keep hard alpha threshold `64` for pixel art and soft alpha for illustrated sprites that need translucent edges.
 - Use `rembg` with `birefnet-general` for ambiguous, soft, dirty, photographic, painterly, or breathing video backgrounds. `birefnet-general-lite` is a speed option, not the quality default.
 - Use BEN2 explicitly for hard/final comparisons where BiRefNet clips hair, fur, spikes, small limbs, or painterly edges. Backend choice is not proof; the best reviewed matte wins.
 - Chroma removal is a legacy-import path only. It must be declared, border-connected, soft-edged, and despilled. Do not generate new green, blue, cyan, or magenta source backgrounds.
@@ -89,4 +90,5 @@ Use this reference when improving prompts, presets, curation, QA, or generated a
 - Capcom attack frame basics: https://game.capcom.com/cfn/sfv/column/131432?lang=en
 - Rivals Workshop anticipation/action/recovery guide: https://www.rivalslib.com/workshop_guide/art/anticipation_action_recovery.html
 - rembg local background removal project: https://github.com/danielgatis/rembg
+- Lucida model and workflow: https://github.com/egeorcun/lucida
 - BRIA RMBG-2.0 model page: https://huggingface.co/briaai/RMBG-2.0

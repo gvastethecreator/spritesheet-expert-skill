@@ -311,6 +311,16 @@ def _normalize_request_defaults(document: dict[str, Any]) -> dict[str, Any]:
     normalized.setdefault("extraction_mode", "components" if asset_kind == "sprite" else "slots")
     raw_layout_policy = str(normalized.get("raw_layout_policy", "compact-body-grids"))
     normalized["raw_layout_policy"] = raw_layout_policy
+    normalized.setdefault(
+        "grid_segmentation",
+        (
+            "adaptive"
+            if asset_kind == "sprite"
+            and normalized["extraction_mode"] == "components"
+            and raw_layout_policy == "compact-body-grids"
+            else "fixed"
+        ),
+    )
     cell = normalized.get("cell")
     if isinstance(cell, dict) and "size" in cell:
         cell.setdefault("width", cell["size"])
@@ -441,6 +451,13 @@ def _semantic_issues(document: Mapping[str, Any], kind: ContractKind) -> list[st
         return issues
     states = document.get("states", {})
     raw_layout_policy = document.get("raw_layout_policy")
+    grid_segmentation = document.get("grid_segmentation")
+    if grid_segmentation == "adaptive" and document.get("extraction_mode") != "components":
+        issues.append(
+            "grid_segmentation: adaptive requires extraction_mode components"
+        )
+    if document.get("creature_motion") is not None and document.get("asset_kind") != "sprite":
+        issues.append("creature_motion requires asset_kind sprite")
     is_vfx_request = document.get("asset_kind") == "vfx"
     if isinstance(states, Mapping):
         for state, entry in states.items():

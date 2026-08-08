@@ -22,6 +22,7 @@ def test_source_intake_validation_is_read_only_and_returns_execution_plan(
         "frame_semantics": "animation",
         "extraction_mode": "components",
         "raw_layout_policy": "compact-body-grids",
+        "grid_segmentation": "adaptive",
         "cell": {"width": 8, "height": 8},
         "states": {
             "idle": {

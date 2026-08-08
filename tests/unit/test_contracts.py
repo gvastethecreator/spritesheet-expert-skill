@@ -224,6 +224,7 @@ def test_load_contract_normalizes_v1_sprite_request_without_mutating_input() -> 
     assert contract.data["asset_kind"] == "sprite"
     assert contract.data["frame_semantics"] == "animation"
     assert contract.data["extraction_mode"] == "components"
+    assert contract.data["grid_segmentation"] == "adaptive"
     assert contract.data["states"]["idle"]["raw_layout"] == {
         "kind": "strip",
         "columns": 4,
@@ -328,6 +329,70 @@ def test_request_policy_off_keeps_raw_layout_absent() -> None:
 
     assert contract.data["raw_layout_policy"] == "off"
     assert "raw_layout" not in contract.data["states"]["idle"]
+    assert contract.data["grid_segmentation"] == "fixed"
+
+
+def test_adaptive_grid_segmentation_requires_component_extraction() -> None:
+    request = _valid_v2_request()
+    request["extraction_mode"] = "slots"
+    request["grid_segmentation"] = "adaptive"
+
+    with pytest.raises(
+        ContractValidationError,
+        match="adaptive requires extraction_mode components",
+    ):
+        validate_contract(request)
+
+
+def test_creature_motion_contract_accepts_anatomy_and_runtime_anchor() -> None:
+    request = _valid_v2_request()
+    request["creature_motion"] = {
+        "anatomy": "multi-legged",
+        "locomotion": "crawl",
+        "camera": "front-fps",
+        "registration_anchor": "body-bottom",
+        "shared_idle": True,
+        "screen_side_labels": True,
+        "movement_source": "alternating diagonal leg groups",
+        "attack_source": "mandibles and front legs",
+        "preserve": ["abdomen center"],
+        "reject": ["alignment from one leg tip"],
+    }
+
+    contract = validate_contract(request)
+
+    assert contract.data["creature_motion"]["anatomy"] == "multi-legged"
+    assert contract.data["creature_motion"]["registration_anchor"] == "body-bottom"
+
+
+def test_creature_motion_contract_rejects_unknown_anatomy() -> None:
+    request = _valid_v2_request()
+    request["creature_motion"] = {
+        "anatomy": "generic-monster",
+        "locomotion": "walk",
+        "camera": "front-fps",
+        "registration_anchor": "body-bottom",
+        "shared_idle": True,
+    }
+
+    with pytest.raises(ContractValidationError, match="creature_motion.anatomy"):
+        validate_contract(request)
+
+
+def test_creature_motion_contract_rejects_non_sprite_asset() -> None:
+    request = _valid_v2_request()
+    request["asset_kind"] = "prop"
+    request["frame_semantics"] = "still-assets"
+    request["creature_motion"] = {
+        "anatomy": "custom",
+        "locomotion": "none",
+        "camera": "front-fps",
+        "registration_anchor": "center",
+        "shared_idle": False,
+    }
+
+    with pytest.raises(ContractValidationError, match="requires asset_kind sprite"):
+        validate_contract(request)
 
 
 def test_normalize_contract_rejects_declared_kind_mismatch() -> None:

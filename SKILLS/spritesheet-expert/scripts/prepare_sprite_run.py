@@ -114,9 +114,21 @@ STYLE_PRESETS: dict[str, dict[str, str]] = {
 }
 STYLE_DEFAULT_PRESET = "pixel-art"
 STYLE_DEFAULT = STYLE_PRESETS[STYLE_DEFAULT_PRESET]["contract"]
-BACKGROUND_REMOVAL_METHODS = {"none", "chroma", "matte", "rembg", "ben2", "auto"}
+BACKGROUND_REMOVAL_METHODS = {
+    "none",
+    "chroma",
+    "matte",
+    "rembg",
+    "ben2",
+    "lucida",
+    "auto",
+}
 DEFAULT_REMBG_MODEL = "birefnet-general"
 DEFAULT_BEN2_MODEL = "PramaLLC/BEN2"
+DEFAULT_LUCIDA_MODEL = "egeorcun/lucida"
+DEFAULT_LUCIDA_REVISION = "6ee11122534c8de59402a589d2293c198cfbf848"
+DEFAULT_LUCIDA_INPUT_SIZE = 1024
+DEFAULT_LUCIDA_HARD_ALPHA_THRESHOLD = 64
 ART_DIRECTION_MODES = {"none", "pixel-art"}
 ART_DIRECTION_MODE_ALIASES: dict[str, str] = {}
 ART_PROFILE_AUTO = "auto"
@@ -207,6 +219,59 @@ LOCOMOTION_REQUIREMENTS = [
     "Foot placement must visibly change: contact frames need one foot forward and one foot back, passing frames need one foot under the body, and the support side must alternate.",
     "If the character has tiny legs or blob feet, exaggerate foot pads and lower-body silhouette enough that the gait reads without labels or motion lines.",
 ]
+
+CREATURE_ANATOMY_REQUIREMENTS = {
+    "biped": [
+        "Use complete alternating steps from the hips through knees and feet. A small knee bend alone is not a step.",
+        "Use the opposite arm as counter-swing. Keep the torso volume stable with only the declared lean or weight shift.",
+    ],
+    "quadruped": [
+        "Declare and alternate the supporting limb groups. Keep the spine and torso mass stable between contacts.",
+        "Do not turn a frontal quadruped gait into a side sway or a mirrored two-leg pose.",
+    ],
+    "multi-legged": [
+        "Declare the alternating leg groups before generation. Move more than one leg when the gait requires a diagonal support pattern.",
+        "Keep the central body level and stable. Do not align or animate the creature from one changing leg tip.",
+    ],
+    "winged": [
+        "Animate both wings as one coordinated flight cycle. Do not alternate one visible wing per frame.",
+        "Keep the body scale and center stable. During attacks, wing motion stays secondary unless wings are the declared weapon.",
+    ],
+    "hovering": [
+        "Animate the lower shroud, tendrils, vapor, or hover anatomy. Do not invent terrestrial steps.",
+        "Keep the head, torso, and hover center stable unless the state explicitly moves them.",
+    ],
+    "amorphous": [
+        "Use localized material pulses, folds, waves, or contractions. Preserve the total mass and the stable outer identity.",
+        "Do not mirror a tail-like protrusion to imitate biped locomotion.",
+    ],
+    "serpentine": [
+        "Propagate a readable wave through the body while the head and attack end keep their declared direction.",
+        "Do not replace body-wave locomotion with alternating humanoid lean.",
+    ],
+    "custom": [
+        "Use the declared movement source and attack source. Do not substitute a generic humanoid gait or one-hand strike.",
+    ],
+}
+
+CREATURE_STABILITY_REQUIREMENTS = {
+    "biped": "Keep the head, torso, pelvis, and limb lengths at one character scale. Brace the feet according to the action.",
+    "quadruped": "Keep the spine, torso mass, and support footprint stable unless the action explicitly displaces them.",
+    "multi-legged": "Keep the central body level and stable while the declared legs move or attack.",
+    "winged": "Keep the body scale and center stable. Wing extent can change without resizing the creature.",
+    "hovering": "Keep the head, torso, and hover center stable while the lower anatomy changes.",
+    "amorphous": "Preserve total mass and the stable outer identity while local material changes occur.",
+    "serpentine": "Preserve body thickness and keep the head or attack end on its declared line of action.",
+    "custom": "Preserve the declared stable body parts and runtime scale through every pose.",
+}
+
+CREATURE_ANCHOR_REQUIREMENTS = {
+    "body-bottom": "Register from the stable lower body mass, not from the lowest changing appendage tip.",
+    "bbox-bottom": "Use the lowest opaque point only when it is a stable grounded contact in every frame.",
+    "footprint": "Keep the declared ground-contact footprint stable across every grounded frame.",
+    "center": "Keep the stable body or hover center fixed while wings, shrouds, legs, or effects change extent.",
+    "custom": "Use the project-specific anchor and record its runtime target before registration.",
+}
 
 STATE_REQUIREMENTS = {
     "running-right": [
@@ -842,7 +907,12 @@ def sampled_reference_pixels(path: Path | None) -> list[tuple[int, int, int]]:
     return pixels
 
 
-def choose_generation_background(reference: Path | None, requested: str) -> dict[str, Any]:
+def choose_generation_background(
+    reference: Path | None,
+    requested: str,
+    *,
+    fallback: str = "#808080",
+) -> dict[str, Any]:
     if requested.lower() != "auto":
         rgb = parse_hex_color(requested)
         hex_value = rgb_to_hex(rgb)
@@ -868,11 +938,17 @@ def choose_generation_background(reference: Path | None, requested: str) -> dict
 
     pixels = sampled_reference_pixels(reference)
     if not pixels:
-        rgb = parse_hex_color("#808080")
+        rgb = parse_hex_color(fallback)
+        fallback_hex = rgb_to_hex(rgb)
+        name = next(
+            candidate_name
+            for candidate_name, candidate_hex in NEUTRAL_BACKGROUND_CANDIDATES
+            if candidate_hex == fallback_hex
+        )
         return {
             "family": "neutral",
-            "name": "gray",
-            "hex": "#808080",
+            "name": name,
+            "hex": fallback_hex,
             "rgb": list(rgb),
             "selection": "fallback",
         }
@@ -894,25 +970,86 @@ def choose_generation_background(reference: Path | None, requested: str) -> dict
     }
 
 
-def normalize_background_removal(raw: dict[str, Any], args: argparse.Namespace, asset_kind: str, extraction_mode: str) -> dict[str, Any]:
+def normalize_background_removal(
+    raw: dict[str, Any],
+    args: argparse.Namespace,
+    asset_kind: str,
+    extraction_mode: str,
+    style_preset: str,
+) -> dict[str, Any]:
     source = raw.get("background_removal") if isinstance(raw.get("background_removal"), dict) else {}
-    default_method = "none" if extraction_mode == "slots" and asset_kind in {"texture", "tileset"} else "auto"
+    if extraction_mode == "slots" and asset_kind in {"texture", "tileset"}:
+        default_method = "none"
+    elif asset_kind == "sprite" and extraction_mode == "components":
+        default_method = "lucida"
+    else:
+        default_method = "auto"
     method = args.background_removal or str(source.get("method", default_method))
     if method not in BACKGROUND_REMOVAL_METHODS:
-        raise SystemExit("background_removal.method must be none, chroma, rembg, ben2, or auto")
+        raise SystemExit(
+            "background_removal.method must be none, chroma, matte, rembg, ben2, lucida, or auto"
+        )
     if method == "chroma":
         raise SystemExit(
-            "new generation no longer supports chroma backgrounds; use neutral generation plus auto, matte, rembg, or ben2, and reserve chroma for legacy imports"
+            "new generation no longer supports chroma backgrounds; use neutral generation plus lucida, auto, matte, rembg, or ben2, and reserve chroma for legacy imports"
         )
-    default_model = DEFAULT_BEN2_MODEL if method == "ben2" else DEFAULT_REMBG_MODEL
+    if method == "ben2":
+        default_model = DEFAULT_BEN2_MODEL
+    elif method == "lucida":
+        default_model = DEFAULT_LUCIDA_MODEL
+    else:
+        default_model = DEFAULT_REMBG_MODEL
     model = args.background_model or str(source.get("model", default_model))
+    revision = args.background_revision or source.get("revision")
+    if method == "lucida":
+        revision = str(revision or DEFAULT_LUCIDA_REVISION)
+        if not re.fullmatch(r"[0-9a-f]{40}", revision):
+            raise SystemExit(
+                "background_removal.revision must be a 40-character lowercase commit SHA for Lucida"
+            )
+    else:
+        revision = None
     device = args.background_device or str(source.get("device", "auto"))
     alpha_matting = source.get("alpha_matting", False)
     if args.alpha_matting is not None:
         alpha_matting = args.alpha_matting
     if not isinstance(alpha_matting, bool):
         raise SystemExit("background_removal.alpha_matting must be boolean")
-    return {
+    alpha_mode = args.alpha_mode or source.get("alpha_mode")
+    if alpha_mode is None:
+        alpha_mode = "hard" if method == "lucida" and style_preset == "pixel-art" else "soft"
+    alpha_mode = str(alpha_mode)
+    if alpha_mode not in {"soft", "hard"}:
+        raise SystemExit("background_removal.alpha_mode must be soft or hard")
+    hard_alpha_threshold = (
+        args.hard_alpha_threshold
+        if args.hard_alpha_threshold is not None
+        else source.get("hard_alpha_threshold")
+    )
+    if method == "lucida" and alpha_mode == "hard" and hard_alpha_threshold is None:
+        hard_alpha_threshold = DEFAULT_LUCIDA_HARD_ALPHA_THRESHOLD
+    if hard_alpha_threshold is not None and (
+        isinstance(hard_alpha_threshold, bool)
+        or not isinstance(hard_alpha_threshold, int)
+        or not 1 <= hard_alpha_threshold <= 255
+    ):
+        raise SystemExit(
+            "background_removal.hard_alpha_threshold must be an integer from 1 to 255"
+        )
+    input_size = (
+        args.background_input_size
+        if args.background_input_size is not None
+        else source.get("input_size", DEFAULT_LUCIDA_INPUT_SIZE)
+    )
+    if method == "lucida" and (
+        isinstance(input_size, bool)
+        or not isinstance(input_size, int)
+        or not 256 <= input_size <= 2048
+    ):
+        raise SystemExit(
+            "background_removal.input_size must be an integer from 256 to 2048 for Lucida"
+        )
+    normalized = {
         "method": method,
         "model": model,
         "device": device,
@@ -920,6 +1057,38 @@ def normalize_background_removal(raw: dict[str, Any], args: argparse.Namespace, 
         "post_rembg_chroma_cleanup": False,
         "source_family": "neutral",
     }
+    if method == "lucida":
+        normalized.update(
+            {
+                "revision": revision,
+                "input_size": input_size,
+                "alpha_mode": alpha_mode,
+                "hard_alpha_threshold": hard_alpha_threshold,
+            }
+        )
+    return normalized
+
+
+def normalize_grid_segmentation(
+    raw: dict[str, Any],
+    args: argparse.Namespace,
+    asset_kind: str,
+    extraction_mode: str,
+) -> str:
+    default = (
+        "adaptive"
+        if asset_kind == "sprite"
+        and extraction_mode == "components"
+        and str(raw.get("raw_layout_policy", "compact-body-grids"))
+        == "compact-body-grids"
+        else "fixed"
+    )
+    method = args.grid_segmentation or str(raw.get("grid_segmentation", default))
+    if method not in {"fixed", "adaptive"}:
+        raise SystemExit("grid_segmentation must be fixed or adaptive")
+    if method == "adaptive" and extraction_mode != "components":
+        raise SystemExit("grid_segmentation=adaptive requires extraction_mode=components")
+    return method
 
 
 def normalize_states(raw: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
@@ -1010,6 +1179,106 @@ def state_tokens(state: str, entry: dict[str, Any] | None = None) -> set[str]:
     if entry:
         text = f"{text} {entry.get('action', '')}"
     return {token for token in re.split(r"[^a-z0-9]+", text.lower()) if token}
+
+
+def creature_motion_requirements_for_row(
+    request: dict[str, Any],
+    state: str,
+    entry: dict[str, Any],
+    asset_kind: str,
+) -> list[str]:
+    profile = request.get("creature_motion")
+    if asset_kind != "sprite" or not isinstance(profile, dict):
+        return []
+
+    anatomy = str(profile.get("anatomy", "custom"))
+    locomotion = str(profile.get("locomotion", "custom"))
+    camera = str(profile.get("camera", "custom"))
+    anchor = str(profile.get("registration_anchor", "custom"))
+    tokens = state_tokens(state, entry)
+    is_attack = bool(
+        tokens
+        & {
+            "attack",
+            "strike",
+            "bite",
+            "claw",
+            "grab",
+            "headbutt",
+            "punch",
+            "kick",
+        }
+    )
+    is_movement = not is_attack and (
+        is_locomotion_state(state, entry)
+        or bool(
+            tokens
+            & {"step", "crawl", "fly", "flight", "hover", "pulse", "slither"}
+        )
+    )
+    requirements = [
+        f"Anatomy class: {anatomy}. Keep every pose mechanically consistent with this body plan.",
+        f"Locomotion class: {locomotion}. Do not replace it with a generic mirrored biped cycle.",
+        f"Registration anchor: {anchor}. {CREATURE_ANCHOR_REQUIREMENTS.get(anchor, CREATURE_ANCHOR_REQUIREMENTS['custom'])}",
+        CREATURE_STABILITY_REQUIREMENTS.get(
+            anatomy, CREATURE_STABILITY_REQUIREMENTS["custom"]
+        ),
+    ]
+    if is_movement:
+        requirements.extend(
+            CREATURE_ANATOMY_REQUIREMENTS.get(
+                anatomy, CREATURE_ANATOMY_REQUIREMENTS["custom"]
+            )
+        )
+
+    if camera == "front-fps":
+        requirements.extend(
+            [
+                "Keep the creature fully frontal at player eye height. Do not use three-quarter, profile, top-down, or tilted views.",
+                "Show depth through the attacking or stepping part only. Do not shrink, flatten, widen, or zoom the full body.",
+            ]
+        )
+    if profile.get("screen_side_labels"):
+        requirements.append(
+            "Interpret left and right as screen sides. Keep the face and torso frontal while the declared limbs alternate."
+        )
+
+    movement_source = profile.get("movement_source")
+    if is_movement and isinstance(movement_source, str) and movement_source.strip():
+        requirements.append(f"Primary movement source: {movement_source.strip()}.")
+    attack_source = profile.get("attack_source")
+    if is_attack and isinstance(attack_source, str) and attack_source.strip():
+        requirements.append(
+            f"Primary attack source: {attack_source.strip()}. Build anticipation and contact around this anatomy, not a generic right-hand strike."
+        )
+    if profile.get("shared_idle"):
+        requirements.append(
+            "Use one accepted idle as the shared pixel source wherever the sequence returns to neutral. Do not trust regenerated idle duplicates."
+        )
+        if int(entry.get("frames", 0)) == 4 and is_attack:
+            requirements.append(
+                "Use the compact attack order: exact idle, anticipation, active contact, exact idle."
+            )
+        elif int(entry.get("frames", 0)) == 4 and is_movement:
+            requirements.append(
+                "Use the compact movement order: exact idle, phase A, exact idle, phase B. Make phases A and B mechanically different."
+            )
+
+    preserve = profile.get("preserve")
+    if isinstance(preserve, list) and preserve:
+        requirements.append(
+            "Preserve across every frame: "
+            + ", ".join(str(item).strip() for item in preserve if str(item).strip())
+            + "."
+        )
+    reject = profile.get("reject")
+    if isinstance(reject, list) and reject:
+        requirements.append(
+            "Reject these outcomes: "
+            + ", ".join(str(item).strip() for item in reject if str(item).strip())
+            + "."
+        )
+    return requirements
 
 
 def is_fighting_context(request: dict[str, Any], state: str, entry: dict[str, Any]) -> bool:
@@ -2131,6 +2400,14 @@ def row_prompt(request: dict[str, Any], state: str, entry: dict[str, Any]) -> st
     production_requirement_text = "\n\nProfessional production requirements:\n" + "\n".join(
         f"- {requirement}" for requirement in production_requirements
     )
+    creature_motion_requirements = creature_motion_requirements_for_row(
+        request, state, entry, asset_kind
+    )
+    creature_motion_text = ""
+    if creature_motion_requirements:
+        creature_motion_text = "\n\nCreature motion contract:\n" + "\n".join(
+            f"- {requirement}" for requirement in creature_motion_requirements
+        )
     active_profile_ids = active_art_profiles(request, state, entry, asset_kind)
     art_requirements = art_direction_requirements_for_row(request, state, entry, asset_kind)
     art_direction_text = ""
@@ -2361,6 +2638,7 @@ Use this prompt as an authoritative {production_label} spec. {style_notes["avoid
 Row action: {entry["action"]}.
 
 {anchor_block}
+{creature_motion_text}
 {production_requirement_text}
 {art_direction_text}
 {animation_workflow_text}
@@ -2419,10 +2697,35 @@ def main() -> int:
     )
     parser.add_argument("--extraction-mode", choices=["components", "slots"], default=None)
     parser.add_argument("--background-removal", choices=sorted(BACKGROUND_REMOVAL_METHODS), default=None)
-    parser.add_argument("--background-model", default=None, help=f"model name; rembg default {DEFAULT_REMBG_MODEL}; ben2 default {DEFAULT_BEN2_MODEL}")
+    parser.add_argument(
+        "--background-model",
+        default=None,
+        help=(
+            f"model name; lucida default {DEFAULT_LUCIDA_MODEL}; "
+            f"rembg default {DEFAULT_REMBG_MODEL}; ben2 default {DEFAULT_BEN2_MODEL}"
+        ),
+    )
+    parser.add_argument(
+        "--background-revision",
+        default=None,
+        help="immutable 40-character model commit SHA; required for Lucida overrides",
+    )
+    parser.add_argument(
+        "--background-input-size",
+        type=int,
+        default=None,
+        help=f"Lucida square inference size; default {DEFAULT_LUCIDA_INPUT_SIZE}",
+    )
     parser.add_argument("--background-device", default=None, help="model-backed background removal device: auto, cpu, cuda, cuda:0, etc.")
     parser.add_argument("--alpha-matting", dest="alpha_matting", action="store_true", default=None)
     parser.add_argument("--no-alpha-matting", dest="alpha_matting", action="store_false")
+    parser.add_argument("--alpha-mode", choices=["soft", "hard"], default=None)
+    parser.add_argument("--hard-alpha-threshold", type=int, default=None)
+    parser.add_argument(
+        "--grid-segmentation",
+        choices=["fixed", "adaptive"],
+        default=None,
+    )
     parser.add_argument(
         "--motion-phase-guides",
         action="store_true",
@@ -2473,12 +2776,6 @@ def main() -> int:
         raise SystemExit(
             "--chroma-key is no longer accepted for new generation; use --generation-background with gray, black, or white"
         )
-    generation_background = choose_generation_background(
-        base_source,
-        str(raw_request.get("generation_background", {}).get("hex", args.generation_background))
-        if isinstance(raw_request.get("generation_background"), dict)
-        else args.generation_background,
-    )
     style_preset = str(raw_request.get("style_preset") or args.style_preset)
     if style_preset not in STYLE_PRESETS:
         raise SystemExit(f"unknown style_preset {style_preset!r}; choices: {', '.join(sorted(STYLE_PRESETS))}")
@@ -2495,6 +2792,37 @@ def main() -> int:
     extraction_mode = str(requested_extraction_mode or ("components" if asset_kind == "sprite" else "slots"))
     if extraction_mode not in {"components", "slots"}:
         raise SystemExit("extraction_mode must be components or slots")
+    background_removal = normalize_background_removal(
+        raw_request,
+        args,
+        asset_kind,
+        extraction_mode,
+        style_preset,
+    )
+    requested_background = (
+        str(
+            raw_request.get("generation_background", {}).get(
+                "hex", args.generation_background
+            )
+        )
+        if isinstance(raw_request.get("generation_background"), dict)
+        else args.generation_background
+    )
+    generation_background = choose_generation_background(
+        base_source,
+        requested_background,
+        fallback=(
+            "#000000"
+            if background_removal["method"] == "lucida"
+            else "#808080"
+        ),
+    )
+    grid_segmentation = normalize_grid_segmentation(
+        raw_request,
+        args,
+        asset_kind,
+        extraction_mode,
+    )
     art_direction = normalize_art_direction(raw_request, args, asset_kind, style_preset)
     if asset_kind == "sprite":
         for state, entry in states.items():
@@ -2516,7 +2844,8 @@ def main() -> int:
         "cell": cell,
         "chroma_key": dict(LEGACY_CHROMA_KEY),
         "generation_background": generation_background,
-        "background_removal": normalize_background_removal(raw_request, args, asset_kind, extraction_mode),
+        "background_removal": background_removal,
+        "grid_segmentation": grid_segmentation,
         "states": states,
         "style_preset": style_preset,
         "style": style,
@@ -2536,6 +2865,7 @@ def main() -> int:
         "frame_semantics",
         "sampling_policy",
         "licenses",
+        "creature_motion",
     ):
         if key in raw_request:
             request[key] = raw_request[key]

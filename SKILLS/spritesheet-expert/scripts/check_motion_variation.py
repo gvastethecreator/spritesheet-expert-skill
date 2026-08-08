@@ -112,25 +112,40 @@ def support_side(value: float, threshold: float) -> str:
     return "center/ambiguous"
 
 
-def contact_phase_check(frames: list[Image.Image], args: argparse.Namespace) -> dict[str, Any] | None:
+def contact_phase_check(
+    frames: list[Image.Image],
+    args: argparse.Namespace,
+    *,
+    shared_idle: bool = False,
+    min_pose_diff: float | None = None,
+) -> dict[str, Any] | None:
     if len(frames) < 4:
         return None
     balances = [support_balance(frame) for frame in frames]
-    opposite_index = len(frames) // 2 if len(frames) >= 6 else 2
-    first = balances[0]
+    first_index = 1 if shared_idle and len(frames) == 4 else 0
+    opposite_index = 3 if shared_idle and len(frames) == 4 else (
+        len(frames) // 2 if len(frames) >= 6 else 2
+    )
+    first = balances[first_index]
     opposite = balances[opposite_index]
     first_side = support_side(first, args.min_contact_balance_abs)
     opposite_side = support_side(opposite, args.min_contact_balance_abs)
     contact_delta = abs(opposite - first)
     contact_pose_diff = lower_mask_diff(
-        frames[0], frames[opposite_index], args.lower_body_start
+        frames[first_index], frames[opposite_index], args.lower_body_start
     )
-    ok = contact_pose_diff >= args.min_opposite_contact_pose_diff
+    effective_min_pose_diff = (
+        args.min_opposite_contact_pose_diff if min_pose_diff is None else min_pose_diff
+    )
+    ok = contact_pose_diff >= effective_min_pose_diff
     reason = "distinct opposite-contact lower-body poses"
     if not ok:
         reason = "opposite contact lower-body pose is duplicated or too similar"
     return {
         "ok": ok,
+        "phase_layout": "idle-phase-a-idle-phase-b" if first_index == 1 else "standard-contact-cycle",
+        "first_contact_index": first_index,
+        "first_contact_frame": first_index + 1,
         "opposite_contact_index": opposite_index,
         "opposite_contact_frame": opposite_index + 1,
         "frame_1_support_balance": round(first, 4),
@@ -139,7 +154,7 @@ def contact_phase_check(frames: list[Image.Image], args: argparse.Namespace) -> 
         "opposite_contact_support_side": opposite_side,
         "contact_delta": round(contact_delta, 4),
         "opposite_contact_pose_diff": round(contact_pose_diff, 4),
-        "min_opposite_contact_pose_diff": args.min_opposite_contact_pose_diff,
+        "min_opposite_contact_pose_diff": effective_min_pose_diff,
         "min_contact_balance_abs": args.min_contact_balance_abs,
         "min_contact_opposition": args.min_contact_opposition,
         "screen_side_is_diagnostic_only": True,
@@ -153,12 +168,28 @@ def inspect_state(
     entry: dict[str, Any],
     frames: list[Image.Image],
     args: argparse.Namespace,
+    shared_idle: bool = False,
+    creature_motion: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
     diffs: list[float] = []
     balances = [support_balance(frame) for frame in frames]
-    phase_check = contact_phase_check(frames, args)
+    anatomy = str((creature_motion or {}).get("anatomy", "")).strip().lower()
+    locomotion = str((creature_motion or {}).get("locomotion", "")).strip().lower()
+    is_amorphous_pulse = anatomy == "amorphous" and locomotion == "pulse"
+    min_average_lower_diff = 0.05 if is_amorphous_pulse else args.min_average_lower_diff
+    min_pair_lower_diff = 0.03 if is_amorphous_pulse else args.min_pair_lower_diff
+    min_opposite_contact_pose_diff = (
+        0.05 if is_amorphous_pulse else args.min_opposite_contact_pose_diff
+    )
+    threshold_policy = "amorphous-pulse" if is_amorphous_pulse else "default"
+    phase_check = contact_phase_check(
+        frames,
+        args,
+        shared_idle=shared_idle,
+        min_pose_diff=min_opposite_contact_pose_diff,
+    )
     centers = [body_center(frame) for frame in frames]
     pairs = len(frames) if entry.get("loop", True) and len(frames) > 2 else max(0, len(frames) - 1)
 
@@ -175,13 +206,13 @@ def inspect_state(
 
     if len(frames) < 2:
         warnings.append("state has fewer than two frames; motion variation not meaningful")
-    elif average_diff < args.min_average_lower_diff:
+    elif average_diff < min_average_lower_diff:
         errors.append(
-            f"lower-body silhouette barely changes across frames (avg {average_diff:.3f}; expected >= {args.min_average_lower_diff:.3f})"
+            f"lower-body silhouette barely changes across frames (avg {average_diff:.3f}; expected >= {min_average_lower_diff:.3f})"
         )
-    elif min_diff < args.min_pair_lower_diff:
+    elif min_diff < min_pair_lower_diff:
         errors.append(
-            f"one or more adjacent frames are too similar in the lower body (min {min_diff:.3f}; expected >= {args.min_pair_lower_diff:.3f})"
+            f"one or more adjacent frames are too similar in the lower body (min {min_diff:.3f}; expected >= {min_pair_lower_diff:.3f})"
         )
 
     if len(frames) >= 3 and support_range < args.min_support_range:
@@ -192,7 +223,8 @@ def inspect_state(
     if is_locomotion_state(state, entry) and phase_check and not phase_check["ok"]:
         message = (
             "opposite-contact candidate duplicates the first lower-body pose "
-            f"(frame 1 vs frame {phase_check['opposite_contact_frame']} lower-body diff "
+            f"(frame {phase_check['first_contact_frame']} vs frame "
+            f"{phase_check['opposite_contact_frame']} lower-body diff "
             f"{phase_check['opposite_contact_pose_diff']:.3f}; expected >= "
             f"{phase_check['min_opposite_contact_pose_diff']:.3f}; {phase_check['reason']})"
         )
@@ -223,6 +255,11 @@ def inspect_state(
             "min_lower_body_diff": round(min_diff, 4),
             "support_balance_range": round(support_range, 4),
             "contact_phase_check": phase_check,
+            "threshold_policy": threshold_policy,
+            "creature_anatomy": anatomy or None,
+            "creature_locomotion": locomotion or None,
+            "min_average_lower_diff": min_average_lower_diff,
+            "min_pair_lower_diff": min_pair_lower_diff,
             "body_center_x_range": round(center_x_range, 4),
             "body_center_y_range": round(center_y_range, 4),
             "support_balances": [round(value, 4) for value in balances],
@@ -253,6 +290,10 @@ def main() -> int:
 
     run_dir = args.run_dir.expanduser().resolve()
     request = json.loads((run_dir / "sprite-request.json").read_text(encoding="utf-8"))
+    creature_motion = request.get("creature_motion")
+    shared_idle = bool(
+        isinstance(creature_motion, dict) and creature_motion.get("shared_idle")
+    )
     frames_manifest = json.loads((run_dir / "frames" / "frames-manifest.json").read_text(encoding="utf-8"))
     if not frames_manifest.get("ok"):
         raise SystemExit("frames-manifest.json is not ok; fix extraction before motion QA")
@@ -289,7 +330,14 @@ def main() -> int:
                 f"{state}: expected {expected_frames} frames, found {len(files)}"
             )
             continue
-        result = inspect_state(state, entry, load_frames(run_dir, row), args)
+        result = inspect_state(
+            state,
+            entry,
+            load_frames(run_dir, row),
+            args,
+            shared_idle=shared_idle,
+            creature_motion=creature_motion if isinstance(creature_motion, dict) else None,
+        )
         results.append(result)
         heuristic_errors.extend(f"{state}: {error}" for error in result["errors"])
         warnings.extend(f"{state}: {warning}" for warning in result["warnings"])

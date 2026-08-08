@@ -51,6 +51,7 @@ def _write_request(
         "frame_semantics": "animation",
         "extraction_mode": "components",
         "raw_layout_policy": "compact-body-grids",
+        "grid_segmentation": "adaptive",
         "cell": {"width": 16, "height": 16, "safe_margin": 2},
         "states": {
             state: {
@@ -209,6 +210,9 @@ def test_ingest_accepts_hash_bound_imagegen_row_and_writes_v2_provenance(
             "sha256": sha256(output.read_bytes()).hexdigest(),
             "size_bytes": output.stat().st_size,
             "states": ["idle"],
+            "source_type": "imagegen",
+            "art_engine": "imagegen",
+            "upstream_report": "qa/source-intake-report.json",
         }
     ]
     report = json.loads(
@@ -435,6 +439,69 @@ def test_ingest_accumulates_partial_coverage_and_force_replaces_only_one_state(
     assert entries["run"]["sha256"] == sha256(
         (run_dir / "raw" / "run.png").read_bytes()
     ).hexdigest()
+
+
+def test_ingest_accumulates_different_providers_as_mixed_provenance(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "mixed"
+    create_run_marker(run_dir, run_id="source-intake-mixed")
+    request = _write_request(run_dir, states=("idle", "attack"))
+    request["licenses"].append(
+        {
+            "id": "grok-generated-art",
+            "status": "generated",
+            "reference": "source-intake-test",
+        }
+    )
+    (run_dir / "sprite-request.json").write_text(
+        json.dumps(request, indent=2), encoding="utf-8"
+    )
+
+    imagegen_candidate = run_dir / "handoff" / "outbox" / "idle.png"
+    imagegen_hash, mime = _write_candidate(imagegen_candidate)
+    imagegen_intake = _intake(
+        run_dir,
+        request,
+        candidate_path="handoff/outbox/idle.png",
+        candidate_hash=imagegen_hash,
+        mime=mime,
+    )
+    imagegen_path = run_dir / "imagegen-intake.json"
+    imagegen_path.write_text(json.dumps(imagegen_intake), encoding="utf-8")
+    first = _run(run_dir, imagegen_path)
+    assert first.returncode == 0, first.stdout + first.stderr
+
+    grok_candidate = run_dir / "handoff" / "outbox" / "attack.png"
+    grok_hash, mime = _write_candidate(grok_candidate)
+    grok_intake = _intake(
+        run_dir,
+        request,
+        state="attack",
+        source_type="grok-imagine-image",
+        engine="grok-imagine",
+        candidate_path="handoff/outbox/attack.png",
+        candidate_hash=grok_hash,
+        mime=mime,
+        license_ref="grok-generated-art",
+    )
+    grok_path = run_dir / "grok-intake.json"
+    grok_path.write_text(json.dumps(grok_intake), encoding="utf-8")
+    second = _run(run_dir, grok_path)
+    assert second.returncode == 0, second.stdout + second.stderr
+
+    provenance = json.loads(
+        (run_dir / "source-provenance.json").read_text(encoding="utf-8")
+    )
+    assert provenance["source_type"] == "mixed"
+    assert provenance["art_engine"] == "mixed"
+    assert "license" not in provenance
+    assert provenance["state_coverage"] == ["idle", "attack"]
+    entries = {entry["states"][0]: entry for entry in provenance["accepted_sources"]}
+    assert entries["idle"]["source_type"] == "imagegen"
+    assert entries["idle"]["art_engine"] == "imagegen"
+    assert entries["attack"]["source_type"] == "grok-imagine-image"
+    assert entries["attack"]["art_engine"] == "grok-imagine"
 
 
 @pytest.mark.parametrize(

@@ -27,6 +27,12 @@ _JOB_SCHEMA = (
     / "schemas"
     / "grok-video-animation-job-v1.schema.json"
 )
+_VIDEO_SOURCE_SCHEMA = (
+    Path(__file__).resolve().parents[2]
+    / "references"
+    / "schemas"
+    / "video-source-v1.schema.json"
+)
 _VIDEO_EXTENSIONS = {".mp4", ".webm", ".mov", ".m4v"}
 _MAX_DECODED_FRAMES = 900
 _MAX_DIMENSION = 4096
@@ -54,6 +60,20 @@ class VideoIngestResult:
     provenance: dict[str, Any]
     source_hashes: Mapping[str, str]
     force: bool
+    additional_outputs: tuple[tuple[Path, bytes], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class FrameSignature:
+    """Small deterministic pose descriptor used for adaptive video sampling."""
+
+    rgb: bytes
+    mask: bytes
+    foreground_ratio: float
+    center_x: float
+    center_y: float
+    sharpness: float
+    source_edge_foreground_ratio: float
 
 
 def _digest(content: bytes) -> str:
@@ -102,6 +122,20 @@ def _validate_job(job: Mapping[str, Any]) -> None:
         raise VideoAnimationError(f"invalid Grok video job: {rendered}")
 
 
+def _validate_video_source_report(report: Mapping[str, Any]) -> None:
+    schema = json.loads(_VIDEO_SOURCE_SCHEMA.read_text(encoding="utf-8"))
+    errors = sorted(
+        Draft202012Validator(schema).iter_errors(report),
+        key=lambda error: list(error.absolute_path),
+    )
+    if errors:
+        rendered = "; ".join(
+            f"{'.'.join(str(part) for part in error.absolute_path) or '<root>'}: {error.message}"
+            for error in errors
+        )
+        raise VideoAnimationError(f"invalid video source report: {rendered}")
+
+
 def _safe_slug(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
     return slug[:48] or "sprite"
@@ -147,6 +181,15 @@ def _video_motion_lock(entry: Mapping[str, Any]) -> str:
             "sway, or root travel. Only the waving shoulder, arm, wrist, and hand may perform the "
             "gesture; keep torso and head motion minimal."
         )
+    if "front-fps-creature-locomotion" in workflows:
+        return (
+            " Preserve the full-frontal FPS view, fixed ground line, apparent scale, body center, "
+            "and camera for one complete in-place movement cycle. Use two clearly different and "
+            "opposite active poses driven by the creature's declared anatomy: limbs, wings, tail, "
+            "or lower body may change pose as appropriate, but never replace that motion with a "
+            "generic biped mirror, whole-body side sway, three-quarter turn, top-down tilt, or "
+            "body scaling. Return through the exact supplied idle anchor between active poses."
+        )
     if "sideview-locomotion" in workflows:
         return (
             " Preserve the side-view ground line and animate one complete in-place locomotion "
@@ -161,11 +204,32 @@ def _video_motion_lock(entry: Mapping[str, Any]) -> str:
     return ""
 
 
-def _video_identity_lock() -> str:
+def _video_identity_lock(request: Mapping[str, Any]) -> str:
+    creature_motion = request.get("creature_motion")
+    preserve: list[str] = []
+    reject: list[str] = []
+    if isinstance(creature_motion, Mapping):
+        preserve = [str(value).strip() for value in creature_motion.get("preserve", []) if str(value).strip()]
+        reject = [str(value).strip() for value in creature_motion.get("reject", []) if str(value).strip()]
+    combined_reject = " ".join(reject).lower()
+    if any(term in combined_reject for term in ("invented mouth", "turning the core into a face", "invented face")):
+        face_lock = (
+            "Keep the head exactly faceless as supplied: do not create eyes, a mouth, teeth, "
+            "a nose, or any facial opening, glow, or expression."
+        )
+    else:
+        face_lock = (
+            "Keep facial topology and markings identical to the first frame for the entire video: "
+            "same eyes and eye colors, eyebrows, nose, mouth shape, teeth, and surface marks; do not "
+            "add blush, cheek dots, new markings, or substitute a different expression design."
+        )
+    contract = ""
+    if preserve:
+        contract += " Preserve exactly: " + "; ".join(preserve) + "."
+    if reject:
+        contract += " Never produce: " + "; ".join(reject) + "."
     return (
-        "Keep facial topology and markings identical to the first frame for the entire video: "
-        "same eyes and eye colors, eyebrows, nose, mouth shape, teeth, and surface marks; do not "
-        "add blush, cheek dots, new markings, or substitute a different expression design."
+        face_lock + contract
     )
 
 
@@ -239,7 +303,7 @@ def prepare_video_job(
     background_hex = str(background["hex"])
     loop_text = "that returns naturally to the starting pose" if entry.get("loop", True) else "with a clean final settle"
     motion_lock = _video_motion_lock(entry)
-    identity_lock = _video_identity_lock()
+    identity_lock = _video_identity_lock(request)
     prompt_text = (
         f"Animate this exact full-body first frame as one continuous {duration_seconds}-second {action}, {loop_text}; use a locked camera, fixed framing and scale, stable character identity, and clear readable motion with no cuts, zooms, pans, text, extra objects, detached effects, motion blur, or cast shadows. "
         f"{motion_lock} {identity_lock} "
@@ -373,6 +437,394 @@ def reviewed_sample_indices(
     return list(indices)
 
 
+def uniform_fallback_metrics(
+    total_frames: int,
+    indices: list[int],
+) -> dict[str, Any]:
+    candidates = [list(indices)]
+    for slot in range(1, len(indices)):
+        for delta in (-1, 1):
+            changed = list(indices)
+            changed[slot] += delta
+            if (
+                0 <= changed[slot] < total_frames
+                and changed == sorted(set(changed))
+                and changed not in candidates
+            ):
+                candidates.append(changed)
+            if len(candidates) == 8:
+                break
+        if len(candidates) == 8:
+            break
+    return {
+        "method": "uniform-fallback",
+        "reason": "the video has too few decoded frames for full adaptive analysis",
+        "candidate_sets": [
+            {
+                "rank": rank,
+                "indices": candidate,
+                "score": round(1.0 - (rank - 1) * 0.01, 6),
+                "timestamps_ratio": [
+                    round(index / total_frames, 6) for index in candidate
+                ],
+            }
+            for rank, candidate in enumerate(candidates, start=1)
+        ],
+    }
+
+
+def _frame_signature(image: Image.Image, sample_size: int = 64) -> FrameSignature:
+    sampled = image.convert("RGB").resize(
+        (sample_size, sample_size), Image.Resampling.BILINEAR
+    )
+    pixels = list(sampled.get_flattened_data())
+    corners = (
+        pixels[0],
+        pixels[sample_size - 1],
+        pixels[-sample_size],
+        pixels[-1],
+    )
+    background = tuple(sum(pixel[channel] for pixel in corners) / 4.0 for channel in range(3))
+    mask_values = bytearray(sample_size * sample_size)
+    xs: list[int] = []
+    ys: list[int] = []
+    luma = bytearray(sample_size * sample_size)
+    for index, pixel in enumerate(pixels):
+        distance = sum(abs(pixel[channel] - background[channel]) for channel in range(3))
+        foreground = distance >= 36
+        mask_values[index] = 255 if foreground else 0
+        if foreground:
+            xs.append(index % sample_size)
+            ys.append(index // sample_size)
+        luma[index] = round(0.299 * pixel[0] + 0.587 * pixel[1] + 0.114 * pixel[2])
+    if xs:
+        center_x = sum(xs) / len(xs) / max(1, sample_size - 1)
+        center_y = sum(ys) / len(ys) / max(1, sample_size - 1)
+    else:
+        center_x = center_y = 0.5
+    edge_total = 0
+    edge_count = 0
+    for y in range(sample_size - 1):
+        for x in range(sample_size - 1):
+            index = y * sample_size + x
+            if mask_values[index]:
+                edge_total += abs(luma[index] - luma[index + 1])
+                edge_total += abs(luma[index] - luma[index + sample_size])
+                edge_count += 2
+    source_edge_values = [
+        mask_values[x]
+        for x in range(sample_size)
+    ] + [
+        mask_values[(sample_size - 1) * sample_size + x]
+        for x in range(sample_size)
+    ] + [
+        mask_values[y * sample_size]
+        for y in range(1, sample_size - 1)
+    ] + [
+        mask_values[y * sample_size + sample_size - 1]
+        for y in range(1, sample_size - 1)
+    ]
+    return FrameSignature(
+        rgb=sampled.tobytes(),
+        mask=bytes(mask_values),
+        foreground_ratio=len(xs) / (sample_size * sample_size),
+        center_x=center_x,
+        center_y=center_y,
+        sharpness=(edge_total / edge_count / 255.0) if edge_count else 0.0,
+        source_edge_foreground_ratio=(
+            sum(1 for value in source_edge_values if value) / len(source_edge_values)
+            if source_edge_values
+            else 0.0
+        ),
+    )
+
+
+def _signature_distance(left: FrameSignature, right: FrameSignature) -> float:
+    union = 0
+    changed = 0
+    for left_value, right_value in zip(left.mask, right.mask):
+        if left_value or right_value:
+            union += 1
+            if bool(left_value) != bool(right_value):
+                changed += 1
+    silhouette = changed / union if union else 0.0
+    rgb_difference = sum(abs(a - b) for a, b in zip(left.rgb, right.rgb))
+    rgb_difference /= max(1, len(left.rgb) * 255)
+    return 0.72 * silhouette + 0.28 * rgb_difference
+
+
+def adaptive_sample_indices(
+    signatures: list[FrameSignature],
+    requested_frames: int,
+    *,
+    sampling_mode: str = "cyclic-half-open",
+) -> tuple[list[int], dict[str, Any]]:
+    """Rank chronological pose sequences from visual evidence, not fixed time."""
+    total_frames = len(signatures)
+    minimum_frames = max(8, requested_frames * 3)
+    if total_frames < minimum_frames:
+        raise VideoAnimationError(
+            f"adaptive video sampling requires at least {minimum_frames} decoded frames"
+        )
+    anchor = signatures[0]
+    anchor_distances = [_signature_distance(anchor, signature) for signature in signatures]
+    max_sharpness = max((signature.sharpness for signature in signatures), default=1.0) or 1.0
+
+    def stability(index: int) -> float:
+        signature = signatures[index]
+        area_drift = abs(signature.foreground_ratio - anchor.foreground_ratio)
+        center_drift = abs(signature.center_x - anchor.center_x) + abs(signature.center_y - anchor.center_y)
+        blur_penalty = max(0.0, 0.65 - signature.sharpness / max_sharpness)
+        return max(0.0, 1.0 - 1.4 * area_drift - 0.8 * center_drift - 0.35 * blur_penalty)
+
+    def source_edge_contact(index: int) -> bool:
+        return signatures[index].source_edge_foreground_ratio > 0.0
+
+    def source_edge_penalty(index: int) -> float:
+        # A visually interesting pose is unusable when the source video already
+        # clips it. Keep such frames visible in the editor, but rank every safe
+        # alternative above them.
+        return 2.0 if source_edge_contact(index) else 0.0
+
+    source_edge_contact_frames = [
+        index for index in range(total_frames) if source_edge_contact(index)
+    ]
+
+    if requested_frames != 4:
+        candidate_sets: list[tuple[float, list[int]]] = []
+        span = total_frames if sampling_mode == "cyclic-half-open" else total_frames - 1
+        window = max(2, total_frames // max(4, requested_frames * 2))
+        variants = (
+            (-0.30, 0.52, 0.30),
+            (-0.20, 0.46, 0.36),
+            (-0.10, 0.40, 0.42),
+            (0.00, 0.34, 0.48),
+            (0.10, 0.30, 0.52),
+            (0.20, 0.42, 0.40),
+            (0.30, 0.50, 0.32),
+            (0.00, 0.60, 0.24),
+        )
+        for shift, novelty_weight, anchor_weight in variants:
+            selected = [0]
+            total_score = 0.0
+            for slot in range(1, requested_frames):
+                target = slot * span / (
+                    requested_frames
+                    if sampling_mode == "cyclic-half-open"
+                    else requested_frames - 1
+                )
+                target += shift * window
+                lower = max(selected[-1] + 1, round(target - window))
+                upper = min(total_frames - 1, round(target + window))
+                remaining = requested_frames - slot - 1
+                upper = min(upper, total_frames - 1 - remaining)
+                if lower > upper:
+                    break
+                prior = selected[-1]
+
+                def score(index: int) -> float:
+                    novelty = _signature_distance(signatures[prior], signatures[index])
+                    timing = 1.0 - min(1.0, abs(index - target) / max(1, window))
+                    return (
+                        novelty_weight * novelty
+                        + anchor_weight * anchor_distances[index]
+                        + 0.12 * stability(index)
+                        + 0.08 * timing
+                        - source_edge_penalty(index)
+                    )
+
+                chosen = max(range(lower, upper + 1), key=score)
+                selected.append(chosen)
+                total_score += score(chosen)
+            if len(selected) == requested_frames:
+                candidate_sets.append((total_score, selected))
+        unique: list[tuple[float, list[int]]] = []
+        seen: set[tuple[int, ...]] = set()
+        for score, candidate in sorted(candidate_sets, reverse=True):
+            key = tuple(candidate)
+            if key not in seen:
+                seen.add(key)
+                unique.append((score, candidate))
+        if not unique:
+            raise VideoAnimationError("video has no valid adaptive pose candidates")
+        indices = unique[0][1]
+        return indices, {
+            "method": "adaptive-sequence-v1",
+            "anchor_distance": [round(anchor_distances[index], 6) for index in indices],
+            "foreground_ratio": [
+                round(signatures[index].foreground_ratio, 6) for index in indices
+            ],
+            "center": [
+                [round(signatures[index].center_x, 6), round(signatures[index].center_y, 6)]
+                for index in indices
+            ],
+            "sharpness": [round(signatures[index].sharpness, 6) for index in indices],
+            "source_edge_foreground_ratio": [
+                round(signatures[index].source_edge_foreground_ratio, 6)
+                for index in indices
+            ],
+            "source_edge_contact_frames": source_edge_contact_frames,
+            "candidate_sets": [
+                {
+                    "rank": rank,
+                    "indices": candidate,
+                    "score": round(score, 6),
+                    "timestamps_ratio": [
+                        round(index / total_frames, 6) for index in candidate
+                    ],
+                    "source_edge_contact_frames": [
+                        index for index in candidate if source_edge_contact(index)
+                    ],
+                }
+                for rank, (score, candidate) in enumerate(unique[:8], start=1)
+            ],
+        }
+
+    margin = max(2, total_frames // 24)
+    midpoint = total_frames // 2
+    minimum_gap = max(2, total_frames // 12)
+    separation = max(2, total_frames // 18)
+
+    def ranked_distinct(candidates: range, score: Any, count: int) -> list[int]:
+        ranked = sorted(candidates, key=score, reverse=True)
+        chosen: list[int] = []
+        for index in ranked:
+            if all(abs(index - prior) >= separation for prior in chosen):
+                chosen.append(index)
+                if len(chosen) == count:
+                    break
+        return chosen
+
+    first_candidates = range(margin, max(margin + 1, midpoint - margin))
+    phase_as = ranked_distinct(
+        first_candidates,
+        lambda index: (
+            anchor_distances[index] * (0.75 + 0.25 * stability(index))
+            - source_edge_penalty(index)
+        ),
+        4,
+    )
+    candidate_sets: list[tuple[float, list[int]]] = []
+    for phase_a in phase_as:
+        recovery_start = phase_a + minimum_gap
+        recovery_end = min(total_frames - margin - minimum_gap, (3 * total_frames) // 4)
+        if recovery_end <= recovery_start:
+            continue
+        recoveries = ranked_distinct(
+            range(recovery_start, recovery_end + 1),
+            lambda index: (
+                -source_edge_penalty(index)
+                - anchor_distances[index]
+                - 0.08 * abs(index - midpoint) / total_frames
+                + 0.1 * stability(index)
+            ),
+            4,
+        )
+        for recovery in recoveries:
+            final_candidates = range(recovery + minimum_gap, total_frames - margin)
+            phase_bs = ranked_distinct(
+                final_candidates,
+                lambda index: (
+                    0.48 * anchor_distances[index]
+                    + 0.52 * _signature_distance(signatures[phase_a], signatures[index])
+                )
+                * (0.75 + 0.25 * stability(index))
+                - source_edge_penalty(index),
+                4,
+            )
+            for phase_b in phase_bs:
+                phase_difference = _signature_distance(
+                    signatures[phase_a], signatures[phase_b]
+                )
+                score = (
+                    anchor_distances[phase_a]
+                    + anchor_distances[phase_b]
+                    + 1.4 * phase_difference
+                    + 0.25 * (stability(phase_a) + stability(phase_b))
+                    - 0.4 * anchor_distances[recovery]
+                    - source_edge_penalty(phase_a)
+                    - source_edge_penalty(recovery)
+                    - source_edge_penalty(phase_b)
+                )
+                candidate_sets.append((score, [0, phase_a, recovery, phase_b]))
+    if not candidate_sets:
+        raise VideoAnimationError("video has no valid adaptive pose candidates")
+    unique_candidates: list[tuple[float, list[int]]] = []
+    seen: set[tuple[int, ...]] = set()
+    for score, candidate in sorted(candidate_sets, reverse=True):
+        key = tuple(candidate)
+        if key not in seen:
+            seen.add(key)
+            unique_candidates.append((score, candidate))
+        if len(unique_candidates) == 8:
+            break
+    indices = unique_candidates[0][1]
+    phase_a, recovery, phase_b = indices[1:]
+    metrics = {
+        "method": "adaptive-pose-v1",
+        "anchor_distance": [round(anchor_distances[index], 6) for index in indices],
+        "phase_a_to_phase_b_distance": round(
+            _signature_distance(signatures[phase_a], signatures[phase_b]), 6
+        ),
+        "candidate_sets": [
+            {
+                "rank": rank,
+                "indices": candidate,
+                "score": round(score, 6),
+                "timestamps_ratio": [round(index / total_frames, 6) for index in candidate],
+                "source_edge_contact_frames": [
+                    index for index in candidate if source_edge_contact(index)
+                ],
+            }
+            for rank, (score, candidate) in enumerate(unique_candidates, start=1)
+        ],
+        "foreground_ratio": [
+            round(signatures[index].foreground_ratio, 6) for index in indices
+        ],
+        "center": [
+            [round(signatures[index].center_x, 6), round(signatures[index].center_y, 6)]
+            for index in indices
+        ],
+        "sharpness": [round(signatures[index].sharpness, 6) for index in indices],
+        "source_edge_foreground_ratio": [
+            round(signatures[index].source_edge_foreground_ratio, 6)
+            for index in indices
+        ],
+        "source_edge_contact_frames": source_edge_contact_frames,
+    }
+    return indices, metrics
+
+
+def _decode_signatures(
+    decoder: Any,
+    video_path: Path,
+    expected_size: tuple[int, int],
+    expected_total: int,
+) -> list[FrameSignature]:
+    reader = decoder.read_frames(str(video_path), pix_fmt="rgb24")
+    signatures: list[FrameSignature] = []
+    try:
+        try:
+            metadata = next(reader)
+        except StopIteration as exc:
+            raise VideoAnimationError("video decoder returned no metadata during adaptive analysis") from exc
+        size, _fps, _duration = _reader_metadata(metadata)
+        if size != expected_size:
+            raise VideoAnimationError("video decoder dimensions changed during adaptive analysis")
+        expected_bytes = size[0] * size[1] * 3
+        for payload in reader:
+            if not isinstance(payload, (bytes, bytearray)) or len(payload) != expected_bytes:
+                raise VideoAnimationError("video decoder returned a malformed RGB frame during adaptive analysis")
+            signatures.append(_frame_signature(Image.frombytes("RGB", size, bytes(payload))))
+    finally:
+        close = getattr(reader, "close", None)
+        if callable(close):
+            close()
+    if len(signatures) != expected_total:
+        raise VideoAnimationError("video decoder frame count changed during adaptive analysis")
+    return signatures
+
+
 def _reader_metadata(metadata: Any) -> tuple[tuple[int, int], float, float | None]:
     if not isinstance(metadata, Mapping):
         raise VideoAnimationError("video decoder returned invalid metadata")
@@ -487,6 +939,26 @@ def _compose_grid(frames: list[Image.Image], columns: int, rows: int) -> bytes:
     return buffer.getvalue()
 
 
+def _exact_idle_slots_for_state(
+    request: Mapping[str, Any], state: str, requested_frames: int
+) -> list[int]:
+    slots = [0]
+    creature_motion = request.get("creature_motion")
+    if (
+        requested_frames != 4
+        or not isinstance(creature_motion, Mapping)
+        or creature_motion.get("shared_idle") is not True
+    ):
+        return slots
+    state_config = request.get("states", {}).get(state, {})
+    workflows = state_config.get("animation_workflows", []) if isinstance(state_config, Mapping) else []
+    is_attack = "attack" in state.lower() or any(
+        "attack" in str(workflow).lower() for workflow in workflows
+    )
+    slots.append(requested_frames - 1 if is_attack else 2)
+    return slots
+
+
 def _merged_provenance(
     run_dir: Path,
     request: Mapping[str, Any],
@@ -496,6 +968,10 @@ def _merged_provenance(
     report_path: Path,
     prior: Mapping[str, Any] | None,
     force: bool,
+    source_type: str = "grok-imagine-video",
+    art_engine: str = "grok-imagine",
+    notes: str = "accepted through completed $grok-imagine video-from-image invocation and deterministic frame sampling",
+    license_name: str = "xAI-provider-terms",
 ) -> dict[str, Any]:
     accepted: list[dict[str, Any]] = []
     if prior is not None:
@@ -513,8 +989,8 @@ def _merged_provenance(
             "sha256": _digest(raw_bytes),
             "size_bytes": len(raw_bytes),
             "states": [state],
-            "source_type": "grok-imagine-video",
-            "art_engine": "grok-imagine",
+            "source_type": source_type,
+            "art_engine": art_engine,
             "upstream_report": report_path.relative_to(run_dir).as_posix(),
         }
     )
@@ -548,8 +1024,8 @@ def _merged_provenance(
         "verification_status": "verified",
         "accepted_sources": accepted,
         "state_coverage": coverage,
-        "notes": "accepted through completed $grok-imagine video-from-image invocation and deterministic frame sampling",
-        "license": "mixed-provider-terms" if mixed else "xAI-provider-terms",
+        "notes": notes,
+        "license": "mixed-provider-terms" if mixed else license_name,
     }
     return normalize_contract(provenance, expected_kind="source-provenance").to_dict()
 
@@ -577,6 +1053,7 @@ def ingest_video(
     force: bool = False,
     decoder: Any | None = None,
     sample_indices: list[int] | None = None,
+    sampling_strategy: str = "adaptive",
 ) -> VideoIngestResult:
     run_root = Path(run_dir).expanduser().resolve()
     if not run_root.is_dir():
@@ -689,11 +1166,37 @@ def ingest_video(
             ) from exc
     decoded_size, fps, duration, total_frames = _inspect_decoded_video(decoder, video_path)
     sampling_mode = str(job.get("sampling_mode") or _video_sampling_mode(state, request["states"][state]))
-    if sample_indices is None:
+    selection_metrics: dict[str, Any] | None = None
+    if (
+        sample_indices is None
+        and sampling_strategy == "adaptive"
+        and total_frames >= max(8, int(job["requested_frames"]) * 3)
+    ):
+        signatures = _decode_signatures(
+            decoder, video_path, decoded_size, total_frames
+        )
+        indices, selection_metrics = adaptive_sample_indices(
+            signatures,
+            int(job["requested_frames"]),
+            sampling_mode=sampling_mode,
+        )
+        sampling_mode = "adaptive-visual"
+    elif sample_indices is None and sampling_strategy == "adaptive":
         indices = uniform_sample_indices(
             total_frames,
             int(job["requested_frames"]),
             sampling_mode=sampling_mode,
+        )
+        selection_metrics = uniform_fallback_metrics(total_frames, indices)
+    elif sample_indices is None and sampling_strategy == "uniform":
+        indices = uniform_sample_indices(
+            total_frames,
+            int(job["requested_frames"]),
+            sampling_mode=sampling_mode,
+        )
+    elif sample_indices is None:
+        raise VideoAnimationError(
+            f"unsupported video sampling strategy: {sampling_strategy!r}"
         )
     else:
         indices = reviewed_sample_indices(
@@ -701,6 +1204,17 @@ def ingest_video(
             int(job["requested_frames"]),
             sample_indices,
         )
+        if sampling_strategy == "adaptive" and total_frames >= max(
+            8, int(job["requested_frames"]) * 3
+        ):
+            signatures = _decode_signatures(
+                decoder, video_path, decoded_size, total_frames
+            )
+            _automatic_indices, selection_metrics = adaptive_sample_indices(
+                signatures,
+                int(job["requested_frames"]),
+                sampling_mode=sampling_mode,
+            )
         sampling_mode = "reviewed-explicit"
     selected = _decode_selected(decoder, video_path, indices, decoded_size, total_frames)
     with Image.open(first_frame_path) as opened:
@@ -710,6 +1224,11 @@ def ingest_video(
         raise VideoAnimationError("exact first-frame dimensions changed after job preparation")
     frames = [_normalized_frame(selected[index], exact_first.size) for index in indices]
     frames[0] = exact_first.copy()
+    shared_idle_slots = _exact_idle_slots_for_state(
+        request, state, int(job["requested_frames"])
+    )
+    for idle_slot in shared_idle_slots:
+        frames[idle_slot] = exact_first.copy()
     raw_layout = request["states"][state].get("raw_layout")
     if not isinstance(raw_layout, Mapping):
         raise VideoAnimationError(f"state {state!r} has no raw_layout")
@@ -760,8 +1279,12 @@ def ingest_video(
         "sampled_video_indices": indices,
         "sampling_mode": sampling_mode,
         "selection_reviewed": sample_indices is not None,
+        "selection_metrics": selection_metrics,
         "sampled_timestamps_seconds": [round(index / fps, 6) for index in indices],
         "exact_first_frame_preserved": True,
+        "exact_idle_slots": shared_idle_slots,
+        "independent_frame_background_removal": True,
+        "selector_required": True,
         "output": output_record,
     }
     provenance = _merged_provenance(
@@ -794,6 +1317,260 @@ def ingest_video(
         source_hashes=source_hashes,
         force=force,
     )
+
+
+def ingest_imported_video(
+    *,
+    run_dir: Path,
+    state: str,
+    video_path: Path,
+    first_frame_path: Path | None = None,
+    force: bool = False,
+    decoder: Any | None = None,
+    sample_indices: list[int] | None = None,
+    sampling_strategy: str = "adaptive",
+    license_name: str = "caller-provided-source-terms",
+) -> VideoIngestResult:
+    """Ingest a caller-provided video through the provider-neutral video lane."""
+
+    run_root = Path(run_dir).expanduser().resolve()
+    if not run_root.is_dir():
+        raise VideoAnimationError(f"run directory does not exist: {run_root}")
+    source_video = Path(video_path).expanduser().resolve()
+    if source_video.suffix.lower() not in _VIDEO_EXTENSIONS:
+        raise VideoAnimationError("video must be MP4, WebM, MOV, or M4V")
+    if not source_video.is_file() or source_video.stat().st_size < 1:
+        raise VideoAnimationError(f"video does not exist or is empty: {source_video}")
+    video_bytes = source_video.read_bytes()
+    source_video_hash = _digest(video_bytes)
+
+    request_path = run_root / "sprite-request.json"
+    request = load_sprite_request(request_path).data
+    if state not in request["states"]:
+        raise VideoAnimationError(f"sprite request has no state {state!r}")
+    entry = request["states"][state]
+    requested_frames = int(entry["frames"])
+    raw_layout = entry.get("raw_layout")
+    if not isinstance(raw_layout, Mapping):
+        raise VideoAnimationError(f"state {state!r} has no raw_layout")
+    request_record = _file_record(request_path, relative_to=run_root)
+
+    source_dir = resolve_run_path(run_root, f"provider/video/{state}")
+    copied_video_path = source_dir / f"source{source_video.suffix.lower()}"
+    report_path = source_dir / "video-source.json"
+    raw_path = resolve_run_path(run_root, f"raw/{state}.png")
+    provenance_path = run_root / "source-provenance.json"
+    first_copy_path: Path | None = None
+    first_bytes: bytes | None = None
+    exact_first: Image.Image | None = None
+    if first_frame_path is not None:
+        supplied_first = Path(first_frame_path).expanduser().resolve()
+        if supplied_first.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}:
+            raise VideoAnimationError("first frame must be PNG, JPEG, or WebP")
+        if not supplied_first.is_file():
+            raise VideoAnimationError(f"first frame does not exist: {supplied_first}")
+        first_bytes = supplied_first.read_bytes()
+        try:
+            with Image.open(BytesIO(first_bytes)) as opened:
+                opened.load()
+                exact_first = opened.convert("RGBA")
+        except (OSError, ValueError) as exc:
+            raise VideoAnimationError("first frame is not a decodable image") from exc
+        first_copy_path = source_dir / f"first-frame{supplied_first.suffix.lower()}"
+
+    collisions = [path for path in (copied_video_path, report_path, raw_path) if path.exists()]
+    if first_copy_path is not None and first_copy_path.exists():
+        collisions.append(first_copy_path)
+    if collisions and not force:
+        raise VideoAnimationError(
+            "imported video outputs already exist; pass --force to replace known outputs"
+        )
+    if decoder is None:
+        try:
+            import imageio_ffmpeg as decoder  # type: ignore[no-redef]
+        except ImportError as exc:
+            raise VideoAnimationError(
+                "video ingestion requires imageio-ffmpeg; install scripts/requirements-video.txt"
+            ) from exc
+    decoded_size, fps, duration, total_frames = _inspect_decoded_video(decoder, source_video)
+    sampling_mode = _video_sampling_mode(state, entry)
+    selection_metrics: dict[str, Any] | None = None
+    if (
+        sample_indices is None
+        and sampling_strategy == "adaptive"
+        and total_frames >= max(8, requested_frames * 3)
+    ):
+        signatures = _decode_signatures(decoder, source_video, decoded_size, total_frames)
+        indices, selection_metrics = adaptive_sample_indices(
+            signatures,
+            requested_frames,
+            sampling_mode=sampling_mode,
+        )
+        effective_sampling_mode = "adaptive-visual"
+    elif sample_indices is None and sampling_strategy in {"adaptive", "uniform"}:
+        indices = uniform_sample_indices(
+            total_frames,
+            requested_frames,
+            sampling_mode=sampling_mode,
+        )
+        effective_sampling_mode = sampling_mode
+        if sampling_strategy == "adaptive":
+            selection_metrics = uniform_fallback_metrics(total_frames, indices)
+    elif sample_indices is None:
+        raise VideoAnimationError(
+            f"unsupported video sampling strategy: {sampling_strategy!r}"
+        )
+    else:
+        indices = reviewed_sample_indices(total_frames, requested_frames, sample_indices)
+        if sampling_strategy == "adaptive" and total_frames >= max(
+            8, requested_frames * 3
+        ):
+            signatures = _decode_signatures(
+                decoder, source_video, decoded_size, total_frames
+            )
+            _automatic_indices, selection_metrics = adaptive_sample_indices(
+                signatures,
+                requested_frames,
+                sampling_mode=sampling_mode,
+            )
+        effective_sampling_mode = "reviewed-explicit"
+    selected = _decode_selected(decoder, source_video, indices, decoded_size, total_frames)
+    if exact_first is None:
+        exact_first = selected[0].copy()
+    target_size = exact_first.size
+    frames = [_normalized_frame(selected[index], target_size) for index in indices]
+    exact_first_preserved = first_bytes is not None
+    if exact_first_preserved:
+        frames[0] = exact_first.copy()
+    exact_idle_slots = _exact_idle_slots_for_state(request, state, requested_frames)
+    for idle_slot in exact_idle_slots:
+        frames[idle_slot] = exact_first.copy()
+    raw_bytes = _compose_grid(
+        frames,
+        int(raw_layout["columns"]),
+        int(raw_layout["rows"]),
+    )
+    prior_provenance, prior_provenance_hash = _prior_provenance_snapshot(
+        provenance_path
+    )
+    output_record = {
+        "path": raw_path.relative_to(run_root).as_posix(),
+        "sha256": _digest(raw_bytes),
+        "size_bytes": len(raw_bytes),
+        "width": target_size[0] * int(raw_layout["columns"]),
+        "height": target_size[1] * int(raw_layout["rows"]),
+    }
+    copied_video_record = {
+        "path": copied_video_path.relative_to(run_root).as_posix(),
+        "sha256": source_video_hash,
+        "size_bytes": len(video_bytes),
+    }
+    first_record = None
+    if first_copy_path is not None and first_bytes is not None:
+        first_record = {
+            "path": first_copy_path.relative_to(run_root).as_posix(),
+            "sha256": _digest(first_bytes),
+            "size_bytes": len(first_bytes),
+            "width": target_size[0],
+            "height": target_size[1],
+        }
+    report = {
+        "version": 1,
+        "kind": "sprite-video-source",
+        "status": "pass",
+        "origin": "imported",
+        "state": state,
+        "sprite_request": request_record,
+        "video": copied_video_record,
+        "first_frame": first_record,
+        "decoder": {
+            "name": "imageio-ffmpeg",
+            "version": str(getattr(decoder, "__version__", "unknown")),
+        },
+        "decoded": {
+            "width": decoded_size[0],
+            "height": decoded_size[1],
+            "fps": fps,
+            "duration_seconds": duration,
+            "frame_count": total_frames,
+        },
+        "sampled_video_indices": indices,
+        "sampling_mode": effective_sampling_mode,
+        "selection_reviewed": sample_indices is not None,
+        "selection_metrics": selection_metrics,
+        "sampled_timestamps_seconds": [round(index / fps, 6) for index in indices],
+        "exact_first_frame_preserved": exact_first_preserved,
+        "exact_idle_slots": exact_idle_slots,
+        "independent_frame_background_removal": True,
+        "selector_required": True,
+        "output": output_record,
+    }
+    _validate_video_source_report(report)
+    provenance = _merged_provenance(
+        run_root,
+        request,
+        state=state,
+        raw_bytes=raw_bytes,
+        report_path=report_path,
+        prior=prior_provenance,
+        force=force,
+        source_type="imported",
+        art_engine="imported",
+        notes="accepted from a caller-provided video and deterministic visual frame selection",
+        license_name=license_name,
+    )
+    outputs: list[tuple[Path, bytes]] = [(copied_video_path, video_bytes)]
+    if first_copy_path is not None and first_bytes is not None:
+        outputs.append((first_copy_path, first_bytes))
+    return VideoIngestResult(
+        run_dir=run_root,
+        raw_path=raw_path,
+        report_path=report_path,
+        provenance_path=provenance_path,
+        raw_bytes=raw_bytes,
+        report=report,
+        provenance=provenance,
+        source_hashes={
+            "sprite_request": request_record["sha256"],
+            "input_video": source_video_hash,
+            "input_first_frame": _digest(first_bytes) if first_bytes is not None else "<absent>",
+            "prior_provenance": prior_provenance_hash,
+            "input_video_path": str(source_video),
+            "input_first_frame_path": str(Path(first_frame_path).expanduser().resolve())
+            if first_frame_path is not None
+            else "<absent>",
+        },
+        force=force,
+        additional_outputs=tuple(outputs),
+    )
+
+
+def revalidate_imported_video_sources(result: VideoIngestResult) -> None:
+    source_video_path = Path(result.source_hashes["input_video_path"])
+    first_path_value = str(result.source_hashes["input_first_frame_path"])
+    current = {
+        "sprite_request": _digest((result.run_dir / "sprite-request.json").read_bytes()),
+        "input_video": _digest(source_video_path.read_bytes()),
+        "input_first_frame": (
+            _digest(Path(first_path_value).read_bytes())
+            if first_path_value != "<absent>"
+            else "<absent>"
+        ),
+        "prior_provenance": (
+            _digest(result.provenance_path.read_bytes())
+            if result.provenance_path.is_file()
+            else "<absent>"
+        ),
+        "input_video_path": str(source_video_path),
+        "input_first_frame_path": first_path_value,
+    }
+    if current != dict(result.source_hashes):
+        raise VideoAnimationError("imported video sources changed before commit")
+    if not result.force and any(
+        path.exists()
+        for path in (result.raw_path, result.report_path, *(path for path, _ in result.additional_outputs))
+    ):
+        raise VideoAnimationError("imported video outputs appeared before commit")
 
 
 def revalidate_video_sources(result: VideoIngestResult) -> None:
@@ -839,9 +1616,12 @@ __all__ = [
     "PreparedVideoJob",
     "VideoAnimationError",
     "VideoIngestResult",
+    "adaptive_sample_indices",
+    "ingest_imported_video",
     "ingest_video",
     "prepare_video_job",
     "revalidate_prepared_sources",
+    "revalidate_imported_video_sources",
     "revalidate_video_sources",
     "reviewed_sample_indices",
     "uniform_sample_indices",

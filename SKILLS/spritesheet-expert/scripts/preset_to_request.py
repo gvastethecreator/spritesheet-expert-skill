@@ -14,9 +14,21 @@ from spritecore.contracts import ContractError, normalize_contract
 
 LOOP_HINTS = ("idle", "walk", "run", "running", "move", "blink", "talk", "sleep", "thinking")
 FRAME_BUDGETS = ("default", "compact", "micro")
-BACKGROUND_REMOVAL_METHODS = ("none", "chroma", "matte", "rembg", "ben2", "auto")
+BACKGROUND_REMOVAL_METHODS = (
+    "none",
+    "chroma",
+    "matte",
+    "rembg",
+    "ben2",
+    "lucida",
+    "auto",
+)
 DEFAULT_REMBG_MODEL = "birefnet-general"
 DEFAULT_BEN2_MODEL = "PramaLLC/BEN2"
+DEFAULT_LUCIDA_MODEL = "egeorcun/lucida"
+DEFAULT_LUCIDA_REVISION = "6ee11122534c8de59402a589d2293c198cfbf848"
+DEFAULT_LUCIDA_INPUT_SIZE = 1024
+DEFAULT_LUCIDA_HARD_ALPHA_THRESHOLD = 64
 ART_DIRECTION_MODES = ("none", "pixel-art")
 ART_DIRECTION_MODE_ALIASES: dict[str, str] = {}
 ART_PROFILE_AUTO = "auto"
@@ -264,9 +276,21 @@ def main() -> int:
     parser.add_argument("--style", default=None)
     parser.add_argument("--frame-budget", choices=FRAME_BUDGETS, default="default", help="optional sprite-only frame reduction; presets stay unchanged by default")
     parser.add_argument("--background-removal", choices=BACKGROUND_REMOVAL_METHODS, default=None)
-    parser.add_argument("--background-model", default=None, help=f"model name; rembg default {DEFAULT_REMBG_MODEL}; ben2 default {DEFAULT_BEN2_MODEL}")
+    parser.add_argument(
+        "--background-model",
+        default=None,
+        help=(
+            f"model name; lucida default {DEFAULT_LUCIDA_MODEL}; "
+            f"rembg default {DEFAULT_REMBG_MODEL}; ben2 default {DEFAULT_BEN2_MODEL}"
+        ),
+    )
+    parser.add_argument("--background-revision", default=None)
+    parser.add_argument("--background-input-size", type=int, default=None)
     parser.add_argument("--background-device", default=None, help="model-backed background removal device: auto, cpu, cuda, cuda:0, etc.")
     parser.add_argument("--alpha-matting", action="store_true")
+    parser.add_argument("--alpha-mode", choices=["soft", "hard"], default=None)
+    parser.add_argument("--hard-alpha-threshold", type=int, default=None)
+    parser.add_argument("--grid-segmentation", choices=["fixed", "adaptive"], default=None)
     parser.add_argument("--motion-phase-guides", action="store_true")
     parser.add_argument("--art-direction", choices=ART_DIRECTION_MODES, default=None)
     parser.add_argument("--art-profile", action="append", choices=sorted(ART_PROFILES), help="repeatable Pixel-art profile id; use auto for inferred profiles")
@@ -385,12 +409,38 @@ def main() -> int:
     if isinstance(preset.get("background_removal"), dict):
         request["background_removal"] = preset["background_removal"]
     if args.background_removal:
+        if args.background_removal == "ben2":
+            default_model = DEFAULT_BEN2_MODEL
+        elif args.background_removal == "lucida":
+            default_model = DEFAULT_LUCIDA_MODEL
+        else:
+            default_model = DEFAULT_REMBG_MODEL
         request["background_removal"] = {
             "method": args.background_removal,
-            "model": args.background_model or (DEFAULT_BEN2_MODEL if args.background_removal == "ben2" else DEFAULT_REMBG_MODEL),
+            "model": args.background_model or default_model,
             "device": args.background_device or "auto",
             "alpha_matting": bool(args.alpha_matting),
         }
+        if args.background_removal == "lucida":
+            alpha_mode = args.alpha_mode or (
+                "hard" if style_preset == "pixel-art" else "soft"
+            )
+            request["background_removal"].update(
+                {
+                    "revision": args.background_revision or DEFAULT_LUCIDA_REVISION,
+                    "input_size": args.background_input_size or DEFAULT_LUCIDA_INPUT_SIZE,
+                    "alpha_mode": alpha_mode,
+                    "hard_alpha_threshold": (
+                        args.hard_alpha_threshold
+                        if args.hard_alpha_threshold is not None
+                        else DEFAULT_LUCIDA_HARD_ALPHA_THRESHOLD
+                        if alpha_mode == "hard"
+                        else None
+                    ),
+                }
+            )
+    if args.grid_segmentation:
+        request["grid_segmentation"] = args.grid_segmentation
     if budget_applied:
         request["frame_budget"] = args.frame_budget
     art_direction = args.art_direction or preset.get("art_direction")

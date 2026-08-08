@@ -1,6 +1,6 @@
 ---
 name: spritesheet-expert
-description: "Build and validate spritesheets, animation rows, tilesets, textures, and atlases from imported art, Imagegen, or explicit Grok still/video. Use for neutral-background cutouts, first-frame-to-video animation, extraction, frame registration, playback/onion previews, provenance, curation, and QA."
+description: "Build and validate spritesheets, anatomy-driven animation rows, tilesets, textures, and atlases from imported art, Imagegen, Grok, or existing videos. Use for compact grids, full-video frame analysis, ranked candidate editors, Lucida cutouts, safe adaptive crops, frame registration, playback previews, provenance, curation, and QA."
 ---
 
 # Spritesheet Expert
@@ -11,8 +11,8 @@ Build sprites and game asset sheets with the component-row pipeline:
 
 ```text
 preset/custom contract -> sprite-request.json -> layout guides + row/grid prompts
--> Pixel-art direction profiles + animation workflows -> imagegen or approved Grok source media
--> neutral-background raw grids/row strips -> alpha/matte/BiRefNet/BEN2 removal + component/projection/grid extraction
+-> Pixel-art direction profiles + animation workflows -> imagegen, approved Grok, or imported video media
+-> ranked video candidates or neutral-background grids -> per-frame Lucida removal + safe adaptive extraction
 -> identity consistency + animation contract + onion-skin alignment QA
 -> curated frames -> atlas PNG + manifest.json.frame_layout -> interactive review workbench
 ```
@@ -33,13 +33,33 @@ Before final QA or packaging, run `scripts/check_generation_provenance.py --run-
 
 When `$imagegen` outputs are meant for the project, copy or move the selected generated image from the default generated-images location into the run folder before extraction. Do not leave project-referenced row art only under `$CODEX_HOME`.
 
-Requires Python with Pillow and jsonschema. From the installed skill directory run `python -m pip install -r scripts/requirements-core.txt`, then `python scripts/check_python_env.py`. Repository maintainers use the root `pyproject.toml` for the complete test gate. Install `scripts/requirements-background.txt` when `rembg`/BiRefNet removal is selected; install `scripts/requirements-video.txt` only for video ingestion. Both extras remain optional so core request preparation stays lightweight.
+Requires Python with Pillow and jsonschema. From the installed skill directory run `python -m pip install -r scripts/requirements-core.txt`, then `python scripts/check_python_env.py`. Repository maintainers use the root `pyproject.toml` for the complete test gate. Install `scripts/requirements-lucida.txt` for the preferred Lucida sprite lane, `scripts/requirements-background.txt` for rembg/BiRefNet, and `scripts/requirements-video.txt` only for video ingestion. These extras remain optional so core request preparation stays lightweight.
+
+## Provider-Neutral Video Animation
+
+Use the video lane for any animation source. The source can come from Grok, another provider, a local tool, or the user.
+
+Ingest existing videos with `scripts/ingest_video_animation.py`. Use an approved first frame when one exists.
+
+Ingestion analyzes every decoded frame. It writes several candidate cycles and builds `qa/<state>-video-frame-selector/index.html` automatically.
+
+The minimal editor is required. It includes full video playback, all frame thumbnails, candidate presets, frame slots, and a cycle preview.
+
+Re-ingest reviewed indices without provider inference. Then remove the background per selected frame, crop its alpha bounds, add transparent padding, and register the result.
+
+Fail extraction if a significant silhouette touches a source boundary. Fail QA if opaque pixels enter the final safe margin.
+
+Read `references/video-animation-workflow.md` for every video source.
 
 ## Optional Grok Imagine Provider
 
 Load and follow `$grok-imagine` when the user selects Grok still generation or the first-frame-to-video animation route. Keep provider execution outside this skill: start with the wrapper `--dry-run`, review its exact source/prompt/counts/output, and add `--ack-run` only with explicit current-task consent. Never call Grok inference from tests.
 
-For video animation, create and approve one exact first frame, then run `scripts/prepare_grok_video_animation.py`. It produces a two-sentence locked-camera prompt and a `$grok-imagine video-from-image` dry-run job. `scripts/ingest_grok_video_animation.py` accepts only the one video named by a completed, successful `invocation.json`; it checks the prompt and first-frame hashes, decodes in bounded two-pass mode, samples deterministic indices, restores the accepted first-frame pixels exactly as frame 1, and writes the normal `raw/<state>.png` grid plus provider provenance. Then run the same extraction, registration, atlas, alignment, identity, animation-contract, runtime-preview, visual-review, and aggregate gates as every other row.
+For video animation, create and approve one exact first frame. Then run `scripts/prepare_grok_video_animation.py`. It creates a locked-camera prompt and a dry-run job.
+
+`scripts/ingest_grok_video_animation.py` accepts one video from a successful invocation. It checks the prompt, first frame, media count, and hashes.
+
+After ingestion, use the provider-neutral selector and extraction path. Grok does not own frame selection, background removal, cropping, registration, or QA.
 
 Read `references/grok-video-animation.md` before this route. On Zero Data Retention teams, video generation may require a caller-owned `output.upload_url`; do not retry around that provider boundary or claim completion without copied media and a completed invocation manifest.
 
@@ -84,9 +104,15 @@ Read `references/pixel-animation-workflows.md` when generating or reviewing anim
 
 Read `references/professional-sprite-animation.md` before generating, repairing, curating, or reviewing animated character rows.
 
+Read `references/creature-animation.md` before generating or repairing non-human creatures, frontal retro-FPS enemies, compact 2x2 movement/attack grids, or anatomy-specific registration.
+
 Read `references/isometric-tilesets.md` when generating, importing, slicing, naming, or reviewing isometric terrain, props, decor, buildings, or tilesets.
 
 Read `references/grok-video-animation.md` when using Grok image generation, image-to-video, video decoding, or video-derived provenance.
+
+Read `references/video-animation-workflow.md` when importing, selecting, reselecting, cutting, or validating frames from any video source.
+
+Read `references/lucida-adaptive-workflow.md` for new Imagegen character or creature grids, black-background cutouts, soft-to-hard alpha policy, variable frame bounds, or adaptive segmentation repair.
 
 Completion criterion: atlas contract names asset kind, extraction mode, background removal, art direction profile(s), animation workflow(s), generation provenance, frame budget if any, QA path, and output manifest before final packaging.
 
@@ -96,33 +122,44 @@ Completion criterion: atlas contract names asset kind, extraction mode, backgrou
    - Read `references/atlas-reference.md` for presets, asset modes, background removal, and frame budgets.
    - Use `references/pixel-art-direction.md` to choose `auto` or explicit profiles such as `pixel-sideview`, `pixel-topdown`, `pixel-isometric`, `pixel-combat`, `pixel-texture`, `pixel-vfx`, `pixel-items-ui`, `pixel-shmup`, or `pixel-tiny`.
    - Use `references/pixel-animation-workflows.md` to confirm inferred row workflows such as `gesture-loop`, `sideview-locomotion`, `topdown-locomotion`, `combat-quick-strike`, `combat-power-strike`, `topdown-weapon-attack`, `responsive-jump`, `water-loop`, or `wind-ambient-loop`.
+   - For an animated creature, declare `creature_motion` before generation. Name its anatomy, locomotion, camera, registration anchor, shared-idle policy, movement source, and attack source.
 
 2. Prepare run folder and generation prompts.
    - Use `scripts/preset_to_request.py` and `scripts/prepare_sprite_run.py` for deterministic request/layout/art-direction setup.
    - Check `references/art-direction.json` after preparation. Wrong profiles or workflows mean fix the request before generation.
    - Static/set rows also record `production_workflows`: character pose-set identity, top-down/isometric projection, exact slot inventory, tile adjacency, or seamless material contracts. They are non-temporal and must not be routed as fake animations.
    - Animated body rows use compact raw grids by default (`raw_layout.kind: compact-grid`) and are assembled into runtime rows only after extraction/QA. Do not force imagegen to draw long raw `1xN` character strips unless the request explicitly opts into `raw_layout_policy: "legacy-strip"` for a low-risk/import compatibility run.
+   - Generate a complete compact grid for each creature state. For four-frame cycles, use one coherent 2x2 source. Use isolated full-frame regeneration only after a documented whole-grid identity failure. Never use a local patch that leaves an edit seam.
+   - New sprite component runs default to `background_removal.method: lucida` and `grid_segmentation: adaptive`. With no identity image, preparation uses a black fallback background. Pixel art uses hard alpha threshold `64`; illustrated art keeps soft alpha unless the request changes it.
    - Locomotion rows also produce `prompts/motion-references/<state>.txt`, a machine-readable contract, and a target under `references/motion-references/`. `prepare_sprite_run.py` materializes an approved template automatically when available; generation is only the cache miss path. The mannequin's fixed anatomical colors prove left/right limb continuity; they are motion evidence only and must not leak into character identity or style.
 
 3. Generate or import real row art.
    - Use `$imagegen` by default. Use `$grok-imagine` only through the explicit provider contract above. Never substitute procedural drawings, placeholder drawings, SVGs, or PIL sheets for representative art.
    - Before a locomotion row, run `scripts/check_motion_references.py --run-dir /abs/run`. A missing reference, undersized image, missing sidecar, or provenance other than `art_engine=imagegen` blocks row generation.
    - Write or preserve `source-provenance.json` with the exact provider/source type and accepted source paths before extraction. Grok video rows also require `provider/grok-imagine/<state>/video-source.json`. For existing user sheets, record imported/user-provided provenance and keep it separate from generated-art claims.
+   - For an existing video, run `ingest_video_animation.py`. Review the required candidate editor before extraction. Re-ingest selected indices without new inference.
 
 4. Extract, curate, compose, preview, and QA.
    - Follow `references/workflows.md` for exact commands for new sheets, imported sheets, atlas unpacking, curation, GIFs, and exports.
-   - For imported/generated whole sheets, do not trust a nominal grid when dimensions, gutters, or visual placement drift. Prefer a trusted manifest, explicit grid, authored boxes, or projection-grid repair when the expected rows/columns are known. Auto-detect is diagnostic by default: if `qa/segmentation-report.json` says the boxes are wrong, auto-detected, or projection-repaired, fix layout/background/source or promote reviewed boxes before registration/composition.
-   - New generation uses flat neutral gray, black, or white. `auto` preserves existing alpha, uses edge-connected matte removal only for a clean flat source, and falls back to `rembg` with `birefnet-general` for ambiguous backgrounds. Chroma is legacy-import compatibility only and must be declared as `source_family: legacy-chroma`; it is never inferred for new neutral generation. BEN2 is an explicit hard-edge comparison path. Review raw, checker, black, gray, white, and alpha panels in `qa/background-matte-review.png`; over-removal of clothing, outlines, props, interiors, or antialiasing is a hard failure.
+   - For imported/generated whole sheets, do not trust a nominal grid when dimensions, gutters, or visual placement drift. New compact sprite grids use Lucida before adaptive two-dimensional component assignment. Review `qa/<state>-adaptive-segmentation.png` and the recorded variable source boxes. Use fixed cells only for a true exact grid. Auto-detect and slot fallback remain diagnostic until reviewed.
+   - Compare the extracted baseline with the game's real runtime cell and actor pivot. When they differ, run `register_sprite_frames.py` with the explicit target and use the registered run for composition, previews, and QA. Never infer the target from the sprite image alone.
+   - New generation uses flat neutral gray, black, or white. Lucida is the preferred sprite cutout because it preserves illustration, line art, and glow. `auto` remains the compatibility path for other assets. It preserves existing alpha, uses edge-connected matte removal for a clean flat source, and falls back to `rembg` with `birefnet-general` for ambiguous backgrounds. Chroma is legacy-import compatibility only. BEN2 is an explicit comparison path. Review raw, checker, black, gray, white, and alpha panels in `qa/background-matte-review.png`; over-removal of clothing, outlines, props, interiors, or antialiasing is a hard failure.
+   - For video sources, remove the background from each selected frame. Do not send the complete grid through one model inference. Use dynamic alpha bounds and transparent crop padding.
+   - Treat source-edge contact and final safe-margin intrusion as hard failures. Registration cannot recover missing source pixels.
    - Render deterministic runtime playback for every animated state, finish the QA reports, then build or rebuild `qa/preview-workbench/index.html` with `scripts/build_preview_workbench.py --force`. Use its pause/step/scrub/speed/zoom/state controls, full frame strip, and checker/black/gray/white edge microscope for human review. Keeping this order prevents a stale self-contained workbench from omitting late evidence.
    - Use Pixel-art profile and workflow QA as a critique pass: 3x3 tile repetition, full-speed motion, locomotion contact/pass logic, attack phase readability, VFX loop math, tiny-sprite economy, projection uniformity, and palette/cluster discipline where relevant.
    - If a second provider attempt still fails exact `repeat_mode: self` edges, `repair_repeat_edges.py` may harmonize only the provider-derived edge band. Keep its original backups/hash report and rerun the all-item 3x3 preview; this is post-processing, never procedural replacement art.
    - For isometric tilesets, do not approve isolated slots only. Run `check_asset_slots.py` and `check_isometric_tiles.py`, then review pivot, 2:1 footprint, map-repeat, edge/corner, and depth-sort proof images. Runtime/prototype placement must consume `qa/isometric-runtime-metadata.json` or a reviewed catalog copied from `qa/isometric-calibrated-catalog.json`; never place isometric cells from rectangular top-lefts or stale declared pivots.
 
-Done when source provenance, transparent frames, atlas PNG, manifest, deterministic previews, the interactive workbench, QA reports, and any curation/export artifacts match the requested asset kind.
+Done when source provenance, required video selector evidence, transparent frames, atlas PNG, manifest, previews, the workbench, and QA reports match the asset kind.
 
 ## Identity And Motion Rules
 
 - Base image creates identity source.
+- Creature motion starts from the declared anatomy. Do not apply mirrored biped sway to winged, hovering, multi-legged, amorphous, serpentine, or custom bodies.
+- Compact four-frame movement uses exact idle, phase A, exact idle, phase B. Compact attack uses exact idle, anticipation, contact, exact idle.
+- Replace repeated generated idles with the accepted idle pixels before final registration and QA. Visual similarity is not pixel identity.
+- Choose registration from stable anatomy. Do not align multi-legged bodies from a changing leg tip or hovering bodies from a changing shroud edge.
 - If no base image exists, the first accepted idle/neutral frame becomes the identity source. Promote it to `references/identity-anchor.png` before generating action rows.
 - Direction-sensitive work should create accepted idle anchors before action rows.
 - Later rows should solve motion, not rediscover identity.
@@ -134,6 +171,7 @@ Done when source provenance, transparent frames, atlas PNG, manifest, determinis
 - Pose corrections require visual comparison, not only numeric checks. Open `qa/pose-scale-review.png`, `qa/<state>-contact.png`, GIFs, or the prototype viewer and compare idle/reference, transition, and final frames for readable body pose, locked character scale, baseline, silhouette, head/hand/foot size, outfit texture, and no "miniature final pose" effect.
 - For humanoid/mascot sprites, use stable-part proxy metrics as a guardrail: `head_width_vs_reference` and `upper_width_vs_reference` should stay near idle scale for jump/fall/land/crouch even when full-body bbox height changes. If these proxies shrink, the row likely scaled the whole character down instead of changing pose.
 - Run `check_identity_consistency.py` after extraction for animated character runs. It gates head width, upper-body width, and opaque-area proxy drift across all rows. Head-size wobble, upper-body shrink, or inflated/miniaturized frames are identity failures even when motion, alignment, and atlas composition pass.
+- Treat identity proxies as guardrails. If raised limbs enter a head or torso proxy band, preserve the standard failure, inspect contact/onion/runtime evidence, and document any pose-aware rerun. Never hide visible drift by widening thresholds.
 - Run the same identity gate for every multi-frame static character pose or direction set. `frame_semantics=variants` does not waive same-character scale, face construction, or body-volume consistency, and every declared slot must be occupied once.
 - Grounded pose rows keep feet on the shared baseline. Airborne rows keep the same body size and move through the slot using the jump/fall arc.
 - Side-view and mascot locomotion rows also keep feet on the shared baseline so body bob, stride, and distinct contact/pass poses survive extraction.

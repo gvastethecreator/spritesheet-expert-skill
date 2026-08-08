@@ -10,7 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PREPARE = REPO_ROOT / "SKILLS" / "spritesheet-expert" / "scripts" / "prepare_sprite_run.py"
 
 
-def test_prepare_defaults_to_a_neutral_generation_background_and_quality_birefnet(
+def test_prepare_defaults_sprite_runs_to_black_lucida_and_adaptive_segmentation(
     tmp_path: Path,
 ) -> None:
     run_dir = tmp_path / "run"
@@ -41,9 +41,17 @@ def test_prepare_defaults_to_a_neutral_generation_background_and_quality_birefne
     written = json.loads((run_dir / "sprite-request.json").read_text(encoding="utf-8"))
     background = written["generation_background"]
     assert background["family"] == "neutral"
-    assert background["hex"] in {"#808080", "#000000", "#FFFFFF"}
+    assert background["hex"] == "#000000"
+    assert background["selection"] == "fallback"
     assert written["background_removal"]["source_family"] == "neutral"
-    assert written["background_removal"]["model"] == "birefnet-general"
+    assert written["background_removal"]["method"] == "lucida"
+    assert written["background_removal"]["model"] == "egeorcun/lucida"
+    assert written["background_removal"]["revision"] == (
+        "6ee11122534c8de59402a589d2293c198cfbf848"
+    )
+    assert written["background_removal"]["alpha_mode"] == "hard"
+    assert written["background_removal"]["hard_alpha_threshold"] == 64
+    assert written["grid_segmentation"] == "adaptive"
 
     prompt = (run_dir / "prompts" / "idle.txt").read_text(encoding="utf-8")
     lowered = prompt.lower()

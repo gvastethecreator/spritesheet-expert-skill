@@ -61,7 +61,15 @@ RATIO_KEYS = {
     "arc_peak_ratio",
     "airborne_bottom_ratio",
 }
-BACKGROUND_REMOVAL_METHODS = {"none", "chroma", "rembg", "ben2", "auto"}
+BACKGROUND_REMOVAL_METHODS = {
+    "none",
+    "chroma",
+    "matte",
+    "rembg",
+    "ben2",
+    "lucida",
+    "auto",
+}
 ART_DIRECTION_MODES = {"none", "pixel-art"}
 ART_PROFILES = {
     "auto",
@@ -110,7 +118,7 @@ def validate_background_removal(preset_id, value):
         return f"{preset_id}: background_removal must be an object"
     method = value.get("method")
     if method not in BACKGROUND_REMOVAL_METHODS:
-        return f"{preset_id}: background_removal.method must be none, chroma, rembg, ben2, or auto"
+        return f"{preset_id}: background_removal.method must be none, chroma, matte, rembg, ben2, lucida, or auto"
     model = value.get("model")
     if model is not None and (not isinstance(model, str) or not model.strip()):
         return f"{preset_id}: background_removal.model must be a non-empty string"
@@ -120,6 +128,22 @@ def validate_background_removal(preset_id, value):
     alpha_matting = value.get("alpha_matting")
     if alpha_matting is not None and not isinstance(alpha_matting, bool):
         return f"{preset_id}: background_removal.alpha_matting must be boolean"
+    revision = value.get("revision")
+    if revision is not None and (
+        not isinstance(revision, str)
+        or re.fullmatch(r"[0-9a-f]{40}", revision) is None
+    ):
+        return f"{preset_id}: background_removal.revision must be a 40-character lowercase commit SHA"
+    alpha_mode = value.get("alpha_mode")
+    if alpha_mode is not None and alpha_mode not in {"soft", "hard"}:
+        return f"{preset_id}: background_removal.alpha_mode must be soft or hard"
+    hard_threshold = value.get("hard_alpha_threshold")
+    if hard_threshold is not None and (
+        isinstance(hard_threshold, bool)
+        or not isinstance(hard_threshold, int)
+        or not 1 <= hard_threshold <= 255
+    ):
+        return f"{preset_id}: background_removal.hard_alpha_threshold must be an integer from 1 to 255"
     return None
 
 

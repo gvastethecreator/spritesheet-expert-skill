@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ingest a completed $grok-imagine video into a deterministic raw sprite grid."""
+"""Ingest an existing animation video and build its candidate-frame editor."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ from spritecore.contracts import ContractError
 from spritecore.locks import RunLockError, acquire_run_lock
 from spritecore.video_animation import (
     VideoAnimationError,
-    ingest_video,
-    revalidate_video_sources,
+    ingest_imported_video,
+    revalidate_imported_video_sources,
 )
 
 
@@ -31,32 +31,36 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--state", required=True)
-    parser.add_argument("--invocation", type=Path, required=True)
-    parser.add_argument("--job")
+    parser.add_argument("--video", type=Path, required=True)
+    parser.add_argument("--first-frame", type=Path)
     parser.add_argument(
         "--sample-indices",
-        help="reviewed chronological decoder indices, comma-separated; count must match the requested frames",
+        help="reviewed chronological decoder indices; frame 0 must stay first",
     )
     parser.add_argument(
         "--sampling-strategy",
         choices=("adaptive", "uniform"),
         default="adaptive",
-        help="automatic frame selector; adaptive analyzes pose/quality while uniform preserves legacy time slicing",
     )
+    parser.add_argument("--license", default="caller-provided-source-terms")
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
     try:
-        result = ingest_video(
+        result = ingest_imported_video(
             run_dir=args.run_dir,
             state=args.state,
-            invocation_path=args.invocation,
-            job_name=args.job,
+            video_path=args.video,
+            first_frame_path=args.first_frame,
             force=args.force,
             sample_indices=parse_sample_indices(args.sample_indices),
             sampling_strategy=args.sampling_strategy,
+            license_name=args.license,
         )
-        with acquire_run_lock(result.run_dir, "ingest-grok-video-animation"):
-            revalidate_video_sources(result)
+        with acquire_run_lock(result.run_dir, "ingest-video-animation"):
+            revalidate_imported_video_sources(result)
+            for output_path, content in result.additional_outputs:
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                atomic_write_bytes(output_path, content)
             result.raw_path.parent.mkdir(parents=True, exist_ok=True)
             result.report_path.parent.mkdir(parents=True, exist_ok=True)
             atomic_write_bytes(result.raw_path, result.raw_bytes)
@@ -74,7 +78,13 @@ def main() -> int:
                 source_report=result.report_path,
                 force=True,
             )
-    except (ContractError, OSError, RunLockError, VideoAnimationError, ValueError) as exc:
+    except (
+        ContractError,
+        OSError,
+        RunLockError,
+        VideoAnimationError,
+        ValueError,
+    ) as exc:
         print(json.dumps({"status": "operational-error", "errors": [str(exc)]}, ensure_ascii=False))
         return 3
 
@@ -84,10 +94,9 @@ def main() -> int:
                 "status": "pass",
                 "raw_path": result.raw_path.relative_to(result.run_dir).as_posix(),
                 "report_path": result.report_path.relative_to(result.run_dir).as_posix(),
-                "provenance_path": result.provenance_path.relative_to(result.run_dir).as_posix(),
                 "selector": selector["output"],
                 "selector_evidence": selector["evidence"],
-                "next": "review candidate cycles, re-ingest reviewed indices if needed, then run extraction and QA",
+                "next": "review candidates, re-ingest reviewed indices, then run background removal and extraction",
             },
             ensure_ascii=False,
         )

@@ -2,9 +2,11 @@
 
 ## Background Removal
 
-New generation uses one perfectly flat neutral background: gray `#808080`, black `#000000`, or white `#FFFFFF`. `prepare_sprite_run.py` chooses the neutral color with the greatest contrast from the accepted reference, with gray as the no-reference fallback. The prompt forbids gradients, texture, vignettes, floor planes, cast shadows, and background lighting variation. It does not ban black, gray, or white from the subject palette.
+New generation uses one perfectly flat neutral background: gray `#808080`, black `#000000`, or white `#FFFFFF`. New sprite component runs use black as the no-reference fallback for the Lucida lane. `prepare_sprite_run.py` chooses the neutral color with the greatest contrast when an accepted reference exists. Other asset modes keep gray as the no-reference fallback. The prompt forbids gradients, texture, vignettes, floor planes, cast shadows, and background lighting variation. It does not ban black, gray, or white from the subject palette.
 
-Default method is `auto`:
+New sprite component runs default to `lucida` plus `grid_segmentation: adaptive`. Read `lucida-adaptive-workflow.md` for the pinned model, alpha policy, variable source boxes, and review gates.
+
+Other asset modes keep `auto`:
 
 1. preserve trustworthy source alpha;
 2. for `source_family: neutral`, remove a simple flat border with an edge-connected matte;
@@ -19,6 +21,7 @@ Do not run chroma cleanup after `rembg` on neutral sources. `post_rembg_chroma_c
 
 Recommended local model stack:
 
+- `lucida` + `egeorcun/lucida` at the pinned revision: preferred for new character and creature grids, illustration, line art, glow, and soft effects. Pixel art uses hard alpha threshold `64`. Illustrated art keeps soft alpha.
 - `rembg` + `birefnet-general`: quality default.
 - `rembg` + `birefnet-general-lite`: explicit speed option for iteration.
 - `rembg` + `birefnet-dis` or `birefnet-hrsod`: hard silhouettes, high-resolution objects, or irregular source sheets where general-lite leaves background.
@@ -29,6 +32,7 @@ Recommended local model stack:
 Install only when needed:
 
 ```bash
+pip install -r scripts/requirements-lucida.txt
 pip install "rembg[cpu]"
 pip install git+https://github.com/PramaLLC/BEN2.git
 ```
@@ -36,6 +40,10 @@ pip install git+https://github.com/PramaLLC/BEN2.git
 Then enable it explicitly when final quality matters or when source sheets are irregular/non-flat:
 
 ```bash
+python scripts/preset_to_request.py custom-atlas --background-removal lucida --grid-segmentation adaptive --out /abs/run/request.json --states-file /abs/run/states.json
+python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id hero --request /abs/run/request.json --generation-background '#000000' --force
+python scripts/extract_sprite_row_frames.py --run-dir /abs/run
+
 python scripts/preset_to_request.py custom-atlas --background-removal rembg --background-model birefnet-general --out /abs/run/request.json --states-file /abs/run/states.json
 python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id hero --request /abs/run/request.json --force
 python scripts/extract_sprite_row_frames.py --run-dir /abs/run
@@ -45,7 +53,7 @@ python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id hero --re
 python scripts/extract_sprite_row_frames.py --run-dir /abs/run --background-device auto
 ```
 
-`extract_sprite_row_frames.py` defaults to `auto`: existing alpha first, edge-connected matte for simple flat neutral borders, and `rembg` for ambiguous backgrounds. The chroma branch runs only for `source_family: legacy-chroma`. Tune the matte fallback with `--matte-threshold` and `--matte-max-colors` when a neutral source has small numeric variation. If `rembg` is requested or selected by `auto` but not installed, fail clearly instead of silently using bad alpha. Review `frames/frames-manifest.json.background_removal.source_family`, `model`, and `matte_mask`.
+`extract_sprite_row_frames.py` reads the request. New sprite component requests use the pinned Lucida model and adaptive grid segmentation. Other requests keep `auto`: existing alpha first, edge-connected matte for simple flat neutral borders, and `rembg` for ambiguous backgrounds. The chroma branch runs only for `source_family: legacy-chroma`. Missing model dependencies fail clearly instead of silently using bad alpha. Review `frames/frames-manifest.json.background_removal`, `rows[*].segmentation.spans`, and `qa/<state>-adaptive-segmentation.png`.
 
 `ben2` is never selected silently by `auto`; choose it explicitly for final/high-risk cutouts after a BiRefNet pass fails visual QA. It writes `background_method: ben2` into manifests and uses `background_removal.device` (`auto`, `cpu`, `cuda`, `cuda:0`, etc.) so slow CPU cutouts are not mistaken for a broken pipeline.
 
@@ -196,13 +204,15 @@ request:
 - `scripts/prepare_motion_template_library.py`: regenerate the five canonical view prompts from the template catalog; it does not draw or approve bitmap art.
 - `scripts/check_motion_references.py`: fail closed before locomotion row generation unless every required neutral mannequin is a valid 512px-or-larger image with adjacent `art_engine=imagegen` provenance.
 - `scripts/promote_identity_anchor.py`: turn the first accepted generated idle/neutral frame into `references/identity-anchor.png`.
-- `scripts/extract_sprite_row_frames.py`: remove chroma/rembg/BEN2 background, extract compact raw grids, connected components, projection-repaired strips, normalize sprite pose scale/baseline, write transparent cell frames.
+- `scripts/extract_sprite_row_frames.py`: remove Lucida/chroma/rembg/BEN2 background, extract compact raw grids with fixed or adaptive bounds, normalize sprite pose scale/baseline, and write transparent cell frames.
 - `scripts/register_sprite_frames.py`: align extracted/imported frames to a stable runtime pivot before atlas composition; use after unpacking whole-sheet candidates whose sprites drift inside cells.
 - `scripts/compose_sprite_atlas.py`: bake atlas and runtime `manifest.json.frame_layout`.
 - `scripts/preview_animation.py`: write contact sheets and GIF previews under `qa/`.
 - `scripts/build_preview_workbench.py`: write the self-contained, hash-bound interactive review surface under `qa/preview-workbench/`.
 - `scripts/prepare_grok_video_animation.py`: bind one exact first frame to a dry-run-first `$grok-imagine video-from-image` job.
 - `scripts/ingest_grok_video_animation.py`: validate completed Grok media, decode/sample video deterministically, preserve frame 1, write the normal raw grid and provider provenance.
+- `scripts/ingest_video_animation.py`: ingest an existing animation video, rank candidate sequences, copy source media, and write imported provenance.
+- `scripts/build_video_frame_selector.py`: build the required minimal editor from all decoded frames and write hash-bound selector evidence.
 - `scripts/check_frame_alignment.py`: real-frame onion-skin QA for baseline/root alignment, jump takeoff/landing closure, fall/knockdown settlement, bboxes, and alpha centers.
 - `scripts/check_identity_consistency.py`: head/upper-body/area proxy QA so identity scale drift cannot pass as animation.
 - `scripts/serve_curation.py`: local curation webview; selection + move/scale/rotate/shear saved in `curation.json`.

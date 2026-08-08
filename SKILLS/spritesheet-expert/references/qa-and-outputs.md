@@ -10,8 +10,9 @@ Block done unless:
 - `references/art-direction.json` exists for pixel-art runs, and active row profiles plus `animation_workflows` match the asset kind/state before generation or final review.
 - `frames/frames-manifest.json.sprite_registration.reference_height`, `reference_width`, `reference_scale`, and stable proxy values exist for sprite runs, and jump/crouch/fall/land frame records show reasonable `height_vs_reference`, `width_vs_reference`, `head_width_vs_reference`, `upper_width_vs_reference`, `expected_height_vs_reference`, and `bottom_y` for their pose profile.
 - Crouch/duck/squat transition rows are compared frame-to-frame: early frames can be taller, final frames must be visibly compressed, final width should usually stay at least around 0.78x of idle width, head/upper-body proxies should remain near idle scale, and the sequence must not shrink uniformly as it settles into the crouch.
-- `frames/frames-manifest.json.rows[*].background_method` records `alpha`, `matte`, `rembg`, `ben2`, or legacy `chroma`, and `background_removal` matches the intended request. New generated rows declare `source_family: neutral`; only imported legacy rows may declare `legacy-chroma`. `rows[*].method` records whether extraction used `grid-components`, `components`, `projection-strip`, or slot extraction.
-- `frames/frames-manifest.json.background_matte_review` points to `qa/background-matte-review.png`. Review raw, checker, black, gray, white, and alpha-mask panels for over-removal and fringe before approving generated rows. `background_method: ben2` is acceptable only when selected explicitly and its review beats BiRefNet visually.
+- `frames/frames-manifest.json.rows[*].background_method` records `alpha`, `matte`, `lucida`, `rembg`, `ben2`, or legacy `chroma`, and `background_removal` matches the intended request. New generated rows declare `source_family: neutral`; only imported legacy rows may declare `legacy-chroma`. `rows[*].method` records whether extraction used `grid-adaptive-components`, `grid-components`, `components`, `projection-strip`, or slot extraction.
+- Adaptive rows include one `source_bbox` per frame and a current `qa/<state>-adaptive-segmentation.png`. Review frame order, complete limbs, detached effects, variable bounds, and cross-frame assignment. `grid-slots-fallback` cannot pass production review.
+- `frames/frames-manifest.json.background_matte_review` points to `qa/background-matte-review.png`. Review raw, checker, black, gray, white, and alpha-mask panels for over-removal and fringe before approving generated rows. A model name is not proof. The selected Lucida, BiRefNet, or BEN2 matte must win visual review for this source.
 - Legacy chroma output uses a soft-edge/despill matte, not a hard key threshold. Run `check_chroma_key_safety.py`, `rekey_chroma_background.py`, and chroma leakage review only for those declared legacy sources.
 - `sprite-sheet-alpha.report.json.ok` true.
 - `manifest.json.frame_layout` exists and runtime can use rectangles.
@@ -38,7 +39,10 @@ Block done unless:
 - Pixel VFX rows show buildup/peak/decay, stable emitter/contact point, alpha-safe fade, and loop math without end-to-start pop. Water rows show wave/flow loop closure; wind rows show flow points/propagation instead of random motion.
 - When no base image was provided, `references/identity-anchor.png` exists and later generated rows visibly follow that anchor instead of drifting into a new character.
 - User-facing generated art was backed by the declared `$imagegen` or `$grok-imagine` source media; synthetic fixtures are labeled as fixtures only.
-- Grok video rows have `provider/grok-imagine/<state>/video-source.json` with completed invocation, exact first-frame, video, decoder, sample-index/timestamp, and raw-grid hashes. Video-derived frames still pass the normal extraction, alignment, identity, animation-contract, preview, visual-review, and aggregate gates.
+- Every video row has a hash-bound `video-source.json`. Grok rows also retain the completed invocation and exact first-frame evidence.
+- Every video row has `qa/<state>-video-frame-selector/index.html` and `selector.evidence.json`. The evidence matches the report, video, selected indices, candidates, and HTML hashes.
+- Video extraction applies background removal per selected frame. Each segmentation span records alpha bounds, crop padding, context padding, discarded noise, and source-edge contacts.
+- A video row fails when a significant source component touches a video boundary. It also fails when opaque pixels enter the final safe margin.
 - Failed provider jobs use blocked sidecars or clear status/log errors instead of fake row images.
 - `qa/motion-variation-report.json.ok` true for walk/run/move sprite rows, unless explicitly waived for non-legged/hovering motion after visual review.
 - Walk/run/move rows also need a visual leg-phase gate. Frame 1 and the halfway contact frame must show opposite anatomical support/contact legs; pass/down frames must show the crossover or depth swap that connects them, and each direction row is reviewed independently in chronological playback. Screen-space left/right balance is diagnostic only and cannot name the anatomical leg. Repeated same-leg contact is a hard failure even when `motion-variation-report.json.ok` is true.
@@ -80,6 +84,7 @@ qa/<state>-contact.png
 qa/<state>.gif
 qa/pose-scale-review.png
 qa/background-matte-review.png
+qa/<state>-adaptive-segmentation.png
 qa/preview-workbench/index.html
 qa/preview-workbench/workbench.evidence.json
 qa/frame-alignment-report.json
@@ -107,6 +112,10 @@ qa/isometric-calibrated-catalog.json
 provider/grok-imagine/<state>/prompt.txt
 provider/grok-imagine/<state>/job.json
 provider/grok-imagine/<state>/video-source.json
+provider/video/<state>/video-source.json
+provider/video/<state>/source.mp4
+qa/<state>-video-frame-selector/index.html
+qa/<state>-video-frame-selector/selector.evidence.json
 ```
 
 Use `manifest.json.frame_layout` as runtime SSoT. Do not recover frame rectangles from alpha at runtime.

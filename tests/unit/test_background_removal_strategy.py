@@ -30,9 +30,13 @@ def _flat_source(background: tuple[int, int, int]) -> Image.Image:
     return image
 
 
-def test_quality_birefnet_is_the_default_model() -> None:
+def test_default_models_are_stable_and_lucida_is_revision_pinned() -> None:
     assert backgrounds.DEFAULT_REMBG_MODEL == "birefnet-general"
     assert backgrounds.default_background_model("auto") == "birefnet-general"
+    assert backgrounds.default_background_model("lucida") == "egeorcun/lucida"
+    assert backgrounds.default_background_revision("lucida") == (
+        "6ee11122534c8de59402a589d2293c198cfbf848"
+    )
 
 
 def test_auto_neutral_sources_never_enter_the_legacy_chroma_branch() -> None:
@@ -112,3 +116,70 @@ def test_pixel_art_edge_refinement_does_not_introduce_fractional_alpha() -> None
 
     assert method == "matte"
     assert set(cutout.getchannel("A").tobytes()) <= {0, 255}
+
+
+def test_lucida_hard_alpha_policy_uses_the_declared_threshold(monkeypatch) -> None:
+    source = Image.new("RGBA", (4, 1), (40, 40, 40, 255))
+    soft = Image.new("RGBA", (4, 1), (220, 80, 40, 255))
+    soft.putalpha(Image.frombytes("L", (4, 1), bytes([0, 63, 64, 255])))
+    monkeypatch.setattr(
+        backgrounds,
+        "remove_lucida_background",
+        lambda image, config, sessions: soft.copy(),
+    )
+
+    cutout, method = backgrounds.remove_background(
+        source,
+        (255, 0, 255),
+        {
+            "method": "lucida",
+            "model": backgrounds.DEFAULT_LUCIDA_MODEL,
+            "revision": backgrounds.DEFAULT_LUCIDA_REVISION,
+            "device": "cpu",
+            "input_size": 1024,
+            "alpha_mode": "hard",
+            "hard_alpha_threshold": 64,
+        },
+        _args(),
+        {},
+    )
+
+    assert method == "lucida"
+    assert list(cutout.getchannel("A").tobytes()) == [0, 0, 255, 255]
+
+
+def test_lucida_conservative_cleanup_removes_only_neutral_edge_leak(monkeypatch) -> None:
+    source = Image.new("RGBA", (8, 8), (0, 0, 0, 255))
+    soft = Image.new("RGBA", source.size, (0, 0, 0, 0))
+    for y in range(2, 6):
+        for x in range(2, 6):
+            soft.putpixel((x, y), (18, 18, 18, 255))
+    soft.putpixel((7, 3), (1, 1, 1, 255))
+    monkeypatch.setattr(
+        backgrounds,
+        "remove_lucida_background",
+        lambda image, config, sessions: soft.copy(),
+    )
+    args = _args()
+    args.edge_refine = "conservative"
+
+    cutout, method = backgrounds.remove_background(
+        source,
+        (255, 0, 255),
+        {
+            "method": "lucida",
+            "model": backgrounds.DEFAULT_LUCIDA_MODEL,
+            "revision": backgrounds.DEFAULT_LUCIDA_REVISION,
+            "device": "cpu",
+            "input_size": 1024,
+            "alpha_mode": "hard",
+            "hard_alpha_threshold": 64,
+        },
+        args,
+        {},
+    )
+
+    assert method == "lucida"
+    assert cutout.getpixel((7, 3))[3] == 0
+    assert cutout.getpixel((2, 3))[3] == 255
+    assert cutout.getpixel((4, 4))[3] == 255
