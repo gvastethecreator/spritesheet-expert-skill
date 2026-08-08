@@ -1,4 +1,4 @@
 interface:
   display_name: "Spritesheet Expert"
-  short_description: "Build and validate professional sprite atlases"
-  default_prompt: "Use $spritesheet-expert to choose Imagegen, explicit Grok still/video, or imported media and deliver neutral-cutout sprites, registered frames, atlas, playback/onion previews, provenance, and QA."
+  short_description: "Build and validate video-ready sprite atlases"
+  default_prompt: "Use $spritesheet-expert to build a sprite atlas from still art or video with candidate selection, safe cutouts, registration, previews, provenance, and QA."

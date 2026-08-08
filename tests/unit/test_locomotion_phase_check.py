@@ -4,7 +4,12 @@ from argparse import Namespace
 
 from PIL import Image, ImageDraw
 
-from check_animation_contracts import contact_phase_check as contract_phase_check
+from check_animation_contracts import (
+    LOCOMOTION_WORKFLOWS,
+    WORKFLOW_CONTRACTS,
+    contact_phase_check as contract_phase_check,
+    ordered_workflows,
+)
 from check_motion_variation import (
     contact_phase_check as motion_phase_check,
     support_balance,
@@ -57,3 +62,30 @@ def test_duplicated_opposite_contact_pose_fails_closed() -> None:
         assert result["ok"] is False
         assert result["opposite_contact_pose_diff"] == 0.0
         assert "duplicated" in result["reason"]
+
+
+def test_shared_idle_cycle_compares_active_phases() -> None:
+    idle = _pose(lifted_left=7)
+    phase_a = _pose(lifted_left=3)
+    phase_b = _pose(lifted_left=10)
+    frames = [idle, phase_a, idle.copy(), phase_b]
+
+    for check in (motion_phase_check, contract_phase_check):
+        result = check(frames, _args(), shared_idle=True)
+        assert result is not None
+        assert result["ok"] is True
+        assert result["phase_layout"] == "idle-phase-a-idle-phase-b"
+        assert result["first_contact_index"] == 1
+        assert result["opposite_contact_index"] == 3
+
+
+def test_front_fps_creature_locomotion_is_a_first_class_contract() -> None:
+    workflow = "front-fps-creature-locomotion"
+
+    assert ordered_workflows([workflow]) == [workflow]
+    assert workflow in LOCOMOTION_WORKFLOWS
+    assert WORKFLOW_CONTRACTS[workflow]["min_frames"] == 4
+    assert any(
+        "not a generic biped" in check
+        for check in WORKFLOW_CONTRACTS[workflow]["visual_checks"]
+    )

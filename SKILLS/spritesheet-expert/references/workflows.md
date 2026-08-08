@@ -113,6 +113,7 @@ an intentional non-legged/hovering motion with a separate visual rationale.
    - Accept provider output only through the executable source-intake contract. The intake command verifies the expected job/state/kind, hashes the selected file, and writes provenance; there is no prose-only inbox/outbox handoff.
    - Do not generate a whole atlas in one image for animated production work unless the user specifically asks for a sheet-level prototype/import. Generate per-state raw sheets, then assemble the runtime atlas after QA.
    - For animated body rows, `prepare_sprite_run.py` writes `states.<state>.raw_layout`. Compact grids such as `2x2`, `3x2`, `4x2`, `3x3`, or `4x3` are the default because long raw `1xN` character strips drift and crop more often. The final atlas can still be a runtime row; raw generation and delivery shape are separate contracts.
+   - New sprite component runs also write `background_removal.method: lucida` and `grid_segmentation: adaptive`. With no identity image, use the black fallback background. Read `lucida-adaptive-workflow.md` before changing the pinned revision, alpha mode, threshold, or segmentation method.
    - Use `raw_layout_policy: "legacy-strip"` only for explicit low-risk compatibility/import cases, and report that the row is using the weaker long-strip path.
    - For walk/run/advance/retreat rows, prefer 8 frames when quality matters. Use 4 or 6 only when the frame budget is intentional and the motion-phase guide still proves contact/pass/opposite-contact logic.
    - If the selected provider does not expose a local accepted file in the current turn, report that the generated-art path cannot be completed honestly yet; do not substitute a scripted drawing.
@@ -163,6 +164,23 @@ python scripts/extract_sprite_row_frames.py --run-dir /abs/run --background-remo
 legitimate subject pixels. Use `--post-rembg-chroma-cleanup` only after visual
 review proves the remaining key color is border/background residue.
 
+For the preferred new Imagegen sprite lane, install Lucida and keep the request
+as the source of truth:
+
+```bash
+python -m pip install -r scripts/requirements-lucida.txt
+python scripts/extract_sprite_row_frames.py --run-dir /abs/run
+```
+
+Review `qa/<state>-adaptive-segmentation.png` before composition. Every colored
+box must contain one complete pose and its related detached parts. Do not approve
+`grid-slots-fallback` for a production sprite row.
+
+If the game runtime cell uses a different bottom or pivot, run
+`register_sprite_frames.py` with that explicit target after extraction. Compose
+and validate the registered output directory. See `lucida-adaptive-workflow.md`
+for the full command sequence and the `512x512`, bottom `440` example.
+
 For final/high-risk mattes where rembg/BiRefNet still eats hair, fur, spikes,
 small limbs, or painterly outlines, switch explicitly to BEN2:
 
@@ -173,9 +191,10 @@ python scripts/extract_sprite_row_frames.py --run-dir /abs/run --background-remo
 Do not treat the backend name as proof. Review `qa/background-matte-review.png`
 on checker, black, gray, white, and alpha-mask panels before atlas composition.
 
-New generation must use a flat neutral gray, black, or white background. The
-default quality model is `birefnet-general`; `birefnet-general-lite` is an
-explicit speed option. Chroma mode is for declared legacy imports only.
+New generation must use a flat neutral gray, black, or white background. Lucida
+is the preferred new sprite model. `birefnet-general` remains the quality default
+for the `auto` compatibility lane. `birefnet-general-lite` is an explicit speed
+option. Chroma mode is for declared legacy imports only.
 
 For animated sprites with walk/run/move rows, also run:
 
@@ -209,7 +228,23 @@ continuity. The report lists those required visual checks.
 
 For user-facing animated sprite runs, render hash-bound runtime playback evidence for every state and open `qa/preview-workbench/index.html`. Use pause, step, scrub, speed, zoom, state selection, the complete filmstrip, and checker/black/gray/white backgrounds. The check should prove the animation reads during playback, not only in a contact sheet.
 
-## Grok First-Frame Video Workflow
+## Video Animation Workflow
+
+Use the common video lane for Grok and existing video files. Read `video-animation-workflow.md` before this workflow.
+
+Import an existing video:
+
+```bash
+python scripts/ingest_video_animation.py --run-dir /abs/run --state walk --video /abs/source/walk.mp4 --first-frame /abs/source/idle.png
+```
+
+The command analyzes every decoded frame. It creates several candidate cycles and the required selector.
+
+Open `qa/<state>-video-frame-selector/index.html`. Select a candidate or replace individual frames.
+
+Re-ingest reviewed indices with `--sample-indices` and `--force`. This action does not run provider inference.
+
+### Grok Provider
 
 After accepting one exact neutral-background first frame, prepare the provider job:
 
@@ -226,10 +261,11 @@ python -m pip install -r scripts/requirements-video.txt
 python scripts/ingest_grok_video_animation.py --run-dir /abs/run --state walk --invocation /abs/project/.scratch/agent-cli-delegation/grok-imagine/spritesheet-video/<run>/invocation.json
 ```
 
-Then return to step 5. Video extraction does not replace background removal,
-frame registration, identity, alignment, animation-contract, preview, visual,
-or aggregate gates. See `grok-video-animation.md` for the exact provider and
-provenance contract.
+The Grok command creates the same selector. Then return to step 5.
+
+Video extraction removes the background per selected frame. It uses safe alpha crops and blocks source-edge contact.
+
+See `grok-video-animation.md` for Grok consent and provenance checks.
 
 For runs with `art_direction.mode: pixel-art`, add the relevant critique pass:
 

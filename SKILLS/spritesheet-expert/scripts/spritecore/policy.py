@@ -23,7 +23,12 @@ GATE_IDS = (
 )
 WORKFLOWS = ("production", "import-diagnostic")
 _LOCOMOTION_WORKFLOWS = frozenset(
-    {"sideview-locomotion", "topdown-locomotion", "run-gun-layered-motion"}
+    {
+        "front-fps-creature-locomotion",
+        "sideview-locomotion",
+        "topdown-locomotion",
+        "run-gun-layered-motion",
+    }
 )
 _ISOMETRIC_PROJECTIONS = frozenset(
     {"isometric", "dimetric-2:1", "2:1-dimetric", "2:1 dimetric diamond"}

@@ -330,7 +330,7 @@ def main() -> int:
         "atlas_outputs": atlas_outputs,
         "base_image": request["character"].get("base_image"),
         "cell": request["cell"],
-        "chroma_key": request["chroma_key"],
+        "chroma_key": request.get("chroma_key"),
         "animation": animation,
         "frame_layout": frame_layout,
     }

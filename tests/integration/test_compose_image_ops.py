@@ -173,6 +173,31 @@ def test_compose_preserves_explicit_sampling_policy_in_runtime_manifest(
     assert manifest["sampling_policy"] == request["sampling_policy"]
 
 
+def test_compose_accepts_neutral_lucida_runs_without_a_chroma_key(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "neutral-lucida"
+    _write_run(run_dir, size=(32, 32), rectangle=(8, 5, 23, 28))
+    request_path = run_dir / "sprite-request.json"
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    request.pop("chroma_key")
+    request["generation_background"] = {
+        "family": "neutral",
+        "name": "black",
+        "hex": "#000000",
+        "rgb": [0, 0, 0],
+    }
+    request["background_removal"] = {"method": "lucida"}
+    _write_json(request_path, request)
+
+    result = _compose(run_dir)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["chroma_key"] is None
+    assert manifest["generation_background"] == request["generation_background"]
+
+
 def test_explicit_min_used_pixels_remains_a_compatibility_override(
     tmp_path: Path,
 ) -> None:

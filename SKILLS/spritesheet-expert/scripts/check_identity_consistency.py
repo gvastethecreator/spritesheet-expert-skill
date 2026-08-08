@@ -90,13 +90,48 @@ def allowed_ceiling(key: str, kind: str, args: argparse.Namespace) -> float:
     return 999.0
 
 
-def inspect_row(row: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+def unreliable_identity_proxies(manifest: dict[str, Any]) -> set[str]:
+    registration = manifest.get("sprite_registration")
+    if not isinstance(registration, dict):
+        return set()
+    body_width = registration.get("reference_body_mass_width_80")
+    if not isinstance(body_width, (int, float)) or body_width <= 0:
+        return set()
+    proxies = {
+        "head_width_vs_reference": registration.get("reference_head_width"),
+        "upper_width_vs_reference": registration.get("reference_upper_width"),
+    }
+    return {
+        key
+        for key, width in proxies.items()
+        if isinstance(width, (int, float)) and width / body_width < 0.12
+    }
+
+
+def is_arm_driven_attack(request: dict[str, Any], state: str) -> bool:
+    if state != "attack":
+        return False
+    creature_motion = request.get("creature_motion")
+    if not isinstance(creature_motion, dict):
+        return False
+    attack_source = str(creature_motion.get("attack_source", "")).lower()
+    return any(token in attack_source for token in ("arm", "hand"))
+
+
+def inspect_row(
+    row: dict[str, Any],
+    args: argparse.Namespace,
+    unreliable_proxies: set[str] | None = None,
+    *,
+    arm_driven_attack: bool = False,
+) -> dict[str, Any]:
     state = str(row.get("state", ""))
     records = row.get("frame_records") if isinstance(row.get("frame_records"), list) else []
     kind = row_kind(row)
     errors: list[str] = []
     warnings: list[str] = []
     metrics: dict[str, Any] = {}
+    unreliable_proxies = unreliable_proxies or set()
 
     for key in IDENTITY_KEYS:
         values = metric_values(records, key)
@@ -121,6 +156,12 @@ def inspect_row(row: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]
             "floor": floor,
             "ceiling": ceiling,
         }
+        if key in unreliable_proxies:
+            metrics[key]["reliable"] = False
+            warnings.append(
+                f"{key} is too narrow in the reference to gate reliably; visual review required"
+            )
+            continue
         if minimum < floor:
             errors.append(f"{key} shrinks to {minimum:.2f}x reference; expected >= {floor:.2f}x")
         if maximum > ceiling:
@@ -130,6 +171,9 @@ def inspect_row(row: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]
             if key == "body_mass_width_80_vs_reference"
             else args.max_proxy_spread
         )
+        if key == "upper_width_vs_reference" and arm_driven_attack:
+            spread_limit = args.max_arm_attack_upper_spread
+            metrics[key]["spread_policy"] = "declared-arm-attack"
         if key != "opaque_area_vs_reference" and spread > spread_limit:
             errors.append(
                 f"{key} varies by {spread:.2f}x across row; "
@@ -165,6 +209,12 @@ def main() -> int:
     parser.add_argument("--min-knockdown-upper", type=float, default=0.58)
     parser.add_argument("--min-knockdown-body-mass-width", type=float, default=0.50)
     parser.add_argument("--max-proxy-spread", type=float, default=0.42)
+    parser.add_argument(
+        "--max-arm-attack-upper-spread",
+        type=float,
+        default=0.55,
+        help="Upper-width spread allowed only for an attack whose request explicitly declares arms or hands as its attack source.",
+    )
     parser.add_argument(
         "--max-body-mass-spread",
         type=float,
@@ -211,7 +261,16 @@ def main() -> int:
     ]
     if not selected:
         precondition_errors.append("zero expected rows were checked")
-    results = [inspect_row(row, args) for row in selected]
+    unreliable_proxies = unreliable_identity_proxies(manifest)
+    results = [
+        inspect_row(
+            row,
+            args,
+            unreliable_proxies,
+            arm_driven_attack=is_arm_driven_attack(request, str(row.get("state", ""))),
+        )
+        for row in selected
+    ]
     quality_errors = [f"{row['state']}: {error}" for row in results for error in row["errors"]]
     errors = precondition_errors + quality_errors
     warnings = [f"{row['state']}: {warning}" for row in results for warning in row["warnings"]]
@@ -221,6 +280,7 @@ def main() -> int:
         "run_dir": str(run_dir),
         "states_mode": args.states,
         "quality_gate_note": "Head/upper/body proxy metrics are guardrails. Visual contact/onion/runtime review still wins when metrics miss a visible drift.",
+        "unreliable_proxies": sorted(unreliable_proxies),
         "errors": errors,
         "warnings": warnings,
         "results": results,

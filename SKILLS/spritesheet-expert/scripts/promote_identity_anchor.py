@@ -15,8 +15,12 @@ from extract_sprite_row_frames import (
     DEFAULT_REMBG_MODEL,
     cell_geometry,
     extract_component_sprites,
+    extract_grid_adaptive_sprites,
+    extract_grid_component_sprites,
+    extract_grid_slot_sprites,
     extract_slot_sprites,
     fit_to_cell,
+    raw_layout_grid,
     remove_background,
 )
 from runio import atomic_save_image, atomic_write_text
@@ -65,13 +69,44 @@ def main() -> int:
     with Image.open(raw_path) as opened:
         strip, background_method = remove_background(opened, chroma_key, background_config, background_args, {})
 
-    sprites = extract_component_sprites(strip, frame_count)
-    method = "components"
+    columns, rows = raw_layout_grid(state_entry, frame_count)
+    uses_grid_layout = rows > 1 or columns != frame_count
+    grid_segmentation = str(request.get("grid_segmentation", "adaptive"))
+    segmentation: dict[str, object] = {
+        "layout": "grid" if uses_grid_layout else "strip",
+        "columns": columns,
+        "rows": rows,
+    }
+    if uses_grid_layout and grid_segmentation == "adaptive":
+        sprites, adaptive_report = extract_grid_adaptive_sprites(
+            strip,
+            frame_count,
+            columns,
+            rows,
+        )
+        segmentation.update(adaptive_report)
+        method = "grid-adaptive-components"
+    elif uses_grid_layout:
+        sprites = extract_grid_component_sprites(
+            strip,
+            frame_count,
+            columns,
+            rows,
+        )
+        method = "grid-components"
+    else:
+        sprites = extract_component_sprites(strip, frame_count)
+        method = "components"
     if sprites is None:
         if not args.allow_slot_fallback:
             raise SystemExit(f"could not extract {frame_count} sprite components from {raw_path}")
-        sprites = extract_slot_sprites(strip, frame_count)
-        method = "slots-explicit"
+        sprites = (
+            extract_grid_slot_sprites(strip, frame_count, columns, rows)
+            if uses_grid_layout
+            else extract_slot_sprites(strip, frame_count)
+        )
+        method = "grid-slots-fallback" if uses_grid_layout else "slots-explicit"
+        segmentation["slot_fallback"] = True
 
     cell_width, cell_height, safe_margin_x, safe_margin_y = cell_geometry(request["cell"])
     anchor = fit_to_cell(sprites[args.frame], cell_width, cell_height, safe_margin_x, safe_margin_y)
@@ -86,6 +121,8 @@ def main() -> int:
         "output": str(out_path.relative_to(run_dir)),
         "method": method,
         "background_method": background_method,
+        "grid_segmentation": grid_segmentation,
+        "segmentation": segmentation,
         "cell": request["cell"],
     }
     atomic_write_text(out_path.with_suffix(".json"), json.dumps(sidecar, ensure_ascii=False, indent=2) + "\n")

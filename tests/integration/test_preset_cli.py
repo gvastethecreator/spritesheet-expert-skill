@@ -74,6 +74,7 @@ def test_preset_converter_writes_a_valid_v2_contract(tmp_path: Path) -> None:
     assert request["kind"] == "sprite-gen-request"
     assert request["frame_semantics"] == "animation"
     assert request["sampling_policy"]["filter"] == "nearest"
+    assert request["grid_segmentation"] == "adaptive"
     assert request["states"]["run"]["raw_layout"]["columns"] >= 1
 
 
@@ -96,6 +97,9 @@ def test_every_builtin_preset_emits_complete_family_contract(
         "mipmaps",
         "pixel_snap",
     }
+    assert request["grid_segmentation"] == (
+        "adaptive" if request["asset_kind"] == "sprite" else "fixed"
+    )
 
     for state, entry in request["states"].items():
         assert entry["label"], state

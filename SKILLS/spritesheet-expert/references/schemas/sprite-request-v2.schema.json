@@ -27,6 +27,7 @@
     "raw_layout_policy": {
       "enum": ["compact-body-grids", "strip", "legacy-strip", "off"]
     },
+    "grid_segmentation": { "enum": ["fixed", "adaptive"] },
     "cell": {
       "type": "object",
       "required": ["width", "height"],
@@ -48,11 +49,35 @@
       },
       "additionalProperties": { "$ref": "#/$defs/state" }
     },
-    "sampling_policy": { "$ref": "#/$defs/samplingPolicy" }
-    ,
-    "generation_background": { "$ref": "#/$defs/generationBackground" }
+    "sampling_policy": { "$ref": "#/$defs/samplingPolicy" },
+    "generation_background": { "$ref": "#/$defs/generationBackground" },
+    "background_removal": { "$ref": "#/$defs/backgroundRemoval" },
+    "creature_motion": { "$ref": "#/$defs/creatureMotion" }
   },
   "$defs": {
+    "backgroundRemoval": {
+      "type": "object",
+      "required": ["method"],
+      "properties": {
+        "method": {
+          "enum": ["none", "chroma", "matte", "rembg", "ben2", "lucida", "auto"]
+        },
+        "model": { "type": "string", "minLength": 1 },
+        "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "device": { "type": "string", "minLength": 1 },
+        "input_size": { "type": "integer", "minimum": 256, "maximum": 2048 },
+        "alpha_matting": { "type": "boolean" },
+        "alpha_mode": { "enum": ["soft", "hard"] },
+        "hard_alpha_threshold": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "maximum": 255
+        },
+        "post_rembg_chroma_cleanup": { "type": "boolean" },
+        "source_family": { "enum": ["neutral", "legacy-chroma", "unknown"] }
+      },
+      "additionalProperties": true
+    },
     "generationBackground": {
       "type": "object",
       "required": ["family", "name", "hex", "rgb"],
@@ -95,6 +120,54 @@
           }
         }
       ],
+      "additionalProperties": false
+    },
+    "creatureMotion": {
+      "type": "object",
+      "required": [
+        "anatomy",
+        "locomotion",
+        "camera",
+        "registration_anchor",
+        "shared_idle"
+      ],
+      "properties": {
+        "anatomy": {
+          "enum": [
+            "biped",
+            "quadruped",
+            "multi-legged",
+            "winged",
+            "hovering",
+            "amorphous",
+            "serpentine",
+            "custom"
+          ]
+        },
+        "locomotion": {
+          "enum": ["walk", "crawl", "fly", "hover", "pulse", "slither", "custom", "none"]
+        },
+        "camera": {
+          "enum": ["front-fps", "side", "topdown", "isometric", "custom"]
+        },
+        "registration_anchor": {
+          "enum": ["body-bottom", "bbox-bottom", "footprint", "center", "custom"]
+        },
+        "shared_idle": { "type": "boolean" },
+        "screen_side_labels": { "type": "boolean" },
+        "movement_source": { "type": "string", "minLength": 1 },
+        "attack_source": { "type": "string", "minLength": 1 },
+        "preserve": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "reject": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
       "additionalProperties": false
     },
     "state": {

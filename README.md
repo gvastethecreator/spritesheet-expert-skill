@@ -10,7 +10,7 @@
 The suite turns game-art requests into repeatable, hash-backed pipelines. Use the focused leaf skills for one asset family and `produce-2d-assets` when a delivery spans several families.
 
 - Prepare structured sprite and tileset runs from presets or custom contracts.
-- Generate isolated sprites, props, and UI on neutral gray/black/white and remove the matte conservatively or with reviewed BiRefNet/BEN2 defaults; keep full-bleed background scene pixels intact.
+- Generate isolated sprites, props, and UI on neutral gray/black/white. Use pinned Lucida plus adaptive frame bounds for new character grids, with reviewed BiRefNet/BEN2 compatibility lanes. Keep full-bleed background scene pixels intact.
 - Use `$imagegen` by default or the optional dry-run-first `$grok-imagine` image/video route.
 - Turn an approved first frame into provider video, then deterministically sample it into the normal verified sprite pipeline.
 - Compose atlas PNGs, manifests, deterministic previews, an interactive review workbench, GIFs, checker/black/gray/white alpha boards, and curation exports.
@@ -67,7 +67,7 @@ npm run check
 - [`scripts/`](./SKILLS/spritesheet-expert/scripts): extraction, curation, composition, preview, and validation helpers.
 - [`agents/openai.yaml`](./SKILLS/spritesheet-expert/agents/openai.yaml): optional agent metadata.
 
-Optional runtime extras are isolated by capability: install `SKILLS/spritesheet-expert/scripts/requirements-background.txt` for rembg/BiRefNet cutouts and `SKILLS/spritesheet-expert/scripts/requirements-video.txt` for video-frame ingestion.
+Optional runtime extras are isolated by capability: install `SKILLS/spritesheet-expert/scripts/requirements-lucida.txt` for the preferred sprite cutout lane, `requirements-background.txt` for rembg/BiRefNet, and `requirements-video.txt` for video-frame ingestion.
 - [`SKILLS/`](./SKILLS/README.md): routing and commands for all six published skills.
 
 ## Status
@@ -75,7 +75,7 @@ Optional runtime extras are isolated by capability: install `SKILLS/spritesheet-
 Validated multi-skill pack.
 
 - Local smoke pipeline is available.
-- Optional background-removal dependencies are intentionally not bundled.
+- Optional Lucida, rembg, and BEN2 background-removal dependencies are intentionally not bundled.
 - Optional video decoding uses the pinned `scripts/requirements-video.txt`; provider inference is never part of tests.
 - Generated sample art is not included by default; bring your own licensed source images.
 - Rejected motion-reference candidates remain in repository-only `maintenance/` evidence and are never copied into an installed skill.

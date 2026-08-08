@@ -52,6 +52,7 @@ _REPORT_PATHS = {
     "frame-registration": "qa/registration-report.json",
 }
 _LOCOMOTION_WORKFLOWS = {
+    "front-fps-creature-locomotion",
     "sideview-locomotion",
     "topdown-locomotion",
     "run-gun-layered-motion",

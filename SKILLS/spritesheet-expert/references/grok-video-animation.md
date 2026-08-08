@@ -1,6 +1,8 @@
-# Grok Image And Video Animation
+# Grok Image And Video Provider
 
-Use `$grok-imagine` as an optional provider. `$imagegen` remains the default still-image path. Provider execution stays in the Grok skill; Spritesheet Expert begins at job preparation and accepted-media ingestion.
+Use `$grok-imagine` as an optional provider. `$imagegen` remains the default still-image path.
+
+This file defines the Grok boundary. Read `video-animation-workflow.md` for frame selection, imported videos, background removal, cropping, registration, and QA.
 
 ## Consent And Execution Boundary
 
@@ -61,20 +63,11 @@ Ingestion fails before mutation unless all of these match:
 - wrapper-owned `media/video-01.*` inside the job output directory;
 - a decodable video with a stable size/fps and enough unique frames.
 
-The decoder performs one bounded counting pass and one selected-frame pass.
-True cyclic motion such as locomotion samples the half-open interval so it does
-not duplicate the first contact. Bookended actions such as character gestures
-include both endpoints so the accepted anchor is restored before playback
-wraps. The prepared job records `sampling_mode` and the source report records
-the effective mode. Frame 1 is then replaced with the approved first frame at
-exact pixel content. Video frames must match its aspect ratio and are normalized
-to its canvas before the compact raw grid is written.
+Ingestion enters the common video analyzer. It scans every decoded frame and creates several candidate sequences.
 
-Uniform sampling is only the first pass. If contact or playback review exposes
-phase aliasing, rerun ingestion with reviewed chronological decoder indices,
-for example `--sample-indices 0,7,14,21`. The count must match the requested
-frames, index 0 stays first, and the source report records
-`sampling_mode: reviewed-explicit` plus `selection_reviewed: true`.
+The command also builds the required minimal selector. Re-ingest reviewed indices with `--force`. This action does not call Grok again.
+
+The selected frames keep the first-frame aspect ratio. An approved first frame replaces decoder frame 0 at exact pixels.
 
 Outputs:
 
@@ -82,6 +75,8 @@ Outputs:
 raw/<state>.png
 provider/grok-imagine/<state>/video-source.json
 source-provenance.json
+qa/<state>-video-frame-selector/index.html
+qa/<state>-video-frame-selector/selector.evidence.json
 ```
 
 The video source report records hash-bound copies of the sprite request, job,
@@ -91,14 +86,11 @@ and raw-grid hash. `source-provenance.json` uses
 `source_type: grok-imagine-video`; runs that combine providers use
 `source_type: mixed` with per-source provider fields.
 
-## Normal Atlas And QA Path
+## Common Atlas And QA Path
 
-Video ingestion does not approve animation or align frames. It only produces the normal raw grid. Continue with the same authoritative pipeline:
+Video ingestion does not approve animation or align frames. Continue with the common workflow in `video-animation-workflow.md`.
 
-`gesture-loop` extraction preserves each provider frame's full canvas and uses
-one shared canvas-to-cell transform. Do not crop and recenter each gesture
-silhouette independently: an extending arm changes the bounding box and would
-otherwise create false pelvis/foot travel.
+`gesture-loop` extraction preserves each provider frame's full canvas. It uses one shared canvas-to-cell transform.
 
 ```bash
 python scripts/check_generation_provenance.py --run-dir /abs/project/.scratch/sprite-run

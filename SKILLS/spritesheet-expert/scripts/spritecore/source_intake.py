@@ -215,10 +215,10 @@ def _validate_existing_provenance(
         return None
     if provenance.get("verification_status") != "verified":
         issues.append("existing source provenance is not verified")
-    if provenance.get("source_type") != source_type:
-        issues.append("existing source provenance uses a different source_type")
-    if provenance.get("license") not in (None, license_ref):
-        issues.append("existing source provenance uses a different license_ref")
+    # A run may deliberately combine providers per state. The writer promotes
+    # the root provenance to ``mixed`` and keeps the concrete source type on
+    # each accepted source entry. License validity is still checked against
+    # the current request before this existing-provenance validation.
     expected_states = set(request.get("states", {}))
     coverage = set(provenance.get("state_coverage", []))
     unknown = sorted(coverage - expected_states)

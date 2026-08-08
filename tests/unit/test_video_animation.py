@@ -9,8 +9,11 @@ from PIL import Image
 import pytest
 
 from spritecore.video_animation import (
+    _exact_idle_slots_for_state,
     VideoAnimationError,
     VideoIngestResult,
+    _frame_signature,
+    adaptive_sample_indices,
     _compose_grid,
     _decode_selected,
     _merged_provenance,
@@ -21,6 +24,18 @@ from spritecore.video_animation import (
     reviewed_sample_indices,
     uniform_sample_indices,
 )
+
+
+def test_shared_idle_slots_follow_move_and_attack_semantics() -> None:
+    request = {
+        "creature_motion": {"shared_idle": True},
+        "states": {
+            "idle-step": {"animation_workflows": ["front-fps-creature-locomotion"]},
+            "attack": {"animation_workflows": ["front-fps-creature-attack"]},
+        },
+    }
+    assert _exact_idle_slots_for_state(request, "idle-step", 4) == [0, 2]
+    assert _exact_idle_slots_for_state(request, "attack", 4) == [0, 3]
 
 
 def _request() -> dict[str, object]:
@@ -97,6 +112,80 @@ def test_cyclic_sampling_stays_half_open_to_avoid_a_duplicate_contact() -> None:
 
 def test_reviewed_sampling_accepts_a_chronological_phase_selection() -> None:
     assert reviewed_sample_indices(145, 4, [0, 7, 14, 21]) == [0, 7, 14, 21]
+
+
+def test_adaptive_sampling_finds_pose_extremes_and_idle_recovery() -> None:
+    def pose(offset: int) -> Image.Image:
+        image = Image.new("RGB", (32, 32), "black")
+        for y in range(10, 25):
+            for x in range(10 + offset, 22 + offset):
+                image.putpixel((x, y), (180, 90, 40))
+        return image
+
+    frames = (
+        [pose(0)] * 3
+        + [pose(-1), pose(-3), pose(-5), pose(-3), pose(-1)]
+        + [pose(0)] * 3
+        + [pose(1), pose(3), pose(5), pose(3), pose(1)]
+        + [pose(0)] * 3
+    )
+    indices, metrics = adaptive_sample_indices(
+        [_frame_signature(frame) for frame in frames], 4
+    )
+
+    assert indices[0] == 0
+    assert indices[1] in {4, 5, 6}
+    assert indices[2] in {8, 9, 10}
+    assert indices[3] in {12, 13, 14}
+    assert metrics["method"] == "adaptive-pose-v1"
+    assert metrics["phase_a_to_phase_b_distance"] > 0
+    assert len(metrics["candidate_sets"]) >= 2
+    assert metrics["candidate_sets"][0]["indices"] == indices
+
+
+def test_adaptive_sampling_supports_non_four_frame_workflows() -> None:
+    frames = []
+    for index in range(36):
+        image = Image.new("RGB", (32, 32), "black")
+        offset = round(5 * __import__("math").sin(index / 36 * 6.283185))
+        for y in range(9, 25):
+            for x in range(10 + offset, 22 + offset):
+                image.putpixel((x, y), (160, 100, 60))
+        frames.append(image)
+
+    indices, metrics = adaptive_sample_indices(
+        [_frame_signature(frame) for frame in frames],
+        6,
+        sampling_mode="cyclic-half-open",
+    )
+
+    assert len(indices) == 6
+    assert indices[0] == 0
+    assert indices == sorted(set(indices))
+    assert metrics["method"] == "adaptive-sequence-v1"
+    assert len(metrics["candidate_sets"]) >= 2
+
+
+def test_adaptive_sampling_ranks_source_edge_contact_below_safe_poses() -> None:
+    frames = []
+    for index in range(30):
+        image = Image.new("RGB", (32, 32), "black")
+        offset = round(6 * __import__("math").sin(index / 30 * 12.56637))
+        left = 10 + offset
+        right = 22 + offset
+        if index in {5, 13, 21}:
+            left, right = (0, 12) if index != 13 else (20, 32)
+        for y in range(9, 25):
+            for x in range(left, right):
+                image.putpixel((x, y), (180, 90, 40))
+        frames.append(image)
+
+    signatures = [_frame_signature(frame) for frame in frames]
+    indices, metrics = adaptive_sample_indices(signatures, 4)
+
+    assert set(metrics["source_edge_contact_frames"]) == {5, 13, 21}
+    assert all(signatures[index].source_edge_foreground_ratio == 0 for index in indices)
+    assert metrics["candidate_sets"][0]["source_edge_contact_frames"] == []
 
 
 @pytest.mark.parametrize(
@@ -191,6 +280,72 @@ def test_sideview_locomotion_prompt_requires_opposite_support_legs(tmp_path: Pat
     assert "other anatomical leg is extended forward and planted" in prompt
     assert "never repeat the same support limb" in prompt
     assert "without forward root travel or foot sliding" in prompt
+
+
+def test_front_fps_creature_prompt_uses_declared_anatomy_not_biped_mirroring(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    request = _request()
+    request["states"]["walk"]["animation_workflows"] = [
+        "front-fps-creature-locomotion"
+    ]
+    (run_dir / "sprite-request.json").write_text(
+        json.dumps(request), encoding="utf-8"
+    )
+    Image.new("RGBA", (32, 32), (128, 128, 128, 255)).save(
+        run_dir / "first-frame.png"
+    )
+
+    prepared = prepare_video_job(
+        repo_root=tmp_path,
+        run_dir=run_dir,
+        state="walk",
+        first_frame_name="first-frame.png",
+    )
+    prompt = prepared.prompt_text.lower()
+
+    assert "full-frontal fps view" in prompt
+    assert "creature's declared anatomy" in prompt
+    assert "generic biped mirror" in prompt
+    assert "exact supplied idle anchor" in prompt
+
+
+def test_faceless_creature_prompt_keeps_declared_anatomy_and_forbids_a_face(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    request = _request()
+    request["creature_motion"] = {
+        "anatomy": "hovering",
+        "locomotion": "hover",
+        "camera": "front-fps",
+        "registration_anchor": "center",
+        "shared_idle": True,
+        "preserve": ["two crescent skeletal forearms", "orange rib-cage core"],
+        "reject": ["invented mouth", "turning the core into a face", "extra arms"],
+    }
+    (run_dir / "sprite-request.json").write_text(
+        json.dumps(request), encoding="utf-8"
+    )
+    Image.new("RGBA", (32, 32), (128, 128, 128, 255)).save(
+        run_dir / "first-frame.png"
+    )
+
+    prepared = prepare_video_job(
+        repo_root=tmp_path,
+        run_dir=run_dir,
+        state="walk",
+        first_frame_name="first-frame.png",
+    )
+    prompt = prepared.prompt_text.lower()
+
+    assert "keep the head exactly faceless" in prompt
+    assert "do not create eyes, a mouth, teeth" in prompt
+    assert "preserve exactly: two crescent skeletal forearms" in prompt
+    assert "never produce: invented mouth" in prompt
 
 
 def test_decode_selected_validates_unselected_second_pass_frames() -> None:

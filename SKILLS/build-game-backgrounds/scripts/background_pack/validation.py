@@ -128,11 +128,17 @@ def _composite(records: list[dict[str, Any]], size: tuple[int, int], offsets: Ma
     for record in records:
         layer = record["image"]
         shift = (offsets or {}).get(record["id"], 0)
-        if shift and record["repeat_x"]:
+        if shift:
             shifted = Image.new("RGBA", size, (0, 0, 0, 0))
-            normalized = shift % size[0]
-            shifted.alpha_composite(layer, (-normalized, 0))
-            shifted.alpha_composite(layer, (size[0] - normalized, 0))
+            if record["repeat_x"]:
+                normalized = shift % size[0]
+                shifted.alpha_composite(layer, (-normalized, 0))
+                shifted.alpha_composite(layer, (size[0] - normalized, 0))
+            else:
+                # Non-repeating layers still need to move in the scroll proof.
+                # Clip the translated layer at the canvas edge instead of
+                # wrapping it; wrapping is reserved for explicitly tiled art.
+                shifted.alpha_composite(layer, (shift, 0))
             layer = shifted
         _blend(canvas, layer, record["blend_mode"])
     return canvas

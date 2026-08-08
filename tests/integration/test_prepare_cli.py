@@ -45,6 +45,152 @@ def test_prepare_writes_a_valid_v2_request(tmp_path: Path) -> None:
     assert written["frame_semantics"] == "animation"
     assert written["sampling_policy"]["filter"] == "nearest"
     assert written["states"]["idle"]["raw_layout"]["columns"] == 2
+    assert written["background_removal"]["method"] == "lucida"
+    assert written["grid_segmentation"] == "adaptive"
+
+
+def test_prepare_preserves_creature_motion_and_adds_anatomy_prompt(tmp_path: Path) -> None:
+    run_dir = tmp_path / "creature"
+    request = {
+        "states": {
+            "idle-step": {
+                "frames": 4,
+                "fps": 8,
+                "loop": True,
+                "action": "frontal step cycle",
+            },
+            "attack": {
+                "frames": 4,
+                "fps": 10,
+                "loop": False,
+                "action": "bilateral grab attack",
+            },
+        },
+        "creature_motion": {
+            "anatomy": "biped",
+            "locomotion": "walk",
+            "camera": "front-fps",
+            "registration_anchor": "body-bottom",
+            "shared_idle": True,
+            "screen_side_labels": True,
+            "movement_source": "alternating legs with opposite arm swing",
+            "attack_source": "both hands",
+            "preserve": ["head size", "torso volume"],
+            "reject": ["knee-only motion", "one-hand generic strike"],
+        },
+    }
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(PREPARE),
+            "--out-dir",
+            str(run_dir),
+            "--character-id",
+            "frontal-shadow",
+            "--request-json",
+            json.dumps(request),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    written = json.loads((run_dir / "sprite-request.json").read_text(encoding="utf-8"))
+    assert written["creature_motion"] == request["creature_motion"]
+
+    movement_prompt = (run_dir / "prompts" / "idle-step.txt").read_text(encoding="utf-8")
+    attack_prompt = (run_dir / "prompts" / "attack.txt").read_text(encoding="utf-8")
+    assert "Anatomy class: biped" in movement_prompt
+    assert "exact idle, phase A, exact idle, phase B" in movement_prompt
+    assert "complete alternating steps" in movement_prompt
+    assert "Primary attack source" not in movement_prompt
+    assert "Primary attack source: both hands" in attack_prompt
+    assert "exact idle, anticipation, active contact, exact idle" in attack_prompt
+    assert "complete alternating steps" not in attack_prompt
+
+
+@pytest.mark.parametrize(
+    ("anatomy", "locomotion", "state", "expected", "forbidden"),
+    [
+        ("winged", "fly", "flight", "Animate both wings", "complete alternating steps"),
+        (
+            "multi-legged",
+            "crawl",
+            "crawl",
+            "Declare the alternating leg groups",
+            "complete alternating steps",
+        ),
+        (
+            "hovering",
+            "hover",
+            "hover",
+            "Animate the lower shroud",
+            "complete alternating steps",
+        ),
+        (
+            "amorphous",
+            "pulse",
+            "pulse",
+            "Use localized material pulses",
+            "complete alternating steps",
+        ),
+    ],
+)
+def test_prepare_uses_anatomy_specific_creature_motion(
+    tmp_path: Path,
+    anatomy: str,
+    locomotion: str,
+    state: str,
+    expected: str,
+    forbidden: str,
+) -> None:
+    run_dir = tmp_path / anatomy
+    request = {
+        "states": {
+            state: {
+                "frames": 4,
+                "fps": 8,
+                "loop": True,
+                "action": f"frontal {state} cycle",
+            }
+        },
+        "creature_motion": {
+            "anatomy": anatomy,
+            "locomotion": locomotion,
+            "camera": "front-fps",
+            "registration_anchor": (
+                "center" if anatomy in {"winged", "hovering"} else "body-bottom"
+            ),
+            "shared_idle": True,
+            "movement_source": f"{anatomy} motion anatomy",
+            "attack_source": "declared natural weapon",
+        },
+    }
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(PREPARE),
+            "--out-dir",
+            str(run_dir),
+            "--character-id",
+            f"{anatomy}-creature",
+            "--request-json",
+            json.dumps(request),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    prompt = (run_dir / "prompts" / f"{state}.txt").read_text(encoding="utf-8")
+    assert expected in prompt
+    assert forbidden not in prompt
 
 
 def test_prepare_rejects_a_declared_non_request_contract(tmp_path: Path) -> None:

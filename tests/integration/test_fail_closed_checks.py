@@ -4,10 +4,13 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+from types import SimpleNamespace
 
 from PIL import Image, ImageDraw
 
-from check_animation_contracts import infer_workflows
+from check_animation_contracts import infer_workflows, inspect_action, inspect_locomotion
+from check_frame_alignment import row_kind
+from extract_sprite_row_frames import exact_idle_copy_pairs, restore_source_foreground_regions
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -39,6 +42,169 @@ def test_alignment_fails_when_manifest_is_missing_and_zero_rows_are_checked(tmp_
     assert report["ok"] is False
     assert report["rows"] == []
     assert report["errors"]
+
+
+def test_winged_flight_idle_step_is_not_treated_as_grounded() -> None:
+    request = {
+        "creature_motion": {"anatomy": "winged", "locomotion": "fly"},
+        "states": {"idle-step": {"frames": 4, "fps": 8}},
+    }
+
+    assert row_kind("idle-step", {"state": "idle-step"}, request) == "airborne"
+
+
+def test_amorphous_pulse_uses_declared_motion_thresholds_without_weakening_default() -> None:
+    frames = []
+    for active_side in (None, "left", None, "right"):
+        frame = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(frame)
+        draw.rectangle((10, 12, 54, 58), fill=(150, 150, 150, 255))
+        if active_side == "left":
+            draw.rectangle((3, 44, 12, 58), fill=(150, 150, 150, 255))
+        elif active_side == "right":
+            draw.rectangle((52, 44, 61, 58), fill=(150, 150, 150, 255))
+        frames.append(frame)
+    args = SimpleNamespace(
+        lower_body_start=0.45,
+        min_average_lower_diff=0.10,
+        min_pair_lower_diff=0.04,
+        min_support_range=0.045,
+        min_contact_balance_abs=0.012,
+        min_contact_opposition=0.035,
+        min_opposite_contact_pose_diff=0.08,
+        min_center_range=0.015,
+    )
+
+    default_errors, _, _ = inspect_locomotion([], frames, [], args, shared_idle=True)
+    pulse_errors, _, pulse_metrics = inspect_locomotion(
+        [],
+        frames,
+        [],
+        args,
+        shared_idle=True,
+        creature_motion={"anatomy": "amorphous", "locomotion": "pulse"},
+    )
+
+    assert default_errors
+    assert pulse_errors == []
+    assert pulse_metrics["threshold_policy"] == "amorphous-pulse"
+    assert pulse_metrics["min_average_lower_diff"] == 0.05
+
+
+def test_action_peak_extent_uses_full_bbox_area_for_wide_creatures() -> None:
+    metrics = [
+        {"width": 0.9, "height": 0.4, "center_x": 0.5, "center_y": 0.5, "alpha_area": 100},
+        {"width": 0.9, "height": 0.5, "center_x": 0.5, "center_y": 0.48, "alpha_area": 120},
+        {"width": 0.9, "height": 0.65, "center_x": 0.5, "center_y": 0.45, "alpha_area": 150},
+        {"width": 0.9, "height": 0.4, "center_x": 0.5, "center_y": 0.5, "alpha_area": 100},
+    ]
+    args = SimpleNamespace(min_action_motion_range=0.045, min_action_pair_diff=0.055)
+
+    _, warnings, action_metrics = inspect_action(
+        ["front-fps-creature-attack"], metrics, [0.2, 0.3, 0.4], args
+    )
+
+    assert action_metrics["peak_extent_frame"] == 3
+    assert not any("strongest extent" in warning for warning in warnings)
+
+
+def test_source_foreground_recovery_restores_black_torso_not_matte_hole() -> None:
+    source = Image.new("RGBA", (64, 64), (128, 128, 128, 255))
+    source_draw = ImageDraw.Draw(source)
+    source_draw.rectangle((8, 8, 30, 42), fill=(18, 18, 20, 255))
+    source_draw.rectangle((38, 8, 58, 42), fill=(128, 128, 128, 255))
+    cutout = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    cutout_draw = ImageDraw.Draw(cutout)
+    cutout_draw.rectangle((7, 7, 31, 43), outline=(40, 40, 42, 255), width=2)
+    cutout_draw.rectangle((37, 7, 59, 43), outline=(40, 40, 42, 255), width=2)
+
+    restored, count = restore_source_foreground_regions(
+        source,
+        cutout,
+        [(128, 128, 128)],
+        min_source_pixels=32,
+    )
+
+    assert count > 400
+    assert restored.getpixel((18, 20)) == (18, 18, 20, 255)
+    assert restored.getpixel((48, 20))[3] == 0
+
+
+def test_source_foreground_recovery_handles_black_void_open_between_horns() -> None:
+    source = Image.new("RGBA", (64, 64), (128, 128, 128, 255))
+    source_draw = ImageDraw.Draw(source)
+    source_draw.polygon(
+        [(16, 0), (24, 18), (40, 18), (48, 0), (48, 52), (16, 52)],
+        fill=(12, 12, 14, 255),
+    )
+    cutout = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    cutout_draw = ImageDraw.Draw(cutout)
+    cutout_draw.line([(16, 0), (24, 18), (16, 52)], fill=(30, 30, 32, 255), width=3)
+    cutout_draw.line([(48, 0), (40, 18), (48, 52)], fill=(30, 30, 32, 255), width=3)
+
+    restored, count = restore_source_foreground_regions(
+        source,
+        cutout,
+        [(128, 128, 128)],
+        min_source_pixels=32,
+    )
+
+    assert count > 600
+    assert restored.getpixel((32, 24)) == (12, 12, 14, 255)
+
+
+def test_source_foreground_recovery_accepts_separate_void_bounded_by_model() -> None:
+    source = Image.new("RGBA", (64, 64), (128, 128, 128, 255))
+    source_draw = ImageDraw.Draw(source)
+    source_draw.rectangle((22, 16, 42, 46), fill=(8, 8, 10, 255))
+    source_draw.rectangle((17, 11, 47, 51), outline=(42, 42, 44, 255), width=2)
+    cutout = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    ImageDraw.Draw(cutout).rectangle(
+        (17, 11, 47, 51), outline=(42, 42, 44, 255), width=2
+    )
+
+    restored, count = restore_source_foreground_regions(
+        source,
+        cutout,
+        [(128, 128, 128)],
+        min_source_pixels=32,
+    )
+
+    assert count > 500
+    assert restored.getpixel((32, 30)) == (8, 8, 10, 255)
+
+
+def test_exact_idle_copy_pairs_require_shared_idle_and_identical_source_cells() -> None:
+    grid = Image.new("RGBA", (16, 16), (128, 128, 128, 255))
+    draw = ImageDraw.Draw(grid)
+    draw.rectangle((1, 1, 6, 6), fill=(20, 20, 20, 255))
+    draw.rectangle((9, 9, 14, 14), fill=(20, 20, 20, 255))
+
+    assert exact_idle_copy_pairs(
+        grid,
+        state="attack",
+        frame_count=4,
+        columns=2,
+        rows=2,
+        shared_idle=True,
+    ) == [(0, 3)]
+    assert exact_idle_copy_pairs(
+        grid,
+        state="attack",
+        frame_count=4,
+        columns=2,
+        rows=2,
+        shared_idle=False,
+    ) == []
+    draw.point((15, 15), fill=(30, 30, 30, 255))
+    assert exact_idle_copy_pairs(
+        grid,
+        state="attack",
+        frame_count=4,
+        columns=2,
+        rows=2,
+        shared_idle=True,
+    ) == []
 
 
 def test_identity_fails_when_manifest_is_missing_and_zero_rows_are_checked(tmp_path: Path) -> None:
@@ -116,6 +282,45 @@ def test_identity_allows_pose_width_change_when_head_and_upper_body_stay_stable(
     result = _run("check_identity_consistency.py", "--run-dir", str(run_dir))
 
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_identity_allows_declared_arm_attack_upper_width_without_relaxing_other_rows(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "arm-attack"
+    (run_dir / "frames").mkdir(parents=True)
+    request = {
+        "creature_motion": {"attack_source": "both arms and hands"},
+        "states": {"attack": {"frames": 4, "fps": 10}},
+    }
+    (run_dir / "sprite-request.json").write_text(
+        json.dumps(request), encoding="utf-8"
+    )
+    records = [
+        {
+            "head_width_vs_reference": 1.0,
+            "upper_width_vs_reference": upper_width,
+            "body_mass_width_80_vs_reference": 1.0,
+            "opaque_area_vs_reference": 1.0,
+        }
+        for upper_width in (1.0, 1.3, 1.45, 1.0)
+    ]
+    (run_dir / "frames" / "frames-manifest.json").write_text(
+        json.dumps(
+            {"ok": True, "rows": [{"state": "attack", "frame_records": records}]}
+        ),
+        encoding="utf-8",
+    )
+
+    result = _run("check_identity_consistency.py", "--run-dir", str(run_dir))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = json.loads(
+        (run_dir / "qa" / "identity-consistency-report.json").read_text()
+    )
+    upper = report["results"][0]["metrics"]["upper_width_vs_reference"]
+    assert upper["spread_policy"] == "declared-arm-attack"
+    assert upper["spread"] == 0.45
 
 
 def test_animation_gate_rejects_unknown_explicit_workflow(tmp_path: Path) -> None:

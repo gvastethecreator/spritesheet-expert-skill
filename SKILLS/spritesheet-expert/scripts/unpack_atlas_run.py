@@ -32,12 +32,22 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
 
-from extract_sprite_row_frames import DEFAULT_BEN2_MODEL, DEFAULT_REMBG_MODEL, default_background_model, remove_background
+from extract_sprite_row_frames import (
+    DEFAULT_BEN2_MODEL,
+    DEFAULT_LUCIDA_INPUT_SIZE,
+    DEFAULT_LUCIDA_MODEL,
+    DEFAULT_LUCIDA_REVISION,
+    DEFAULT_REMBG_MODEL,
+    default_background_model,
+    default_background_revision,
+    remove_background,
+)
 from runio import acquire_run_dir_lock, atomic_save_image, atomic_write_text
 from segmentation import projection_spans
 from spritecore.contracts import ContractError, normalize_contract
@@ -46,7 +56,15 @@ from spritecore.paths import PathSafetyError, create_run_marker, remove_known_ou
 
 ALPHA_THRESHOLD = 16  # a pixel counts as content above this alpha
 MIN_GUTTER = 1        # a fully-empty line of >= this many px separates frames
-BACKGROUND_REMOVAL_METHODS = {"none", "auto", "chroma", "matte", "rembg", "ben2"}
+BACKGROUND_REMOVAL_METHODS = {
+    "none",
+    "auto",
+    "chroma",
+    "matte",
+    "rembg",
+    "ben2",
+    "lucida",
+}
 UNPACK_KNOWN_OUTPUTS = (
     "frames",
     "qa",
@@ -93,11 +111,28 @@ def preprocess_atlas_background(
     args: argparse.Namespace,
 ) -> tuple[Image.Image, str, dict[str, Any]]:
     rgba = atlas.convert("RGBA")
+    revision = args.background_revision or default_background_revision(mode)
+    if mode == "lucida" and (
+        not isinstance(revision, str)
+        or re.fullmatch(r"[0-9a-f]{40}", revision) is None
+    ):
+        raise SystemExit(
+            "--background-revision must be a 40-character lowercase commit SHA for Lucida"
+        )
+    input_size = args.background_input_size or (
+        DEFAULT_LUCIDA_INPUT_SIZE if mode == "lucida" else None
+    )
+    if mode == "lucida" and not 256 <= input_size <= 2048:
+        raise SystemExit("--background-input-size must be from 256 to 2048")
+    if args.hard_alpha_threshold is not None and not 1 <= args.hard_alpha_threshold <= 255:
+        raise SystemExit("--hard-alpha-threshold must be from 1 to 255")
     config = {
         "method": mode,
         "model": args.background_model or default_background_model(mode),
         "device": args.background_device or "auto",
         "alpha_matting": bool(args.alpha_matting),
+        "alpha_mode": args.alpha_mode or "soft",
+        "hard_alpha_threshold": args.hard_alpha_threshold,
         "post_rembg_chroma_cleanup": bool(args.post_rembg_chroma_cleanup),
         "matte_threshold": args.matte_threshold,
         "matte_max_colors": args.matte_max_colors,
@@ -109,6 +144,9 @@ def preprocess_atlas_background(
         "chroma_matte": "soft-edge-despill",
         "matte_mask": "edge-palette-border-connected",
     }
+    if mode == "lucida":
+        config["revision"] = revision
+        config["input_size"] = input_size
     if mode == "none":
         return rgba, "preserved", config
     processed, method = remove_background(rgba, chroma_key, config, args, {})
@@ -684,9 +722,24 @@ def main() -> int:
         default=None,
         help="background matte before segmentation; default is auto for alpha auto-detect, none for explicit grid/manifest",
     )
-    parser.add_argument("--background-model", default=None, help=f"model name; rembg default {DEFAULT_REMBG_MODEL}; ben2 default {DEFAULT_BEN2_MODEL}")
+    parser.add_argument(
+        "--background-model",
+        default=None,
+        help=(
+            f"model name; lucida default {DEFAULT_LUCIDA_MODEL}; "
+            f"rembg default {DEFAULT_REMBG_MODEL}; ben2 default {DEFAULT_BEN2_MODEL}"
+        ),
+    )
+    parser.add_argument(
+        "--background-revision",
+        default=None,
+        help=f"immutable model commit SHA; Lucida default {DEFAULT_LUCIDA_REVISION}",
+    )
+    parser.add_argument("--background-input-size", type=int, default=None)
     parser.add_argument("--background-device", default=None, help="model-backed background removal device: auto, cpu, cuda, cuda:0, etc.")
     parser.add_argument("--alpha-matting", action="store_true")
+    parser.add_argument("--alpha-mode", choices=["soft", "hard"], default=None)
+    parser.add_argument("--hard-alpha-threshold", type=int, default=None)
     parser.add_argument("--post-rembg-chroma-cleanup", action="store_true", help="after rembg, also run conservative border-connected chroma cleanup; off by default to avoid subject over-removal")
     parser.add_argument("--chroma-key", default="#FF00FF")
     parser.add_argument("--key-threshold", type=float, default=96.0)

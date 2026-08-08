@@ -1,0 +1,6 @@
+torch>=2.4
+torchvision
+transformers>=4.44
+timm
+einops
+kornia
