@@ -503,6 +503,28 @@ def normalized_pair_diff(left: Image.Image, right: Image.Image, y_start_ratio: f
     return xor / union if union else 0.0
 
 
+def normalized_visual_pair_diff(
+    left: Image.Image,
+    right: Image.Image,
+    *,
+    channel_threshold: int = 24,
+) -> float:
+    """Measure visible interior changes that do not alter the alpha silhouette."""
+    if left.size != right.size:
+        return 1.0
+    left_pixels = left.convert("RGBA").get_flattened_data()
+    right_pixels = right.convert("RGBA").get_flattened_data()
+    union = 0
+    changed = 0
+    for left_pixel, right_pixel in zip(left_pixels, right_pixels):
+        if left_pixel[3] == 0 and right_pixel[3] == 0:
+            continue
+        union += 1
+        if max(abs(left_pixel[index] - right_pixel[index]) for index in range(3)) >= channel_threshold:
+            changed += 1
+    return changed / union if union else 0.0
+
+
 def metric_range(metrics: list[dict[str, float]], key: str) -> float:
     values = [metric[key] for metric in metrics]
     return max(values) - min(values) if values else 0.0
@@ -677,6 +699,7 @@ def inspect_action(
     metrics: list[dict[str, float]],
     pair_diffs: list[float],
     args: argparse.Namespace,
+    visual_pair_diffs: list[float] | None = None,
 ) -> tuple[list[str], list[str], dict[str, Any]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -690,12 +713,23 @@ def inspect_action(
     peak_area_index = area_values.index(max(area_values)) if area_values else None
     peak_extent_index = extent_scores.index(max(extent_scores)) if extent_scores else None
     average_diff = sum(pair_diffs) / len(pair_diffs) if pair_diffs else 0.0
+    average_visual_diff = (
+        sum(visual_pair_diffs) / len(visual_pair_diffs)
+        if visual_pair_diffs
+        else 0.0
+    )
+    min_visual_diff = float(getattr(args, "min_action_visual_diff", 0.003))
     max_motion_range = max(width_range, height_range, center_x_range, center_y_range, area_range)
 
-    if max_motion_range < args.min_action_motion_range and average_diff < args.min_action_pair_diff:
+    if (
+        max_motion_range < args.min_action_motion_range
+        and average_diff < args.min_action_pair_diff
+        and average_visual_diff < min_visual_diff
+    ):
         errors.append(
             "action row is too static to prove startup/active/recovery phases "
-            f"(motion range {max_motion_range:.3f}, avg diff {average_diff:.3f})"
+            f"(motion range {max_motion_range:.3f}, alpha diff {average_diff:.3f}, "
+            f"visual diff {average_visual_diff:.3f})"
         )
     if peak_extent_index in {0, len(metrics) - 1} and len(metrics) >= 4:
         warnings.append("strongest extent is on the first or last frame; verify active/contact is not missing")
@@ -709,6 +743,8 @@ def inspect_action(
         "center_y_range": round(center_y_range, 4),
         "alpha_area_range_ratio": round(area_range, 4),
         "average_pair_diff": round(average_diff, 4),
+        "average_visual_pair_diff": round(average_visual_diff, 4),
+        "min_action_visual_diff": min_visual_diff,
         "peak_area_frame": None if peak_area_index is None else peak_area_index + 1,
         "peak_extent_frame": None if peak_extent_index is None else peak_extent_index + 1,
     }
@@ -950,9 +986,14 @@ def inspect_state(
         normalized_pair_diff(frames[index], frames[(index + 1) % len(frames)])
         for index in range(pair_count)
     ]
+    visual_pair_diffs = [
+        normalized_visual_pair_diff(frames[index], frames[(index + 1) % len(frames)])
+        for index in range(pair_count)
+    ]
     metric_blocks: dict[str, Any] = {
         "frame_count": len(frames),
         "pair_diffs": [round(value, 4) for value in pair_diffs],
+        "visual_pair_diffs": [round(value, 4) for value in visual_pair_diffs],
         "bbox_width_range": round(metric_range(metrics, "width"), 4),
         "bbox_height_range": round(metric_range(metrics, "height"), 4),
         "center_x_range": round(metric_range(metrics, "center_x"), 4),
@@ -986,7 +1027,13 @@ def inspect_state(
             warnings.extend(step_warnings)
             metric_blocks["locomotion"] = step_metrics
         if ACTION_WORKFLOWS & set(workflows):
-            step_errors, step_warnings, step_metrics = inspect_action(workflows, metrics, pair_diffs, args)
+            step_errors, step_warnings, step_metrics = inspect_action(
+                workflows,
+                metrics,
+                pair_diffs,
+                args,
+                visual_pair_diffs,
+            )
             errors.extend(step_errors)
             warnings.extend(step_warnings)
             metric_blocks["action"] = step_metrics
@@ -1060,6 +1107,7 @@ def main() -> int:
     parser.add_argument("--min-center-range", type=float, default=0.015)
     parser.add_argument("--min-action-motion-range", type=float, default=0.045)
     parser.add_argument("--min-action-pair-diff", type=float, default=0.055)
+    parser.add_argument("--min-action-visual-diff", type=float, default=0.003)
     parser.add_argument("--min-jump-vertical-range", type=float, default=0.035)
     parser.add_argument("--min-reaction-motion-range", type=float, default=0.035)
     parser.add_argument("--min-vfx-area-range", type=float, default=0.20)

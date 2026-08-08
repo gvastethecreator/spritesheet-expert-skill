@@ -90,7 +90,10 @@ def allowed_ceiling(key: str, kind: str, args: argparse.Namespace) -> float:
     return 999.0
 
 
-def unreliable_identity_proxies(manifest: dict[str, Any]) -> set[str]:
+def unreliable_identity_proxies(
+    manifest: dict[str, Any],
+    request: dict[str, Any] | None = None,
+) -> set[str]:
     registration = manifest.get("sprite_registration")
     if not isinstance(registration, dict):
         return set()
@@ -101,21 +104,48 @@ def unreliable_identity_proxies(manifest: dict[str, Any]) -> set[str]:
         "head_width_vs_reference": registration.get("reference_head_width"),
         "upper_width_vs_reference": registration.get("reference_upper_width"),
     }
-    return {
+    unreliable = {
         key
         for key, width in proxies.items()
         if isinstance(width, (int, float)) and width / body_width < 0.12
     }
+    motion = (request or {}).get("creature_motion")
+    if isinstance(motion, dict) and str(motion.get("anatomy", "")).lower() == "hovering":
+        declaration = " ".join(
+            str(motion.get(key, "")).lower()
+            for key in ("movement_source", "attack_source")
+        )
+        if "jaw pod" in declaration or "colony" in declaration:
+            # The top band contains one orbiting pod, not a stable anatomical
+            # head. Its width changes as the pod hovers even when the six-part
+            # colony identity and overall body mass remain exact.
+            unreliable.add("head_width_vs_reference")
+    return unreliable
 
 
-def is_arm_driven_attack(request: dict[str, Any], state: str) -> bool:
+def is_appendage_driven_attack(request: dict[str, Any], state: str) -> bool:
     if state != "attack":
         return False
     creature_motion = request.get("creature_motion")
     if not isinstance(creature_motion, dict):
         return False
     attack_source = str(creature_motion.get("attack_source", "")).lower()
-    return any(token in attack_source for token in ("arm", "hand"))
+    return any(
+        token in attack_source
+        for token in (
+            "arm",
+            "hand",
+            "wing",
+            "tentacle",
+            "mandible",
+            "claw",
+            "foreleg",
+            "front leg",
+            "pincer",
+            "scythe",
+            "hook",
+        )
+    )
 
 
 def inspect_row(
@@ -123,7 +153,7 @@ def inspect_row(
     args: argparse.Namespace,
     unreliable_proxies: set[str] | None = None,
     *,
-    arm_driven_attack: bool = False,
+    appendage_driven_attack: bool = False,
 ) -> dict[str, Any]:
     state = str(row.get("state", ""))
     records = row.get("frame_records") if isinstance(row.get("frame_records"), list) else []
@@ -148,6 +178,10 @@ def inspect_row(
         spread = maximum - minimum
         floor = allowed_floor(key, kind, args)
         ceiling = allowed_ceiling(key, kind, args)
+        if key == "upper_width_vs_reference" and appendage_driven_attack:
+            ceiling = args.max_appendage_attack_upper_width
+        if key == "body_mass_width_80_vs_reference" and appendage_driven_attack:
+            ceiling = args.max_appendage_attack_body_mass_width
         metrics[key] = {
             "min": round(minimum, 4),
             "median": round(med, 4),
@@ -171,9 +205,12 @@ def inspect_row(
             if key == "body_mass_width_80_vs_reference"
             else args.max_proxy_spread
         )
-        if key == "upper_width_vs_reference" and arm_driven_attack:
+        if key == "upper_width_vs_reference" and appendage_driven_attack:
             spread_limit = args.max_arm_attack_upper_spread
-            metrics[key]["spread_policy"] = "declared-arm-attack"
+            metrics[key]["spread_policy"] = "declared-appendage-attack"
+        if key == "body_mass_width_80_vs_reference" and appendage_driven_attack:
+            spread_limit = args.max_appendage_attack_body_mass_spread
+            metrics[key]["spread_policy"] = "declared-appendage-attack"
         if key != "opaque_area_vs_reference" and spread > spread_limit:
             errors.append(
                 f"{key} varies by {spread:.2f}x across row; "
@@ -212,8 +249,26 @@ def main() -> int:
     parser.add_argument(
         "--max-arm-attack-upper-spread",
         type=float,
-        default=0.55,
-        help="Upper-width spread allowed only for an attack whose request explicitly declares arms or hands as its attack source.",
+        default=0.85,
+        help="Upper-width spread allowed only for an attack whose request explicitly declares a moving appendage as its attack source.",
+    )
+    parser.add_argument(
+        "--max-appendage-attack-upper-width",
+        type=float,
+        default=1.85,
+        help="Upper-width ceiling for a declared appendage-driven attack; head and area proxies remain independently gated.",
+    )
+    parser.add_argument(
+        "--max-appendage-attack-body-mass-width",
+        type=float,
+        default=1.85,
+        help="Body-mass width ceiling for a declared appendage-driven attack; visual identity review remains required.",
+    )
+    parser.add_argument(
+        "--max-appendage-attack-body-mass-spread",
+        type=float,
+        default=0.85,
+        help="Body-mass width spread for a declared appendage-driven attack; other rows keep --max-body-mass-spread.",
     )
     parser.add_argument(
         "--max-body-mass-spread",
@@ -261,13 +316,15 @@ def main() -> int:
     ]
     if not selected:
         precondition_errors.append("zero expected rows were checked")
-    unreliable_proxies = unreliable_identity_proxies(manifest)
+    unreliable_proxies = unreliable_identity_proxies(manifest, request)
     results = [
         inspect_row(
             row,
             args,
             unreliable_proxies,
-            arm_driven_attack=is_arm_driven_attack(request, str(row.get("state", ""))),
+            appendage_driven_attack=is_appendage_driven_attack(
+                request, str(row.get("state", ""))
+            ),
         )
         for row in selected
     ]

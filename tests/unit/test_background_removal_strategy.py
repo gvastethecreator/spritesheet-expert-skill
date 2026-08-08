@@ -183,3 +183,60 @@ def test_lucida_conservative_cleanup_removes_only_neutral_edge_leak(monkeypatch)
     assert cutout.getpixel((7, 3))[3] == 0
     assert cutout.getpixel((2, 3))[3] == 255
     assert cutout.getpixel((4, 4))[3] == 255
+
+
+def test_enclosed_hole_recovery_restores_dark_subject_interior() -> None:
+    source = Image.new("RGBA", (9, 9), (0, 0, 0, 255))
+    cutout = Image.new("RGBA", source.size, (0, 0, 0, 0))
+    for value in range(2, 7):
+        cutout.putpixel((value, 2), (100, 120, 140, 255))
+        cutout.putpixel((value, 6), (100, 120, 140, 255))
+        cutout.putpixel((2, value), (100, 120, 140, 255))
+        cutout.putpixel((6, value), (100, 120, 140, 255))
+
+    restored, pixels = backgrounds.restore_enclosed_source_holes(
+        source,
+        cutout,
+        max_hole_ratio=0.2,
+    )
+
+    assert pixels == 9
+    assert restored.getpixel((4, 4)) == (0, 0, 0, 255)
+    assert restored.getpixel((0, 0))[3] == 0
+
+
+def test_enclosed_hole_recovery_keeps_border_connected_gap_transparent() -> None:
+    source = Image.new("RGBA", (9, 9), (0, 0, 0, 255))
+    cutout = Image.new("RGBA", source.size, (0, 0, 0, 0))
+    for value in range(2, 7):
+        cutout.putpixel((value, 2), (100, 120, 140, 255))
+        cutout.putpixel((value, 6), (100, 120, 140, 255))
+        cutout.putpixel((2, value), (100, 120, 140, 255))
+        cutout.putpixel((6, value), (100, 120, 140, 255))
+    cutout.putpixel((4, 2), (0, 0, 0, 0))
+
+    restored, pixels = backgrounds.restore_enclosed_source_holes(
+        source,
+        cutout,
+        max_hole_ratio=0.2,
+    )
+
+    assert pixels == 0
+    assert restored.getpixel((4, 4))[3] == 0
+
+
+def test_canonical_reference_state_prefers_non_attack_state() -> None:
+    request = {
+        "states": {
+            "attack": {"animation_workflows": ["front-fps-attack"]},
+            "idle-step": {"animation_workflows": ["front-fps-creature-locomotion"]},
+        }
+    }
+
+    assert backgrounds.canonical_reference_state(request) == "idle-step"
+
+
+def test_canonical_reference_state_falls_back_when_only_attack_exists() -> None:
+    request = {"states": {"attack": {"animation_workflows": ["front-fps-attack"]}}}
+
+    assert backgrounds.canonical_reference_state(request) == "attack"

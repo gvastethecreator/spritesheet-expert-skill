@@ -28,3 +28,24 @@ def test_normal_reference_proxies_remain_gated() -> None:
     }
 
     assert unreliable_identity_proxies(manifest) == set()
+
+
+def test_hovering_jaw_colony_does_not_use_top_pod_as_head_width_gate() -> None:
+    manifest = {
+        "sprite_registration": {
+            "reference_head_width": 30,
+            "reference_upper_width": 120,
+            "reference_body_mass_width_80": 180,
+        }
+    }
+    request = {
+        "creature_motion": {
+            "anatomy": "hovering",
+            "movement_source": "staggered hover of six jaw pods",
+            "attack_source": "all six jaw pods",
+        }
+    }
+
+    assert unreliable_identity_proxies(manifest, request) == {
+        "head_width_vs_reference"
+    }

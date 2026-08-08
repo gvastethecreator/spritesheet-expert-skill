@@ -1,0 +1,86 @@
+{
+  "current_commit": "6a687f002f7d9926e64d7cb65c556a6f9f1a183f",
+  "working_tree_dirty": true,
+  "generated_at": "2026-08-08T10:25:59Z",
+  "scanned_scope": [
+    "."
+  ],
+  "excluded_directories": [
+    ".cache",
+    ".git",
+    ".hg",
+    ".next",
+    ".nuxt",
+    ".svn",
+    ".turbo",
+    ".venv",
+    "__pycache__",
+    "build",
+    "coverage",
+    "dist",
+    "docs/codemap",
+    "generated",
+    "node_modules",
+    "out",
+    "target",
+    "vendor",
+    "venv"
+  ],
+  "fingerprint_algorithm": "sha256-path-content-v1",
+  "modules": [
+    {
+      "id": ".",
+      "path": ".",
+      "file_count": 6,
+      "fingerprint": "7c392888bfb97759537c56f34a6cbc3fe3f9025e9e808d711af0c508fa18feca"
+    },
+    {
+      "id": ".github",
+      "path": ".github",
+      "file_count": 1,
+      "fingerprint": "97fed3606becb15d05ce06264e9894168e5c217905e5d1185e0a6569b4420a18"
+    },
+    {
+      "id": "SKILLS",
+      "path": "SKILLS",
+      "file_count": 168,
+      "fingerprint": "ea8b3ebaab700602b52b78869b13c635a8c4edc6dd83ef34a264a274e87eab66"
+    },
+    {
+      "id": "assets",
+      "path": "assets",
+      "file_count": 1,
+      "fingerprint": "3b1ada1f1ddbb28cf0205d1960415a852520db41d9d897082fde00595d134b66"
+    },
+    {
+      "id": "docs",
+      "path": "docs",
+      "file_count": 6,
+      "fingerprint": "de349900e4f8ebec565ad8e2f52069564192cd164e6c4c7b8effa201c67f1f4d"
+    },
+    {
+      "id": "evals",
+      "path": "evals",
+      "file_count": 1,
+      "fingerprint": "b0be1f366c5201405cc9277fe32e421dcc3104a496551694821970d75ee6326e"
+    },
+    {
+      "id": "maintenance",
+      "path": "maintenance",
+      "file_count": 109,
+      "fingerprint": "355b276d312c4040e028ba7e1d1faa5552ec2b60d291c7f0c1414ae5ab17dce5"
+    },
+    {
+      "id": "scripts",
+      "path": "scripts",
+      "file_count": 3,
+      "fingerprint": "265d38724dff79793713f4a5848016170f0c40755034bc3933b1bc558c179fb0"
+    },
+    {
+      "id": "tests",
+      "path": "tests",
+      "file_count": 54,
+      "fingerprint": "a339a540a8659242a7b00f143b82905cbc38619adf53aacc5f196efb6f2d7855"
+    }
+  ]
+}

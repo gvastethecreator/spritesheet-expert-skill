@@ -8,7 +8,12 @@ from types import SimpleNamespace
 
 from PIL import Image, ImageDraw
 
-from check_animation_contracts import infer_workflows, inspect_action, inspect_locomotion
+from check_animation_contracts import (
+    infer_workflows,
+    inspect_action,
+    inspect_locomotion,
+    normalized_visual_pair_diff,
+)
 from check_frame_alignment import row_kind
 from extract_sprite_row_frames import exact_idle_copy_pairs, restore_source_foreground_regions
 
@@ -108,6 +113,19 @@ def test_action_peak_extent_uses_full_bbox_area_for_wide_creatures() -> None:
     assert not any("strongest extent" in warning for warning in warnings)
 
 
+def test_action_visual_diff_detects_internal_mouth_change_with_static_silhouette() -> None:
+    idle = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    active = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    for frame in (idle, active):
+        ImageDraw.Draw(frame).ellipse((8, 8, 56, 56), fill=(90, 90, 90, 255))
+    ImageDraw.Draw(idle).ellipse((27, 27, 37, 37), fill=(20, 20, 20, 255))
+    ImageDraw.Draw(active).ellipse((24, 20, 40, 44), fill=(210, 210, 210, 255))
+
+    visual_diff = normalized_visual_pair_diff(idle, active)
+
+    assert visual_diff > 0.003
+
+
 def test_source_foreground_recovery_restores_black_torso_not_matte_hole() -> None:
     source = Image.new("RGBA", (64, 64), (128, 128, 128, 255))
     source_draw = ImageDraw.Draw(source)
@@ -172,6 +190,47 @@ def test_source_foreground_recovery_accepts_separate_void_bounded_by_model() -> 
 
     assert count > 500
     assert restored.getpixel((32, 30)) == (8, 8, 10, 255)
+
+
+def test_source_foreground_recovery_can_retain_a_reviewed_separate_appendage() -> None:
+    source = Image.new("RGBA", (96, 64), (0, 0, 0, 255))
+    source_draw = ImageDraw.Draw(source)
+    source_draw.rectangle((34, 16, 60, 52), fill=(90, 100, 112, 255))
+    source_draw.rectangle((3, 8, 15, 20), fill=(180, 190, 204, 255))
+    cutout = Image.new("RGBA", (96, 64), (0, 0, 0, 0))
+    cutout_draw = ImageDraw.Draw(cutout)
+    cutout_draw.rectangle((34, 16, 60, 52), fill=(90, 100, 112, 255))
+    cutout_draw.point((0, 63), fill=(1, 1, 1, 255))
+    cutout_draw.point((95, 0), fill=(1, 1, 1, 255))
+
+    default_restored, default_count = restore_source_foreground_regions(
+        source,
+        cutout,
+        [(0, 0, 0)],
+        min_source_pixels=16,
+    )
+    reviewed_restored, reviewed_count = restore_source_foreground_regions(
+        source,
+        cutout,
+        [(0, 0, 0)],
+        min_source_pixels=16,
+        near_radius=24,
+    )
+
+    assert default_count == 0
+    assert default_restored.getpixel((10, 12))[3] == 0
+    assert reviewed_count > 150
+    assert reviewed_restored.getpixel((10, 12)) == (180, 190, 204, 255)
+
+    detached_restored, detached_count = restore_source_foreground_regions(
+        source,
+        cutout,
+        [(0, 0, 0)],
+        min_source_pixels=16,
+        accept_detached=True,
+    )
+    assert detached_count > 150
+    assert detached_restored.getpixel((10, 12)) == (180, 190, 204, 255)
 
 
 def test_exact_idle_copy_pairs_require_shared_idle_and_identical_source_cells() -> None:
@@ -284,7 +343,7 @@ def test_identity_allows_pose_width_change_when_head_and_upper_body_stay_stable(
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_identity_allows_declared_arm_attack_upper_width_without_relaxing_other_rows(
+def test_identity_allows_declared_arm_attack_width_without_relaxing_other_rows(
     tmp_path: Path,
 ) -> None:
     run_dir = tmp_path / "arm-attack"
@@ -300,10 +359,14 @@ def test_identity_allows_declared_arm_attack_upper_width_without_relaxing_other_
         {
             "head_width_vs_reference": 1.0,
             "upper_width_vs_reference": upper_width,
-            "body_mass_width_80_vs_reference": 1.0,
+            "body_mass_width_80_vs_reference": body_width,
             "opaque_area_vs_reference": 1.0,
         }
-        for upper_width in (1.0, 1.3, 1.45, 1.0)
+        for upper_width, body_width in zip(
+            (1.0, 1.3, 1.45, 1.0),
+            (1.0, 1.45, 1.72, 1.0),
+            strict=True,
+        )
     ]
     (run_dir / "frames" / "frames-manifest.json").write_text(
         json.dumps(
@@ -319,8 +382,49 @@ def test_identity_allows_declared_arm_attack_upper_width_without_relaxing_other_
         (run_dir / "qa" / "identity-consistency-report.json").read_text()
     )
     upper = report["results"][0]["metrics"]["upper_width_vs_reference"]
-    assert upper["spread_policy"] == "declared-arm-attack"
+    assert upper["spread_policy"] == "declared-appendage-attack"
     assert upper["spread"] == 0.45
+    assert upper["ceiling"] == 1.85
+    body = report["results"][0]["metrics"]["body_mass_width_80_vs_reference"]
+    assert body["spread_policy"] == "declared-appendage-attack"
+    assert body["ceiling"] == 1.85
+
+
+def test_identity_allows_declared_wing_attack_width(tmp_path: Path) -> None:
+    run_dir = tmp_path / "wing-attack"
+    (run_dir / "frames").mkdir(parents=True)
+    (run_dir / "sprite-request.json").write_text(
+        json.dumps(
+            {
+                "creature_motion": {"attack_source": "both hooked wing tips"},
+                "states": {"attack": {"frames": 4, "fps": 10}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    records = [
+        {
+            "head_width_vs_reference": 1.0,
+            "upper_width_vs_reference": upper_width,
+            "body_mass_width_80_vs_reference": body_width,
+            "opaque_area_vs_reference": 1.0,
+        }
+        for upper_width, body_width in zip(
+            (1.0, 1.2, 1.4, 1.0),
+            (0.92, 1.25, 1.66, 0.92),
+            strict=True,
+        )
+    ]
+    (run_dir / "frames" / "frames-manifest.json").write_text(
+        json.dumps(
+            {"ok": True, "rows": [{"state": "attack", "frame_records": records}]}
+        ),
+        encoding="utf-8",
+    )
+
+    result = _run("check_identity_consistency.py", "--run-dir", str(run_dir))
+
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_animation_gate_rejects_unknown_explicit_workflow(tmp_path: Path) -> None:
