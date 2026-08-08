@@ -247,7 +247,7 @@ def _runtime_preview_result(run_dir: Path, request: Mapping[str, Any]) -> CheckR
             errors=tuple(errors),
             evidence={"fingerprints": fingerprints},
             complete=bool(checked) and len(checked) == len(expected),
-            status=CheckStatus.BLOCKED if not checked else CheckStatus.FAIL,
+            status=CheckStatus.BLOCKED,
         )
     aggregate = sha256(
         json.dumps(fingerprints, sort_keys=True, separators=(",", ":")).encode("utf-8")

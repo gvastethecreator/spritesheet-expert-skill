@@ -524,6 +524,54 @@ def normalize_background_removal(request: dict[str, Any], args: argparse.Namespa
         raise SystemExit(
             "background_removal.input_size must be an integer from 256 to 2048 for Lucida"
         )
+    source_recovery_radius = config.get("source_recovery_radius", 8)
+    if (
+        isinstance(source_recovery_radius, bool)
+        or not isinstance(source_recovery_radius, int)
+        or not 1 <= source_recovery_radius <= 128
+    ):
+        raise SystemExit(
+            "background_removal.source_recovery_radius must be an integer from 1 to 128"
+        )
+    source_recovery_accept_detached = config.get(
+        "source_recovery_accept_detached", False
+    )
+    if not isinstance(source_recovery_accept_detached, bool):
+        raise SystemExit(
+            "background_removal.source_recovery_accept_detached must be boolean"
+        )
+    source_recovery_enabled = config.get("source_recovery_enabled", True)
+    if not isinstance(source_recovery_enabled, bool):
+        raise SystemExit(
+            "background_removal.source_recovery_enabled must be boolean"
+        )
+    post_source_recovery_cleanup = config.get(
+        "post_source_recovery_cleanup", False
+    )
+    if not isinstance(post_source_recovery_cleanup, bool):
+        raise SystemExit(
+            "background_removal.post_source_recovery_cleanup must be boolean"
+        )
+    post_source_recovery_threshold = config.get(
+        "post_source_recovery_threshold", 28
+    )
+    if (
+        isinstance(post_source_recovery_threshold, bool)
+        or not isinstance(post_source_recovery_threshold, (int, float))
+        or not 0 <= float(post_source_recovery_threshold) <= 255
+    ):
+        raise SystemExit(
+            "background_removal.post_source_recovery_threshold must be between 0 and 255"
+        )
+    post_source_recovery_passes = config.get("post_source_recovery_passes", 1)
+    if (
+        isinstance(post_source_recovery_passes, bool)
+        or not isinstance(post_source_recovery_passes, int)
+        or not 1 <= post_source_recovery_passes <= 8
+    ):
+        raise SystemExit(
+            "background_removal.post_source_recovery_passes must be an integer from 1 to 8"
+        )
     return {
         "method": method,
         "model": model,
@@ -533,6 +581,12 @@ def normalize_background_removal(request: dict[str, Any], args: argparse.Namespa
         "alpha_mode": alpha_mode,
         "hard_alpha_threshold": hard_alpha_threshold,
         "input_size": input_size if method == "lucida" else None,
+        "source_recovery_radius": source_recovery_radius,
+        "source_recovery_accept_detached": source_recovery_accept_detached,
+        "source_recovery_enabled": source_recovery_enabled,
+        "post_source_recovery_cleanup": post_source_recovery_cleanup,
+        "post_source_recovery_threshold": float(post_source_recovery_threshold),
+        "post_source_recovery_passes": post_source_recovery_passes,
         "post_rembg_chroma_cleanup": post_rembg_chroma_cleanup,
         "source_family": source_family,
         "matte_threshold": args.matte_threshold,
@@ -707,6 +761,8 @@ def restore_source_foreground_regions(
     *,
     color_threshold: float = 36.0,
     min_source_pixels: int | None = None,
+    near_radius: int = 8,
+    accept_detached: bool = False,
 ) -> tuple[Image.Image, int]:
     """Recover source-colored subject regions that a matte model erased.
 
@@ -729,7 +785,10 @@ def restore_source_foreground_regions(
         else max(1, int(min_source_pixels))
     )
     alpha_data = alpha.tobytes()
-    near_alpha_data = alpha.filter(ImageFilter.MaxFilter(17)).tobytes()
+    near_radius = max(1, int(near_radius))
+    near_alpha_data = alpha.filter(
+        ImageFilter.MaxFilter(near_radius * 2 + 1)
+    ).tobytes()
     foreground_bbox = alpha.getbbox()
     visited = bytearray(width * height)
     source_pixels = rgba_source.load()
@@ -789,7 +848,7 @@ def restore_source_foreground_regions(
         bounded_by_model = contained_by_foreground and accepted_near >= max(
             16, round(len(component) * 0.03)
         )
-        if not overlaps_model and not bounded_by_model:
+        if not accept_detached and not overlaps_model and not bounded_by_model:
             continue
         for index in component:
             if alpha_data[index] > 16:
@@ -799,6 +858,93 @@ def restore_source_foreground_regions(
             red, green, blue, _alpha = source_pixels[x, y]
             output_pixels[x, y] = (red, green, blue, 255)
             restored += 1
+    return output, restored
+
+
+def restore_enclosed_source_holes(
+    source: Image.Image,
+    cutout: Image.Image,
+    *,
+    alpha_threshold: int = 16,
+    max_hole_ratio: float = 0.02,
+) -> tuple[Image.Image, int]:
+    """Restore small transparent islands fully enclosed by accepted foreground.
+
+    Dark sprites on black mattes can contain subject pixels that no colour
+    distance test can distinguish from the background. Lucida may erase those
+    shadows even though the surrounding limb or torso was accepted. Only
+    transparent components that cannot reach the image border are eligible;
+    open spaces between legs, feelers, wings, and other silhouette gaps remain
+    transparent. Large enclosed openings are also left untouched.
+    """
+
+    rgba_source = source.convert("RGBA")
+    output = cutout.convert("RGBA").copy()
+    if rgba_source.size != output.size:
+        raise ValueError("source and cutout sizes must match for enclosed-hole recovery")
+    width, height = output.size
+    alpha_data = output.getchannel("A").tobytes()
+    transparent = bytearray(value <= alpha_threshold for value in alpha_data)
+    exterior = bytearray(width * height)
+    stack: list[int] = []
+    for x in range(width):
+        stack.extend((x, (height - 1) * width + x))
+    for y in range(1, height - 1):
+        stack.extend((y * width, y * width + width - 1))
+    while stack:
+        index = stack.pop()
+        if exterior[index] or not transparent[index]:
+            continue
+        exterior[index] = 1
+        x = index % width
+        y = index // width
+        if x > 0:
+            stack.append(index - 1)
+        if x + 1 < width:
+            stack.append(index + 1)
+        if y > 0:
+            stack.append(index - width)
+        if y + 1 < height:
+            stack.append(index + width)
+
+    visited = bytearray(width * height)
+    source_pixels = rgba_source.load()
+    output_pixels = output.load()
+    max_hole_pixels = max(1, round(width * height * max_hole_ratio))
+    restored = 0
+    for start, is_transparent in enumerate(transparent):
+        if not is_transparent or exterior[start] or visited[start]:
+            continue
+        component: list[int] = []
+        stack = [start]
+        visited[start] = 1
+        while stack:
+            index = stack.pop()
+            component.append(index)
+            x = index % width
+            y = index // width
+            for neighbor in (
+                index - 1 if x > 0 else -1,
+                index + 1 if x + 1 < width else -1,
+                index - width if y > 0 else -1,
+                index + width if y + 1 < height else -1,
+            ):
+                if (
+                    neighbor >= 0
+                    and transparent[neighbor]
+                    and not exterior[neighbor]
+                    and not visited[neighbor]
+                ):
+                    visited[neighbor] = 1
+                    stack.append(neighbor)
+        if len(component) > max_hole_pixels:
+            continue
+        for index in component:
+            x = index % width
+            y = index // width
+            red, green, blue, _alpha = source_pixels[x, y]
+            output_pixels[x, y] = (red, green, blue, 255)
+        restored += len(component)
     return output, restored
 
 
@@ -889,15 +1035,36 @@ def remove_background(
                 max(1, int(args.edge_refine_passes)),
             )
         cutout = apply_alpha_policy(cutout, config)
-        cutout, _restored_source_pixels = restore_source_foreground_regions(
+        if bool(config.get("source_recovery_enabled", True)):
+            cutout, _restored_source_pixels = restore_source_foreground_regions(
+                source,
+                cutout,
+                edge_palette_colors(
+                    source,
+                    args.matte_threshold,
+                    args.matte_max_colors,
+                ),
+                near_radius=int(config.get("source_recovery_radius", 8)),
+                accept_detached=bool(
+                    config.get("source_recovery_accept_detached", False)
+                ),
+            )
+        cutout, _restored_enclosed_pixels = restore_enclosed_source_holes(
             source,
             cutout,
-            edge_palette_colors(
-                source,
-                args.matte_threshold,
-                args.matte_max_colors,
-            ),
         )
+        if bool(config.get("post_source_recovery_cleanup", False)):
+            cutout = refine_cutout_edges(
+                cutout,
+                edge_palette_colors(
+                    source,
+                    args.matte_threshold,
+                    args.matte_max_colors,
+                ),
+                float(config.get("post_source_recovery_threshold", 28.0)),
+                0.0,
+                int(config.get("post_source_recovery_passes", 1)),
+            )
         return cutout, "lucida"
     cutout = remove_chroma_background(
         source,
@@ -955,7 +1122,12 @@ def labeled_preview(label: str, image: Image.Image, width: int, height: int) -> 
     return target
 
 
-def save_background_matte_review(entries: list[dict[str, Any]], out_dir: Path) -> str | None:
+def save_background_matte_review(
+    entries: list[dict[str, Any]],
+    out_dir: Path,
+    *,
+    filename: str = "background-matte-review.png",
+) -> str | None:
     if not entries:
         return None
     qa_dir = out_dir / "qa"
@@ -988,9 +1160,36 @@ def save_background_matte_review(entries: list[dict[str, Any]], out_dir: Path) -
         for index, panel in enumerate(panels):
             x = gutter + index * (panel_width + gutter)
             review.alpha_composite(panel, (x, y + label_height))
-    path = qa_dir / "background-matte-review.png"
+    path = qa_dir / filename
     atomic_save_image(review, path)
     return path.relative_to(out_dir).as_posix()
+
+
+def compose_state_matte_reviews(
+    run_dir: Path,
+    state_order: list[str],
+) -> str | None:
+    paths = [
+        run_dir / "qa" / f"{state}-background-matte-review.png"
+        for state in state_order
+    ]
+    paths = [path for path in paths if path.is_file()]
+    if not paths:
+        return None
+    panels = []
+    for path in paths:
+        with Image.open(path) as opened:
+            panels.append(opened.convert("RGBA"))
+    width = max(panel.width for panel in panels)
+    height = sum(panel.height for panel in panels)
+    review = Image.new("RGBA", (width, height), (7, 7, 7, 255))
+    y = 0
+    for panel in panels:
+        review.alpha_composite(panel, (0, y))
+        y += panel.height
+    path = run_dir / "qa" / "background-matte-review.png"
+    atomic_save_image(review, path)
+    return path.relative_to(run_dir).as_posix()
 
 
 def connected_components(image: Image.Image) -> list[dict[str, Any]]:
@@ -1211,6 +1410,23 @@ def locks_reference_scale(pose_geometry: dict[str, Any] | None) -> bool:
     kind = str(pose_geometry.get("kind", ""))
     curve = str(pose_geometry.get("height_curve", ""))
     return kind in {"crouch", "jump", "fall", "land"} or curve == "compress"
+
+
+def canonical_reference_state(request: dict[str, Any]) -> str | None:
+    states = request.get("states")
+    if not isinstance(states, dict):
+        return None
+    for name, entry in states.items():
+        workflows = {
+            str(value).strip().lower()
+            for value in entry.get("animation_workflows", [])
+            if isinstance(value, str)
+        } if isinstance(entry, dict) else set()
+        if "attack" not in str(name).lower() and not any(
+            "attack" in workflow for workflow in workflows
+        ):
+            return str(name)
+    return str(next(iter(states))) if states else None
 
 
 def pose_top_margin(pose_geometry: dict[str, Any] | None, safe_margin_y: int) -> int:
@@ -2504,6 +2720,12 @@ def main() -> int:
     chroma_key = tuple(int(value) for value in background_key["rgb"])
     frames_root = run_dir / "frames"
     frames_root.mkdir(parents=True, exist_ok=True)
+    frames_manifest_path = frames_root / "frames-manifest.json"
+    existing_frames_manifest: dict[str, Any] | None = None
+    if args.states != "all" and frames_manifest_path.is_file():
+        existing_frames_manifest = json.loads(
+            frames_manifest_path.read_text(encoding="utf-8")
+        )
     asset_kind = str(request.get("asset_kind", "sprite"))
     asset_catalog = request.get("asset_catalog", {}).get("items", {})
     if not isinstance(asset_catalog, dict):
@@ -2712,7 +2934,33 @@ def main() -> int:
             }
         )
 
-    reference_metrics = reference_metrics_for_rows(request, pending_rows, cell_width, cell_height, safe_margin_x, safe_margin_y)
+    reference_metrics = None
+    reference_state = canonical_reference_state(request)
+    refresh_reference = reference_state is not None and reference_state in states
+    if refresh_reference:
+        reference_metrics = reference_metrics_for_rows(
+            request,
+            pending_rows,
+            cell_width,
+            cell_height,
+            safe_margin_x,
+            safe_margin_y,
+        )
+    if (
+        reference_metrics is None
+        and existing_frames_manifest is not None
+        and existing_frames_manifest.get("rows")
+    ):
+        reference_metrics = existing_reference_metrics(request, run_dir)
+    if reference_metrics is None:
+        reference_metrics = reference_metrics_for_rows(
+            request,
+            pending_rows,
+            cell_width,
+            cell_height,
+            safe_margin_x,
+            safe_margin_y,
+        )
     if reference_metrics is None:
         reference_metrics = existing_reference_metrics(request, run_dir)
     registration = (
@@ -2842,7 +3090,44 @@ def main() -> int:
             row_record["pose_geometry"] = pose_geometry
         rows.append(row_record)
 
-    matte_review = save_background_matte_review(matte_review_entries, run_dir)
+    if existing_frames_manifest is not None:
+        selected_states = set(states)
+        preserved_rows = [
+            row
+            for row in existing_frames_manifest.get("rows", [])
+            if isinstance(row, dict) and row.get("state") not in selected_states
+        ]
+        row_by_state = {
+            row["state"]: row
+            for row in [*preserved_rows, *rows]
+            if isinstance(row, dict) and isinstance(row.get("state"), str)
+        }
+        rows = [
+            row_by_state[state]
+            for state in request["states"]
+            if state in row_by_state
+        ]
+        all_errors = [
+            error
+            for error in existing_frames_manifest.get("errors", [])
+            if not any(str(error).startswith(f"{state}:") for state in selected_states)
+        ] + all_errors
+        all_warnings = [
+            warning
+            for warning in existing_frames_manifest.get("warnings", [])
+            if not any(str(warning).startswith(f"{state}:") for state in selected_states)
+        ] + all_warnings
+
+    if args.states == "all":
+        matte_review = save_background_matte_review(matte_review_entries, run_dir)
+    else:
+        for entry in matte_review_entries:
+            save_background_matte_review(
+                [entry],
+                run_dir,
+                filename=f"{entry['state']}-background-matte-review.png",
+            )
+        matte_review = compose_state_matte_reviews(run_dir, list(request["states"]))
     result = {
         "ok": not all_errors,
         "engine": "component-row",
@@ -2868,7 +3153,7 @@ def main() -> int:
         "errors": all_errors,
         "warnings": all_warnings,
     }
-    atomic_write_text(frames_root / "frames-manifest.json", json.dumps(result, ensure_ascii=False, indent=2) + "\n")
+    atomic_write_text(frames_manifest_path, json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({k: v for k, v in result.items() if k != "rows"}, ensure_ascii=False, indent=2))
     return 0 if result["ok"] else 1
 
