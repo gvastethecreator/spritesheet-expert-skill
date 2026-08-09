@@ -74,6 +74,9 @@ class FrameSignature:
     center_y: float
     sharpness: float
     source_edge_foreground_ratio: float
+    bbox_width_ratio: float
+    bbox_height_ratio: float
+    core_bbox_height_ratio: float
 
 
 def _digest(content: bytes) -> str:
@@ -167,12 +170,16 @@ def _video_sampling_mode(state: str, entry: Mapping[str, Any]) -> str:
     return "bookended-inclusive"
 
 
-def _video_motion_lock(entry: Mapping[str, Any]) -> str:
-    workflows = {
+def _workflow_names(entry: Mapping[str, Any]) -> set[str]:
+    return {
         str(value).strip().lower()
         for value in entry.get("animation_workflows", [])
         if isinstance(value, str)
     }
+
+
+def _video_motion_lock(entry: Mapping[str, Any]) -> str:
+    workflows = _workflow_names(entry)
     if "gesture-loop" in workflows:
         return (
             " Keep the pelvis, both legs, knees, ankles, both feet, and the contact footprint "
@@ -190,6 +197,13 @@ def _video_motion_lock(entry: Mapping[str, Any]) -> str:
             "generic biped mirror, whole-body side sway, three-quarter turn, top-down tilt, or "
             "body scaling. Return through the exact supplied idle anchor between active poses."
         )
+    if "front-fps-creature-attack" in workflows:
+        return (
+            " Preserve the full-frontal FPS view, fixed ground line or hover center, apparent scale, "
+            "body center, and camera. Build threat through a compact anticipation and a clear anatomical "
+            "contact pose, not through body growth or camera depth. Keep support anatomy stable unless the "
+            "action explicitly names it; return to the exact supplied idle anchor after contact."
+        )
     if "sideview-locomotion" in workflows:
         return (
             " Preserve the side-view ground line and animate one complete in-place locomotion "
@@ -204,6 +218,139 @@ def _video_motion_lock(entry: Mapping[str, Any]) -> str:
     return ""
 
 
+def _video_prompt_contract(
+    request: Mapping[str, Any],
+    state: str,
+    entry: Mapping[str, Any],
+) -> dict[str, Any]:
+    workflows = _workflow_names(entry)
+    creature_motion = request.get("creature_motion")
+    is_front_creature = bool(
+        workflows
+        & {"front-fps-creature-locomotion", "front-fps-creature-attack"}
+    )
+    if is_front_creature and not isinstance(creature_motion, Mapping):
+        raise VideoAnimationError(
+            f"state {state!r} requires creature_motion before Grok video preparation"
+        )
+
+    creature = creature_motion if isinstance(creature_motion, Mapping) else {}
+    anatomy = str(creature.get("anatomy") or "unspecified").strip().lower()
+    locomotion = str(creature.get("locomotion") or "unspecified").strip().lower()
+    camera = str(creature.get("camera") or "unspecified").strip().lower()
+    movement_source = str(creature.get("movement_source") or "").strip()
+    attack_source = str(creature.get("attack_source") or "").strip()
+    if is_front_creature and camera != "front-fps":
+        raise VideoAnimationError(
+            f"state {state!r} uses a front-FPS workflow but creature_motion.camera is {camera!r}"
+        )
+    if "front-fps-creature-locomotion" in workflows and not movement_source:
+        raise VideoAnimationError(
+            f"state {state!r} requires creature_motion.movement_source"
+        )
+    if "front-fps-creature-attack" in workflows and not attack_source:
+        raise VideoAnimationError(
+            f"state {state!r} requires creature_motion.attack_source"
+        )
+
+    configured = entry.get("video_prompt")
+    configured = configured if isinstance(configured, Mapping) else {}
+    motion_window_seconds = float(configured.get("motion_window_seconds", 1.8))
+    if not 0.5 <= motion_window_seconds <= 4.0:
+        raise VideoAnimationError(
+            f"states.{state}.video_prompt.motion_window_seconds must be between 0.5 and 4.0"
+        )
+    edge_margin_ratio = float(configured.get("edge_margin_ratio", 0.12))
+    if not 0.08 <= edge_margin_ratio <= 0.30:
+        raise VideoAnimationError(
+            f"states.{state}.video_prompt.edge_margin_ratio must be between 0.08 and 0.30"
+        )
+    motion_plane = str(configured.get("motion_plane", "image-plane")).strip().lower()
+    if motion_plane not in {"image-plane", "depth-allowed"}:
+        raise VideoAnimationError(
+            f"states.{state}.video_prompt.motion_plane must be image-plane or depth-allowed"
+        )
+
+    later_motion = (
+        "Later motion may repeat only that same stable action."
+        if bool(entry.get("loop", True))
+        else "After recovery, hold the exact supplied idle for the rest of the video."
+    )
+    if "front-fps-creature-locomotion" in workflows:
+        phase_semantics = ["exact-idle", "phase-a", "exact-idle", "phase-b"]
+        allowed_motion = movement_source
+        timing = (
+            f"Start in the exact supplied idle. Complete one readable in-place cycle within the first "
+            f"{motion_window_seconds:g} seconds: phase A, exact idle pass, phase B, exact idle recovery. "
+            f"{later_motion}"
+        )
+    elif "front-fps-creature-attack" in workflows:
+        phase_semantics = ["exact-idle", "anticipation", "contact", "exact-idle"]
+        allowed_motion = attack_source
+        timing = (
+            f"Start in the exact supplied idle. Complete one attack within the first "
+            f"{motion_window_seconds:g} seconds: compact anticipation, clear threatening contact, "
+            f"exact idle recovery. {later_motion}"
+        )
+    else:
+        phase_semantics = []
+        allowed_motion = ""
+        timing = ""
+
+    return {
+        "anatomy": anatomy,
+        "locomotion": locomotion,
+        "camera": camera,
+        "workflow": sorted(workflows),
+        "allowed_motion": allowed_motion,
+        "motion_plane": motion_plane,
+        "motion_window_seconds": motion_window_seconds,
+        "edge_margin_ratio": edge_margin_ratio,
+        "phase_semantics": phase_semantics,
+        "pose_transition_policy": "articulated-pose-only",
+        "root_policy": "stationary-image-plane-anchor",
+        "timing": timing,
+    }
+
+
+def _video_creature_lock(contract: Mapping[str, Any]) -> str:
+    allowed_motion = str(contract.get("allowed_motion") or "").strip()
+    if not allowed_motion:
+        return ""
+    anatomy = str(contract.get("anatomy") or "creature")
+    locomotion = str(contract.get("locomotion") or "custom")
+    plane = str(contract.get("motion_plane") or "image-plane")
+    margin_percent = round(float(contract.get("edge_margin_ratio", 0.12)) * 100)
+    plane_rule = (
+        "Motion stays on the same flat 2D image plane. Interpret any phrase such as "
+        "'toward the player' as pose readability only: no depth translation, foreshortening, "
+        "perspective enlargement, giant foreground limb, or body approach."
+        if plane == "image-plane"
+        else "Depth motion is allowed only when the action text explicitly names it."
+    )
+    return (
+        f"SUBJECT TYPE: {anatomy} creature; locomotion: {locomotion}.\n"
+        f"ONLY MOTION DRIVER: {allowed_motion}. Do not substitute generic biped motion, a mirrored pose, "
+        "or whole-body deformation.\n"
+        "POSE MECHANICS: animate with clean articulated pose changes only. Preserve every bone or segment "
+        "length, limb thickness, body volume, topology, and left/right identity. No mirror-flip substitute, "
+        "liquify, rubber deformation, squash-and-stretch, shrinking, growing, or cross-fade into a new drawing.\n"
+        "DRIVER SCALE LOCK: moving hands, feet, jaws, wings, claws, or tendrils keep their exact palm, digit, "
+        "segment, and tip lengths. Move them through the declared joints; never enlarge the moving part to imply "
+        "depth, impact, or threat.\n"
+        "ROOT LOCK: keep the registered body root and average subject center stationary on the image plane. "
+        "Locomotion is in place; an attack may lean or extend only through the declared joints, never by moving "
+        "or scaling the whole creature.\n"
+        "NON-DRIVER LOCK: anatomy not named by the motion driver remains structurally stable and may use only "
+        "small physically connected secondary motion.\n"
+        "CANDIDATE READABILITY: hold each useful phase as a sharp recognizable pose for several source frames. "
+        "Avoid twitching, jitter, motion blur, rapid oscillation, and deformed transitional smears.\n"
+        f"MOTION PLANE: {plane_rule}\n"
+        f"FRAME SAFETY: preserve at least the existing empty border, target {margin_percent}% clear space "
+        "from every source edge, and keep every limb, wing, weapon, tail, and effect fully visible."
+    )
+
+
 def _video_identity_lock(request: Mapping[str, Any]) -> str:
     creature_motion = request.get("creature_motion")
     preserve: list[str] = []
@@ -211,8 +358,39 @@ def _video_identity_lock(request: Mapping[str, Any]) -> str:
     if isinstance(creature_motion, Mapping):
         preserve = [str(value).strip() for value in creature_motion.get("preserve", []) if str(value).strip()]
         reject = [str(value).strip() for value in creature_motion.get("reject", []) if str(value).strip()]
+    covered_preserve = {
+        "exact approved identity",
+        "full frontal orientation",
+        "head and torso scale",
+        "body volume",
+        "limb count",
+        "palette and surface markings",
+    }
+    covered_reject = {
+        "camera movement",
+        "three-quarter rotation",
+        "top-down tilt",
+        "whole-body side sway",
+        "body scaling",
+        "extra or missing limbs",
+        "identity morphing",
+        "cropped anatomy",
+    }
+    preserve = [value for value in preserve if value.lower() not in covered_preserve]
+    reject = [value for value in reject if value.lower() not in covered_reject]
     combined_reject = " ".join(reject).lower()
-    if any(term in combined_reject for term in ("invented mouth", "turning the core into a face", "invented face")):
+    combined_preserve = " ".join(preserve).lower()
+    if any(
+        term in combined_reject or term in combined_preserve
+        for term in (
+            "invented mouth",
+            "turning the core into a face",
+            "invented face",
+            "mouth or teeth",
+            "featureless black face",
+            "featureless head",
+        )
+    ):
         face_lock = (
             "Keep the head exactly faceless as supplied: do not create eyes, a mouth, teeth, "
             "a nose, or any facial opening, glow, or expression."
@@ -220,8 +398,9 @@ def _video_identity_lock(request: Mapping[str, Any]) -> str:
     else:
         face_lock = (
             "Keep facial topology and markings identical to the first frame for the entire video: "
-            "same eyes and eye colors, eyebrows, nose, mouth shape, teeth, and surface marks; do not "
-            "add blush, cheek dots, new markings, or substitute a different expression design."
+            "same count, size, shape, position, and color for every existing eye, mouth, tooth, nose, "
+            "opening, and surface mark; do not invent absent features or substitute a new expression design. "
+            "Do not add blush, cheek dots, new markings, or decorative facial details."
         )
     contract = ""
     if preserve:
@@ -240,6 +419,7 @@ def prepare_video_job(
     state: str,
     first_frame_name: str,
     duration_seconds: int = 6,
+    provider_action_override: str | None = None,
     force: bool = False,
 ) -> PreparedVideoJob:
     repo = Path(repo_root).expanduser().resolve()
@@ -298,16 +478,48 @@ def prepare_video_job(
 
     first_record = _file_record(first_frame, relative_to=run_root)
     first_record.update({"width": width, "height": height})
-    action = str(entry.get("action") or state).strip().rstrip(".")
+    video_prompt = entry.get("video_prompt")
+    video_prompt = video_prompt if isinstance(video_prompt, Mapping) else {}
+    if provider_action_override is not None:
+        action = str(provider_action_override).strip().rstrip(".")
+        action_source = "cli-override"
+    else:
+        action = str(video_prompt.get("provider_action") or entry.get("action") or state).strip().rstrip(".")
+        action_source = (
+            "request-video-prompt"
+            if video_prompt.get("provider_action")
+            else "request-state-action"
+        )
+    if not action or len(action) > 800:
+        raise VideoAnimationError("provider action must contain 1..800 characters")
     background_name = str(background["name"])
     background_hex = str(background["hex"])
-    loop_text = "that returns naturally to the starting pose" if entry.get("loop", True) else "with a clean final settle"
+    closure_text = (
+        "Return naturally to the exact starting pose."
+        if entry.get("loop", True)
+        else "Finish with a clean exact-pose settle."
+    )
     motion_lock = _video_motion_lock(entry)
+    prompt_contract = _video_prompt_contract(request, state, entry)
+    prompt_contract["provider_action"] = action
+    prompt_contract["provider_action_source"] = action_source
+    creature_lock = _video_creature_lock(prompt_contract)
     identity_lock = _video_identity_lock(request)
     prompt_text = (
-        f"Animate this exact full-body first frame as one continuous {duration_seconds}-second {action}, {loop_text}; use a locked camera, fixed framing and scale, stable character identity, and clear readable motion with no cuts, zooms, pans, text, extra objects, detached effects, motion blur, or cast shadows. "
-        f"{motion_lock} {identity_lock} "
-        f"Keep the flat neutral {background_name} {background_hex} background perfectly unchanged across the full shot, keep every body part inside frame, and do not redesign the subject.\n"
+        "PROVIDER CALL: invoke image_to_video exactly once and produce exactly one video. "
+        "Do not generate alternatives, variants, previews, or a second take after the first successful call.\n"
+        f"TASK: Animate the exact supplied full-body first frame for {duration_seconds} seconds. "
+        f"One continuous action: {action}. {closure_text}\n"
+        "HARD CAMERA LOCK: use a locked camera; projection, framing, ground line, subject center, and "
+        "subject pixel scale remain fixed. No cuts, pans, tilts, rolls, zooms, push-ins, pull-backs, "
+        "reframing, or camera shake.\n"
+        f"{creature_lock}\n"
+        f"PHASE TIMING: {prompt_contract['timing']}\n"
+        f"ANATOMY MOTION: {motion_lock.strip()}\n"
+        f"IDENTITY LOCK: {identity_lock}\n"
+        f"BACKGROUND LOCK: flat neutral {background_name} {background_hex}; every background pixel and the "
+        "first-frame lighting remain unchanged. No cast shadow, flicker, exposure change, detached effect, "
+        "text, prop, extra object, motion blur, identity redesign, added anatomy, or missing anatomy.\n"
     )
     prompt_bytes = prompt_text.encode("utf-8")
     prompt_record = {
@@ -358,6 +570,11 @@ def prepare_video_job(
             "family": "neutral",
             "name": background_name,
             "hex": background_hex,
+        },
+        "prompt_contract": {
+            key: value
+            for key, value in prompt_contract.items()
+            if key != "timing"
         },
         "sprite_request": request_record,
         "first_frame": first_record,
@@ -500,8 +717,21 @@ def _frame_signature(image: Image.Image, sample_size: int = 64) -> FrameSignatur
     if xs:
         center_x = sum(xs) / len(xs) / max(1, sample_size - 1)
         center_y = sum(ys) / len(ys) / max(1, sample_size - 1)
+        bbox_width_ratio = (max(xs) - min(xs) + 1) / sample_size
+        bbox_height_ratio = (max(ys) - min(ys) + 1) / sample_size
     else:
         center_x = center_y = 0.5
+        bbox_width_ratio = bbox_height_ratio = 0.0
+    core_min_x = round(sample_size * 0.31)
+    core_max_x = round(sample_size * 0.69)
+    core_ys = [
+        index // sample_size
+        for index, value in enumerate(mask_values)
+        if value and core_min_x <= index % sample_size <= core_max_x
+    ]
+    core_bbox_height_ratio = (
+        (max(core_ys) - min(core_ys) + 1) / sample_size if core_ys else 0.0
+    )
     edge_total = 0
     edge_count = 0
     for y in range(sample_size - 1):
@@ -536,6 +766,106 @@ def _frame_signature(image: Image.Image, sample_size: int = 64) -> FrameSignatur
             if source_edge_values
             else 0.0
         ),
+        bbox_width_ratio=bbox_width_ratio,
+        bbox_height_ratio=bbox_height_ratio,
+        core_bbox_height_ratio=core_bbox_height_ratio,
+    )
+
+
+def reviewed_selection_metrics(
+    signatures: list[FrameSignature],
+    indices: list[int],
+    exact_first: FrameSignature,
+    candidate_metrics: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Attach metrics for the reviewed indices, not only auto-ranked candidates."""
+
+    metrics = dict(candidate_metrics or {})
+    selected = [signatures[index] for index in indices]
+    reference_height = max(exact_first.bbox_height_ratio, 1e-9)
+    reference_core_height = max(exact_first.core_bbox_height_ratio, 1e-9)
+    reference_width = max(exact_first.bbox_width_ratio, 1e-9)
+    metrics["reviewed_indices"] = list(indices)
+    metrics["reviewed_selection"] = {
+        "foreground_ratio": [round(item.foreground_ratio, 6) for item in selected],
+        "bbox_width_ratio_vs_first_frame": [
+            round(item.bbox_width_ratio / reference_width, 6) for item in selected
+        ],
+        "bbox_height_ratio_vs_first_frame": [
+            round(item.bbox_height_ratio / reference_height, 6) for item in selected
+        ],
+        "core_bbox_height_ratio_vs_first_frame": [
+            round(item.core_bbox_height_ratio / reference_core_height, 6)
+            for item in selected
+        ],
+        "center": [
+            [round(item.center_x, 6), round(item.center_y, 6)] for item in selected
+        ],
+        "source_edge_foreground_ratio": [
+            round(item.source_edge_foreground_ratio, 6) for item in selected
+        ],
+        "source_edge_contact_frames": [
+            index
+            for index, item in zip(indices, selected)
+            if item.source_edge_foreground_ratio > 0.0
+        ],
+    }
+    return metrics
+
+
+def validate_reviewed_locomotion_scale(
+    request: Mapping[str, Any],
+    state: str,
+    signatures: list[FrameSignature],
+    indices: list[int],
+    exact_first: FrameSignature,
+    exact_idle_slots: list[int],
+    *,
+    minimum_height_ratio: float = 0.78,
+    maximum_height_ratio: float = 1.22,
+) -> None:
+    """Fail before background removal when reviewed locomotion zooms or shrinks."""
+
+    if not _is_locomotion_state(request, state) or exact_first.bbox_height_ratio <= 0:
+        return
+    use_core_height = exact_first.core_bbox_height_ratio > 0
+    reference_height = (
+        exact_first.core_bbox_height_ratio
+        if use_core_height
+        else exact_first.bbox_height_ratio
+    )
+    ratios = [
+        (
+            signatures[index].core_bbox_height_ratio
+            if use_core_height and signatures[index].core_bbox_height_ratio > 0
+            else signatures[index].bbox_height_ratio
+        )
+        / reference_height
+        for index in indices
+    ]
+    active_ratios = [
+        ratio for slot, ratio in enumerate(ratios) if slot not in set(exact_idle_slots)
+    ]
+    if not active_ratios:
+        return
+    smallest = min(active_ratios)
+    largest = max(active_ratios)
+    if smallest < minimum_height_ratio or largest > maximum_height_ratio:
+        raise VideoAnimationError(
+            "reviewed locomotion selection changes subject core height to "
+            f"{smallest:.2f}x..{largest:.2f}x the exact first frame; expected "
+            f"{minimum_height_ratio:.2f}x..{maximum_height_ratio:.2f}x. "
+            "Choose stable in-place frames or regenerate before background removal."
+        )
+
+
+def _is_locomotion_state(
+    request: Mapping[str, Any], state: str
+) -> bool:
+    entry = request.get("states", {}).get(state, {})
+    workflows = entry.get("animation_workflows", []) if isinstance(entry, Mapping) else []
+    return state == "idle-step" or any(
+        "locomotion" in str(workflow).lower() for workflow in workflows
     )
 
 
@@ -558,6 +888,7 @@ def adaptive_sample_indices(
     requested_frames: int,
     *,
     sampling_mode: str = "cyclic-half-open",
+    enforce_scale_stability: bool = False,
 ) -> tuple[list[int], dict[str, Any]]:
     """Rank chronological pose sequences from visual evidence, not fixed time."""
     total_frames = len(signatures)
@@ -570,12 +901,39 @@ def adaptive_sample_indices(
     anchor_distances = [_signature_distance(anchor, signature) for signature in signatures]
     max_sharpness = max((signature.sharpness for signature in signatures), default=1.0) or 1.0
 
+    def height_ratio(index: int) -> float:
+        if anchor.bbox_height_ratio <= 0:
+            return 1.0
+        return signatures[index].bbox_height_ratio / anchor.bbox_height_ratio
+
+    def scale_penalty(index: int) -> float:
+        if not enforce_scale_stability:
+            return 0.0
+        ratio = height_ratio(index)
+        drift = abs(ratio - 1.0)
+        hard = 2.0 if ratio < 0.78 or ratio > 1.22 else 0.0
+        return hard + 1.2 * drift
+
+    scale_unstable_frames = [
+        index
+        for index in range(total_frames)
+        if enforce_scale_stability and not 0.78 <= height_ratio(index) <= 1.22
+    ]
+
     def stability(index: int) -> float:
         signature = signatures[index]
         area_drift = abs(signature.foreground_ratio - anchor.foreground_ratio)
         center_drift = abs(signature.center_x - anchor.center_x) + abs(signature.center_y - anchor.center_y)
         blur_penalty = max(0.0, 0.65 - signature.sharpness / max_sharpness)
-        return max(0.0, 1.0 - 1.4 * area_drift - 0.8 * center_drift - 0.35 * blur_penalty)
+        height_drift = abs(height_ratio(index) - 1.0) if enforce_scale_stability else 0.0
+        return max(
+            0.0,
+            1.0
+            - 1.4 * area_drift
+            - 0.8 * center_drift
+            - 0.35 * blur_penalty
+            - 0.9 * height_drift,
+        )
 
     def source_edge_contact(index: int) -> bool:
         return signatures[index].source_edge_foreground_ratio > 0.0
@@ -631,6 +989,7 @@ def adaptive_sample_indices(
                         + 0.12 * stability(index)
                         + 0.08 * timing
                         - source_edge_penalty(index)
+                        - scale_penalty(index)
                     )
 
                 chosen = max(range(lower, upper + 1), key=score)
@@ -664,6 +1023,7 @@ def adaptive_sample_indices(
                 for index in indices
             ],
             "source_edge_contact_frames": source_edge_contact_frames,
+            "scale_unstable_frames": scale_unstable_frames,
             "candidate_sets": [
                 {
                     "rank": rank,
@@ -674,6 +1034,12 @@ def adaptive_sample_indices(
                     ],
                     "source_edge_contact_frames": [
                         index for index in candidate if source_edge_contact(index)
+                    ],
+                    "scale_unstable_frames": [
+                        index for index in candidate if index in scale_unstable_frames
+                    ],
+                    "bbox_height_ratio_vs_anchor": [
+                        round(height_ratio(index), 6) for index in candidate
                     ],
                 }
                 for rank, (score, candidate) in enumerate(unique[:8], start=1)
@@ -701,6 +1067,7 @@ def adaptive_sample_indices(
         lambda index: (
             anchor_distances[index] * (0.75 + 0.25 * stability(index))
             - source_edge_penalty(index)
+            - scale_penalty(index)
         ),
         4,
     )
@@ -717,6 +1084,7 @@ def adaptive_sample_indices(
                 - anchor_distances[index]
                 - 0.08 * abs(index - midpoint) / total_frames
                 + 0.1 * stability(index)
+                - scale_penalty(index)
             ),
             4,
         )
@@ -729,7 +1097,8 @@ def adaptive_sample_indices(
                     + 0.52 * _signature_distance(signatures[phase_a], signatures[index])
                 )
                 * (0.75 + 0.25 * stability(index))
-                - source_edge_penalty(index),
+                - source_edge_penalty(index)
+                - scale_penalty(index),
                 4,
             )
             for phase_b in phase_bs:
@@ -745,6 +1114,9 @@ def adaptive_sample_indices(
                     - source_edge_penalty(phase_a)
                     - source_edge_penalty(recovery)
                     - source_edge_penalty(phase_b)
+                    - scale_penalty(phase_a)
+                    - scale_penalty(recovery)
+                    - scale_penalty(phase_b)
                 )
                 candidate_sets.append((score, [0, phase_a, recovery, phase_b]))
     if not candidate_sets:
@@ -775,6 +1147,12 @@ def adaptive_sample_indices(
                 "source_edge_contact_frames": [
                     index for index in candidate if source_edge_contact(index)
                 ],
+                "scale_unstable_frames": [
+                    index for index in candidate if index in scale_unstable_frames
+                ],
+                "bbox_height_ratio_vs_anchor": [
+                    round(height_ratio(index), 6) for index in candidate
+                ],
             }
             for rank, (score, candidate) in enumerate(unique_candidates, start=1)
         ],
@@ -791,6 +1169,7 @@ def adaptive_sample_indices(
             for index in indices
         ],
         "source_edge_contact_frames": source_edge_contact_frames,
+        "scale_unstable_frames": scale_unstable_frames,
     }
     return indices, metrics
 
@@ -1167,6 +1546,7 @@ def ingest_video(
     decoded_size, fps, duration, total_frames = _inspect_decoded_video(decoder, video_path)
     sampling_mode = str(job.get("sampling_mode") or _video_sampling_mode(state, request["states"][state]))
     selection_metrics: dict[str, Any] | None = None
+    signatures: list[FrameSignature] | None = None
     if (
         sample_indices is None
         and sampling_strategy == "adaptive"
@@ -1179,6 +1559,7 @@ def ingest_video(
             signatures,
             int(job["requested_frames"]),
             sampling_mode=sampling_mode,
+            enforce_scale_stability=_is_locomotion_state(request, state),
         )
         sampling_mode = "adaptive-visual"
     elif sample_indices is None and sampling_strategy == "adaptive":
@@ -1204,16 +1585,17 @@ def ingest_video(
             int(job["requested_frames"]),
             sample_indices,
         )
+        signatures = _decode_signatures(
+            decoder, video_path, decoded_size, total_frames
+        )
         if sampling_strategy == "adaptive" and total_frames >= max(
             8, int(job["requested_frames"]) * 3
         ):
-            signatures = _decode_signatures(
-                decoder, video_path, decoded_size, total_frames
-            )
             _automatic_indices, selection_metrics = adaptive_sample_indices(
                 signatures,
                 int(job["requested_frames"]),
                 sampling_mode=sampling_mode,
+                enforce_scale_stability=_is_locomotion_state(request, state),
             )
         sampling_mode = "reviewed-explicit"
     selected = _decode_selected(decoder, video_path, indices, decoded_size, total_frames)
@@ -1222,11 +1604,24 @@ def ingest_video(
         exact_first = opened.convert("RGBA")
     if exact_first.size != (job["first_frame"]["width"], job["first_frame"]["height"]):
         raise VideoAnimationError("exact first-frame dimensions changed after job preparation")
-    frames = [_normalized_frame(selected[index], exact_first.size) for index in indices]
-    frames[0] = exact_first.copy()
     shared_idle_slots = _exact_idle_slots_for_state(
         request, state, int(job["requested_frames"])
     )
+    if sample_indices is not None and signatures is not None:
+        exact_signature = _frame_signature(exact_first)
+        selection_metrics = reviewed_selection_metrics(
+            signatures, indices, exact_signature, selection_metrics
+        )
+        validate_reviewed_locomotion_scale(
+            request,
+            state,
+            signatures,
+            indices,
+            exact_signature,
+            shared_idle_slots,
+        )
+    frames = [_normalized_frame(selected[index], exact_first.size) for index in indices]
+    frames[0] = exact_first.copy()
     for idle_slot in shared_idle_slots:
         frames[idle_slot] = exact_first.copy()
     raw_layout = request["states"][state].get("raw_layout")
@@ -1395,6 +1790,7 @@ def ingest_imported_video(
     decoded_size, fps, duration, total_frames = _inspect_decoded_video(decoder, source_video)
     sampling_mode = _video_sampling_mode(state, entry)
     selection_metrics: dict[str, Any] | None = None
+    signatures: list[FrameSignature] | None = None
     if (
         sample_indices is None
         and sampling_strategy == "adaptive"
@@ -1405,6 +1801,7 @@ def ingest_imported_video(
             signatures,
             requested_frames,
             sampling_mode=sampling_mode,
+            enforce_scale_stability=_is_locomotion_state(request, state),
         )
         effective_sampling_mode = "adaptive-visual"
     elif sample_indices is None and sampling_strategy in {"adaptive", "uniform"}:
@@ -1422,27 +1819,41 @@ def ingest_imported_video(
         )
     else:
         indices = reviewed_sample_indices(total_frames, requested_frames, sample_indices)
+        signatures = _decode_signatures(
+            decoder, source_video, decoded_size, total_frames
+        )
         if sampling_strategy == "adaptive" and total_frames >= max(
             8, requested_frames * 3
         ):
-            signatures = _decode_signatures(
-                decoder, source_video, decoded_size, total_frames
-            )
             _automatic_indices, selection_metrics = adaptive_sample_indices(
                 signatures,
                 requested_frames,
                 sampling_mode=sampling_mode,
+                enforce_scale_stability=_is_locomotion_state(request, state),
             )
         effective_sampling_mode = "reviewed-explicit"
     selected = _decode_selected(decoder, source_video, indices, decoded_size, total_frames)
     if exact_first is None:
         exact_first = selected[0].copy()
     target_size = exact_first.size
+    exact_idle_slots = _exact_idle_slots_for_state(request, state, requested_frames)
+    if sample_indices is not None and signatures is not None:
+        exact_signature = _frame_signature(exact_first)
+        selection_metrics = reviewed_selection_metrics(
+            signatures, indices, exact_signature, selection_metrics
+        )
+        validate_reviewed_locomotion_scale(
+            request,
+            state,
+            signatures,
+            indices,
+            exact_signature,
+            exact_idle_slots,
+        )
     frames = [_normalized_frame(selected[index], target_size) for index in indices]
     exact_first_preserved = first_bytes is not None
     if exact_first_preserved:
         frames[0] = exact_first.copy()
-    exact_idle_slots = _exact_idle_slots_for_state(request, state, requested_frames)
     for idle_slot in exact_idle_slots:
         frames[idle_slot] = exact_first.copy()
     raw_bytes = _compose_grid(

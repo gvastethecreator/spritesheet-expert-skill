@@ -45,17 +45,52 @@ Ingestion analyzes every decoded frame. It writes several candidate cycles and b
 
 The minimal editor is required. It includes full video playback, all frame thumbnails, candidate presets, frame slots, and a cycle preview.
 
+For creature videos, the editor also shows the declared creature type, anatomy-driven motion source, semantic slot names, and five mandatory review checks. Changing a candidate or frame clears those checks. Do not copy the re-ingestion command until type, pose semantics, identity, camera/scale, and source margins are confirmed for that exact selection.
+
 Re-ingest reviewed indices without provider inference. Then remove the background per selected frame, crop its alpha bounds, add transparent padding, and register the result.
 
 Fail extraction if a significant silhouette touches a source boundary. Fail QA if opaque pixels enter the final safe margin.
 
 Read `references/video-animation-workflow.md` for every video source.
 
+### Fast Video Production Gate
+
+Use this order for each state. Do not batch-approve creatures.
+
+1. Prepare the structured provider prompt. It must name the anatomy, allowed motion driver, motion plane, early action window, edge margin, identity locks, slot semantics, articulated-pose policy, stationary root, non-driver anatomy lock, and phase readability.
+2. Reject the first frame before inference if it is not full frontal, fully inside the canvas, correctly scaled, or the wrong creature type.
+3. After inference, inspect the complete video once at native speed. Reject immediately for camera motion, scale drift, three-quarter/top-down rotation, identity morphing, missing/extra anatomy, wrong movement family, or source-edge contact.
+4. Only for a viable video, inspect every decoded frame in the selector. Compare several candidate sets and inspect the chosen active frames at full source resolution. `BORDE` marks source clipping; `ESCALA` marks locomotion outside `0.78x..1.22x` of the anchor. Both block export for the selected active slot.
+5. Re-ingest explicit indices. The ingestion gate records metrics for those exact reviewed frames and rejects locomotion whose active-pose subject height leaves `0.78x..1.22x` of the exact first frame. Run Lucida and adaptive extraction only after that gate and semantic selection pass. This keeps expensive cutout work away from rejected videos.
+6. Review matte, adaptive boxes, atlas, onion skin, and runtime playback for that state before starting the next creature.
+
+Automatic candidate score is navigation only. It cannot identify anatomical support limbs, creature type, attack intent, perspective errors, or identity drift.
+
+Reviewed source indices must be strictly chronological. Choose semantic phases in time order even when an exact-idle output slot will later be replaced from the approved anchor. Reject or reselect before background removal; never spend Lucida time on an ingestion command that did not pass.
+
+If one provider action needs stricter wording, rerun `prepare_grok_video_animation.py` for only that state with `--provider-action`. This changes the state prompt/job without mutating the shared `sprite-request.json`, so accepted sibling-state provenance remains valid. The override must still obey the request's anatomy, motion source, identity, camera, and margin contract.
+
+Request exactly one provider video and stop after the first successful media call. Never ask for alternatives in the same invocation. One long native-rate video is the candidate pool; compare several frame sets from it before paying for another generation.
+
+For a quota-sealed batch, inspect every approved first frame before preparing jobs. Describe the anatomy that is visibly present, not the legacy enemy class: count support limbs, attack limbs, wings, tendrils, mouths, weapons, and identity-critical faces or markings. Give each state one explicit motion driver, exact left/right or grouped phase mechanics, pixel-stable non-driver anatomy, fixed image-plane scale, and a complete early action with held readable poses. Prepare exactly one movement job and one attack job per identity, dry-run and audit all jobs, then execute each job once. After successful media exists, mark video generation frozen for that identity and solve selection, segmentation, alignment, or recovery from those videos only.
+
+Provider overproduction is not permission to regenerate. If a one-video job accidentally returns several valid videos in one completed invocation, recover only the first discovered deliverable, record every discarded overflow path in provenance, and mark the job complete. Do not invoke the provider again for that state. Any other provider failure stops the batch for diagnosis; never blind-retry a quota-sealed job.
+
+When video generation is frozen, never spend quota to repair one bad selected pose. Search the full existing timeline and compare alternate chronological phase sets first. If no clean frame exists but the other three semantic poses are valid, use `$imagegen` for a single identity-locked replacement frame based on the approved anchor plus adjacent accepted poses. The repair must keep the same canvas, camera, full-frontal orientation, apparent scale, registered root, lighting, palette, limb count, and background; change only the named articulation. Record mixed provenance and rerun Lucida, adaptive crop, registration, contact, onion, matte, white-background, and runtime QA for the repaired state.
+
+Use this repair ladder after a rejected state: first search the complete existing video for another clean phase set; next rewrite only that state's `provider_action` with stricter joint, support, and centerline rules; then regenerate only that state. A clean complete early cycle may be salvaged before later video corruption only when every chosen phase precedes the first unsafe frame and exact recovery uses the approved anchor. If two attempts deform the same motion driver, stop repeating it and choose another identity-safe driver already present in the creature, such as a lower shroud, tail, jaw, paired forelimbs, wings, or body mass. Long hands, forearms, tendrils, and other distal levers need extra identity review because providers often stretch them after the useful early window. Preserve the accepted sibling state and archive every rejected attempt with its reason.
+
+The regeneration step in that ladder applies only while quota is open. A quota-sealed batch skips it and moves from full-timeline salvage to the isolated `$imagegen` frame repair above.
+
+For rigid-region prompts, describe the creature as two explicit masks: the small animated driver region and the pixel-locked remainder. Give a measurable driver boundary such as `bottom 15 percent`, `below the fixed hips`, or `existing jaw only`; lock total height, center, ground line, and named landmarks. For bilateral attacks, require both original limbs to stay same-size, below a named height, on one flat image plane, and to reach one readable shared contact pose. This is faster and more reliable than broad verbs such as `lunge`, `strike toward the player`, or `attack with the body`.
+
+The generated provider prompt favors selectable animation evidence over cinematic motion. It requires articulated pose changes, fixed segment lengths and body volume, a stationary root and average center, stable non-driver anatomy, and sharp phase plateaus. Moving hands, feet, jaws, wings, claws, and tendrils keep their exact palm, digit, segment, and tip lengths; threat comes from jointed pose, not enlarged anatomy. It forbids mirror substitution, morphing, liquify, squash/stretch, whole-creature scaling, approach, and blurred transitional smears. Keep the state-local `provider_action` positive and concrete: name the exact moving anatomy, support/contact relationship, anticipation, contact, and recovery. Do not repeat the global negative locks there.
+
 ## Optional Grok Imagine Provider
 
 Load and follow `$grok-imagine` when the user selects Grok still generation or the first-frame-to-video animation route. Keep provider execution outside this skill: start with the wrapper `--dry-run`, review its exact source/prompt/counts/output, and add `--ack-run` only with explicit current-task consent. Never call Grok inference from tests.
 
-For video animation, create and approve one exact first frame. Then run `scripts/prepare_grok_video_animation.py`. It creates a locked-camera prompt and a dry-run job.
+For video animation, create and approve one exact first frame. Then run `scripts/prepare_grok_video_animation.py`. It creates a structured locked-camera prompt and a dry-run job. Front-FPS creature states fail preparation unless `creature_motion.camera`, `movement_source` or `attack_source`, and anatomy are explicit.
 
 `scripts/ingest_grok_video_animation.py` accepts one video from a successful invocation. It checks the prompt, first frame, media count, and hashes.
 

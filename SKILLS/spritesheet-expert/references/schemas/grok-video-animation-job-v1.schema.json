@@ -45,6 +45,47 @@
       },
       "additionalProperties": true
     },
+    "prompt_contract": {
+      "type": "object",
+      "required": [
+        "anatomy",
+        "locomotion",
+        "camera",
+        "workflow",
+        "allowed_motion",
+        "motion_plane",
+        "motion_window_seconds",
+        "edge_margin_ratio",
+        "phase_semantics",
+        "pose_transition_policy",
+        "root_policy"
+      ],
+      "properties": {
+        "anatomy": { "type": "string", "minLength": 1 },
+        "locomotion": { "type": "string", "minLength": 1 },
+        "camera": { "type": "string", "minLength": 1 },
+        "workflow": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "allowed_motion": { "type": "string" },
+        "provider_action": { "type": "string", "minLength": 1, "maxLength": 800 },
+        "provider_action_source": {
+          "enum": ["request-video-prompt", "request-state-action", "cli-override"]
+        },
+        "motion_plane": { "enum": ["image-plane", "depth-allowed"] },
+        "motion_window_seconds": { "type": "number", "minimum": 0.5, "maximum": 4.0 },
+        "edge_margin_ratio": { "type": "number", "minimum": 0.08, "maximum": 0.30 },
+        "phase_semantics": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "pose_transition_policy": { "const": "articulated-pose-only" },
+        "root_policy": { "const": "stationary-image-plane-anchor" }
+      },
+      "additionalProperties": false
+    },
     "sprite_request": { "$ref": "#/$defs/file" },
     "first_frame": { "$ref": "#/$defs/file" },
     "prompt": { "$ref": "#/$defs/file" },

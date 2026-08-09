@@ -31,6 +31,64 @@ def thumbnail_data(image: Image.Image, index: int, timestamp: float) -> str:
     return "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
 
 
+def write_timeline_pages(
+    output_dir: Path,
+    thumbnails: list[str],
+    fps: float,
+    *,
+    columns: int = 5,
+    rows: int = 5,
+) -> dict[str, object]:
+    """Persist an exhaustive, paginated visual audit beside the HTML selector."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    page_capacity = columns * rows
+    if page_capacity <= 0:
+        raise ValueError("timeline page grid must have positive dimensions")
+    generated: set[Path] = set()
+    pages: list[dict[str, object]] = []
+    for page_index, first in enumerate(range(0, len(thumbnails), page_capacity), 1):
+        batch = thumbnails[first : first + page_capacity]
+        page = Image.new("RGB", (columns * 156, rows * 180), (9, 9, 11))
+        for offset, data_url in enumerate(batch):
+            _header, encoded = data_url.split(",", 1)
+            thumb = Image.open(BytesIO(base64.b64decode(encoded))).convert("RGB")
+            page.paste(thumb, ((offset % columns) * 156, (offset // columns) * 180))
+        page_path = output_dir / f"timeline-page-{page_index:02d}.png"
+        buffer = BytesIO()
+        page.save(buffer, format="PNG", optimize=True)
+        temp_path = page_path.with_name(page_path.name + ".tmp")
+        temp_path.write_bytes(buffer.getvalue())
+        temp_path.replace(page_path)
+        generated.add(page_path)
+        pages.append(
+            {
+                "path": page_path.name,
+                "first": first,
+                "last": first + len(batch) - 1,
+                "sha256": digest(page_path),
+            }
+        )
+    for stale in output_dir.glob("timeline-page-*.png"):
+        if stale not in generated:
+            stale.unlink()
+    manifest = {
+        "version": 1,
+        "kind": "full-video-frame-review-pages",
+        "frame_count": len(thumbnails),
+        "fps": fps,
+        "columns": columns,
+        "rows": rows,
+        "pages": pages,
+    }
+    manifest_path = output_dir / "timeline-pages.json"
+    atomic_write_text(manifest_path, json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+    return {
+        "manifest": manifest_path.name,
+        "manifest_sha256": digest(manifest_path),
+        "pages": pages,
+    }
+
+
 def decode_thumbnails(video_path: Path) -> tuple[list[str], float, tuple[int, int]]:
     try:
         import imageio_ffmpeg
@@ -79,6 +137,50 @@ def report_file_path(run_dir: Path, record: dict[str, object]) -> Path:
     return path.resolve() if path.is_absolute() else (run_dir / path).resolve()
 
 
+def selector_review_contract(
+    run_dir: Path,
+    state: str,
+    slot_count: int,
+    exact_idle_slots: list[int],
+) -> dict[str, object]:
+    request_path = run_dir / "sprite-request.json"
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    entry = (request.get("states") or {}).get(state) or {}
+    workflows = {
+        str(value).strip().lower()
+        for value in entry.get("animation_workflows", [])
+        if isinstance(value, str)
+    }
+    motion = request.get("creature_motion")
+    motion = motion if isinstance(motion, dict) else {}
+    anatomy = str(motion.get("anatomy") or "unspecified")
+    locomotion = str(motion.get("locomotion") or "unspecified")
+    if "front-fps-creature-locomotion" in workflows and slot_count == 4:
+        slot_labels = ["Idle exacto", "Fase A", "Idle exacto", "Fase B"]
+        motion_source = str(motion.get("movement_source") or "movimiento declarado")
+    elif "front-fps-creature-attack" in workflows and slot_count == 4:
+        slot_labels = ["Idle exacto", "Anticipación", "Contacto", "Idle exacto"]
+        motion_source = str(motion.get("attack_source") or "ataque declarado")
+    else:
+        slot_labels = [
+            "Idle exacto" if index in exact_idle_slots else f"Pose {index + 1}"
+            for index in range(slot_count)
+        ]
+        motion_source = "movimiento declarado"
+    return {
+        "creatureType": f"{anatomy} / {locomotion}",
+        "motionSource": motion_source,
+        "slotLabels": slot_labels,
+        "checks": [
+            "Tipo de criatura, anatomía y orientación frontal correctos",
+            "Cada slot cumple su pose y usa el movimiento declarado",
+            "Identidad, rostro, volumen y cantidad de miembros estables",
+            "Cámara, escala, centro, suelo y fondo permanecen fijos",
+            "Ninguna parte toca el borde ni queda cortada",
+        ],
+    }
+
+
 def build_selector(
     *,
     run_dir: Path,
@@ -100,12 +202,22 @@ def build_selector(
     output_dir = run_root / "qa" / f"{state}-video-frame-selector"
     output_path = output_dir / "index.html"
     evidence_path = output_dir / "selector.evidence.json"
-    if (output_path.exists() or evidence_path.exists()) and not force:
+    timeline_manifest_path = output_dir / "timeline-pages.json"
+    if (
+        output_path.exists()
+        or evidence_path.exists()
+        or timeline_manifest_path.exists()
+        or any(output_dir.glob("timeline-page-*.png"))
+    ) and not force:
         raise ValueError(
             f"selector already exists; pass --force to replace it: {output_path}"
         )
     thumbnails, fps, _size = decode_thumbnails(video_path)
     selected = [int(value) for value in report["sampled_video_indices"]]
+    exact_idle_slots = [int(value) for value in report.get("exact_idle_slots", [0])]
+    review_contract = selector_review_contract(
+        run_root, state, len(selected), exact_idle_slots
+    )
     scripts_dir = Path(__file__).resolve().parent
     if report["kind"] == "sprite-grok-video-source":
         invocation_path = Path(report["invocation"]["path"]).expanduser().resolve()
@@ -134,9 +246,13 @@ def build_selector(
         "unsafeFrames": (report.get("selection_metrics") or {}).get(
             "source_edge_contact_frames", []
         ),
-        "exactIdleSlots": report.get("exact_idle_slots", [0]),
+        "scaleUnsafeFrames": (report.get("selection_metrics") or {}).get(
+            "scale_unstable_frames", []
+        ),
+        "exactIdleSlots": exact_idle_slots,
         "exactFirstFramePreserved": bool(report.get("exact_first_frame_preserved")),
         "commandPrefix": command_prefix,
+        "reviewContract": review_contract,
     }
     encoded = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
 
@@ -152,19 +268,21 @@ h1{font-size:18px;margin:0 0 10px}.layout{display:grid;grid-template-columns:min
 .slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:8px;margin:12px 0}.slot{padding:5px;border:1px solid #3f3f46;background:#18181b;color:#fafafa;border-radius:8px;cursor:pointer}.slot img{display:block;width:100%;border-radius:5px}.slot.active{border-color:#f59e0b;color:#fbbf24}.slot.locked{cursor:default}.cycle{display:block;width:190px;max-width:100%;margin:10px auto;border:1px solid #3f3f46;border-radius:8px}
 .candidate{display:flex;flex-wrap:wrap;max-width:340px;gap:3px;align-items:center}.candidate img{width:54px;display:block}.candidate strong{flex-basis:100%;text-align:left}.candidate.unsafe{border-color:#ef4444;color:#fecaca}
 .actions{display:flex;gap:8px;flex-wrap:wrap}button{border:1px solid #3f3f46;background:#27272a;color:#fafafa;padding:8px 10px;border-radius:8px;cursor:pointer}.status{font-size:13px;color:#a1a1aa;margin-top:10px;word-break:break-all}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(116px,1fr));gap:8px}.frame{border:2px solid transparent;background:#111113;padding:0;position:relative}.frame img{width:100%;display:block}.frame.selected{border-color:#f59e0b}.frame.active{outline:2px solid #38bdf8}.frame.unsafe::after{content:'BORDE';position:absolute;top:5px;right:5px;background:#b91c1c;color:#fff;padding:2px 5px;border-radius:4px;font-weight:700;font-size:10px}.badge{position:absolute;top:5px;left:5px;background:#f59e0b;color:#111;padding:2px 5px;border-radius:4px;font-weight:700;font-size:11px}
+.review{margin:12px 0;padding:10px;border:1px solid #3f3f46;border-radius:8px;background:#18181b}.review strong{display:block;margin-bottom:4px}.review small{display:block;color:#a1a1aa;margin-bottom:8px}.review label{display:block;font-size:12px;line-height:1.35;margin:6px 0}.review input{margin-right:7px}button:disabled{opacity:.38;cursor:not-allowed}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(116px,1fr));gap:8px}.frame{border:2px solid transparent;background:#111113;padding:0;position:relative}.frame img{width:100%;display:block}.frame.selected{border-color:#f59e0b}.frame.active{outline:2px solid #38bdf8}.frame.unsafe::after{content:'BORDE';position:absolute;top:5px;right:5px;background:#b91c1c;color:#fff;padding:2px 5px;border-radius:4px;font-weight:700;font-size:10px}.frame.scale-unsafe::before{content:'ESCALA';position:absolute;top:25px;right:5px;background:#7c3aed;color:#fff;padding:2px 5px;border-radius:4px;font-weight:700;font-size:10px}.badge{position:absolute;top:5px;left:5px;background:#f59e0b;color:#111;padding:2px 5px;border-radius:4px;font-weight:700;font-size:11px}
 @media(max-width:850px){.layout{grid-template-columns:1fr}header{position:static}}
 </style></head><body>
 <header><h1>Selector de frames · __STATE__</h1><div>Video completo a <b id="fps"></b> FPS. Frame 0 queda bloqueado; cambia los otros frames sin regenerar.</div></header>
-<main class="layout"><section class="panel"><video id="video" controls muted loop></video><img id="cycle" class="cycle" alt="Preview del ciclo"><div id="slots" class="slots"></div><h2 style="font-size:14px">Ciclos candidatos</h2><div id="candidates" class="actions"></div><div class="actions" style="margin-top:12px"><button id="copy">Copiar comando</button><button id="download">Descargar selección JSON</button><button id="reset">Restaurar automática</button></div><div id="status" class="status"></div></section><section><div id="grid" class="grid"></div></section></main>
-<script>const data=__DATA__;let selected=[...data.selected];let active=1,cycleFrame=0;const video=document.querySelector('#video'),grid=document.querySelector('#grid'),slots=document.querySelector('#slots'),status=document.querySelector('#status'),cycle=document.querySelector('#cycle');video.src=data.videoUrl;document.querySelector('#fps').textContent=data.fps.toFixed(3);
+<main class="layout"><section class="panel"><video id="video" controls muted loop></video><img id="cycle" class="cycle" alt="Preview del ciclo"><div id="slots" class="slots"></div><div id="review" class="review"></div><h2 style="font-size:14px">Ciclos candidatos</h2><div id="candidates" class="actions"></div><div class="actions" style="margin-top:12px"><button id="copy">Copiar comando revisado</button><button id="download">Descargar selección JSON</button><button id="reset">Restaurar automática</button></div><div id="status" class="status"></div></section><section><div id="grid" class="grid"></div></section></main>
+<script>const data=__DATA__;let selected=[...data.selected];let active=1,cycleFrame=0;const video=document.querySelector('#video'),grid=document.querySelector('#grid'),slots=document.querySelector('#slots'),status=document.querySelector('#status'),cycle=document.querySelector('#cycle'),review=document.querySelector('#review'),copy=document.querySelector('#copy'),download=document.querySelector('#download');video.src=data.videoUrl;document.querySelector('#fps').textContent=data.fps.toFixed(3);review.innerHTML=`<strong>Contrato: ${data.reviewContract.creatureType}</strong><small>Movimiento: ${data.reviewContract.motionSource}</small>`+data.reviewContract.checks.map((label,index)=>`<label><input type="checkbox" data-review="${index}">${label}</label>`).join('');
 function seek(i){video.currentTime=i/data.fps;video.pause()}
-function isUnsafe(frame,slot){return data.unsafeFrames.includes(frame)&&!(data.exactFirstFramePreserved&&data.exactIdleSlots.includes(slot))}function render(){slots.innerHTML='';selected.forEach((frame,i)=>{const b=document.createElement('button');b.className='slot '+(i===active?'active ':'')+(i===0?'locked':'');const shown=data.exactIdleSlots.includes(i)?0:frame;b.innerHTML=`<img src="${data.thumbnails[shown]}"><span>${i+1}: #${frame}${data.exactIdleSlots.includes(i)?' · idle exacto':''}${isUnsafe(frame,i)?' · TOCA BORDE':''}</span>`;if(i>0)b.onclick=()=>{active=i;seek(frame);render()};slots.append(b)});document.querySelectorAll('.frame').forEach((el,i)=>{el.classList.toggle('selected',selected.includes(i));el.classList.toggle('active',selected[active]===i);const badge=el.querySelector('.badge');if(badge)badge.remove();const slot=selected.indexOf(i);if(slot>=0){const x=document.createElement('span');x.className='badge';x.textContent=slot+1;el.append(x)}});const unsafe=selected.filter((frame,slot)=>isUnsafe(frame,slot));status.textContent='Índices: '+selected.join(', ')+(unsafe.length?' · ADVERTENCIA borde: '+unsafe.join(', '):' · márgenes fuente seguros')+' · '+data.commandPrefix+'"'+selected.join(',')+'" --force'}
-data.candidates.forEach(c=>{const unsafe=c.indices.filter((frame,slot)=>isUnsafe(frame,slot));const b=document.createElement('button');b.className='candidate'+(unsafe.length?' unsafe':'');b.innerHTML=`<strong>#${c.rank} · score ${c.score}${unsafe.length?' · borde '+unsafe.join(', '):' · seguro'}</strong>`+c.indices.map((i,slot)=>`<img src="${data.thumbnails[data.exactIdleSlots.includes(slot)?0:i]}" alt="Frame ${i}">`).join('');b.onclick=()=>{selected=[...c.indices];active=1;seek(selected[1]);render()};document.querySelector('#candidates').append(b)});data.thumbnails.forEach((src,i)=>{const b=document.createElement('button');b.className='frame'+(data.unsafeFrames.includes(i)?' unsafe':'');b.innerHTML=`<img loading="lazy" src="${src}" alt="Frame ${i}">`;b.onclick=()=>{seek(i);if(i===0){active=0}else if(selected.includes(i)){active=selected.indexOf(i)}else{selected[active]=i;selected=[selected[0],...selected.slice(1).sort((a,b)=>a-b)];active=selected.indexOf(i)}render()};grid.append(b)});setInterval(()=>{const slot=cycleFrame++%selected.length;const index=data.exactIdleSlots.includes(slot)?0:selected[slot];cycle.src=data.thumbnails[index]},125);
-document.querySelector('#copy').onclick=async()=>{await navigator.clipboard.writeText(data.commandPrefix+'"'+selected.join(',')+'" --force');status.textContent='Comando copiado.'};document.querySelector('#download').onclick=()=>{const blob=new Blob([JSON.stringify({state:data.state,sample_indices:selected,fps:data.fps},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${data.state}-frame-selection.json`;a.click();URL.revokeObjectURL(a.href)};document.querySelector('#reset').onclick=()=>{selected=[...data.selected];active=1;render()};render();</script></body></html>"""
+function isEdgeUnsafe(frame,slot){return data.unsafeFrames.includes(frame)&&!(data.exactFirstFramePreserved&&data.exactIdleSlots.includes(slot))}function isScaleUnsafe(frame,slot){return data.scaleUnsafeFrames.includes(frame)&&!(data.exactFirstFramePreserved&&data.exactIdleSlots.includes(slot))}function isUnsafe(frame,slot){return isEdgeUnsafe(frame,slot)||isScaleUnsafe(frame,slot)}function reviewInputs(){return [...review.querySelectorAll('input')]}function resetReview(){reviewInputs().forEach(input=>input.checked=false)}function render(){slots.innerHTML='';selected.forEach((frame,i)=>{const b=document.createElement('button');b.className='slot '+(i===active?'active ':'')+(i===0?'locked':'');const shown=data.exactIdleSlots.includes(i)?0:frame;b.innerHTML=`<img src="${data.thumbnails[shown]}"><span>${i+1}: ${data.reviewContract.slotLabels[i]||'Pose'} · #${frame}${isEdgeUnsafe(frame,i)?' · TOCA BORDE':''}${isScaleUnsafe(frame,i)?' · ESCALA INESTABLE':''}</span>`;if(i>0)b.onclick=()=>{active=i;seek(frame);render()};slots.append(b)});document.querySelectorAll('.frame').forEach((el,i)=>{el.classList.toggle('selected',selected.includes(i));el.classList.toggle('active',selected[active]===i);const badge=el.querySelector('.badge');if(badge)badge.remove();const slot=selected.indexOf(i);if(slot>=0){const x=document.createElement('span');x.className='badge';x.textContent=slot+1;el.append(x)}});const edgeUnsafe=selected.filter((frame,slot)=>isEdgeUnsafe(frame,slot)),scaleUnsafe=selected.filter((frame,slot)=>isScaleUnsafe(frame,slot)),reviewed=reviewInputs().every(input=>input.checked);copy.disabled=download.disabled=edgeUnsafe.length>0||scaleUnsafe.length>0||!reviewed;status.textContent='Índices: '+selected.join(', ')+(edgeUnsafe.length?' · ADVERTENCIA borde: '+edgeUnsafe.join(', '):' · márgenes fuente seguros')+(scaleUnsafe.length?' · ADVERTENCIA escala: '+scaleUnsafe.join(', '):' · escala estable')+(reviewed?' · revisión completa':' · confirma 5 checks')+' · '+data.commandPrefix+'"'+selected.join(',')+'" --force'}
+review.addEventListener('change',render);data.candidates.forEach(c=>{const unsafe=c.indices.filter((frame,slot)=>isUnsafe(frame,slot));const b=document.createElement('button');b.className='candidate'+(unsafe.length?' unsafe':'');b.innerHTML=`<strong>#${c.rank} · score ${c.score}${unsafe.length?' · revisar '+unsafe.join(', '):' · seguro'}</strong>`+c.indices.map((i,slot)=>`<img src="${data.thumbnails[data.exactIdleSlots.includes(slot)?0:i]}" alt="Frame ${i}">`).join('');b.onclick=()=>{selected=[...c.indices];active=1;resetReview();seek(selected[1]);render()};document.querySelector('#candidates').append(b)});data.thumbnails.forEach((src,i)=>{const b=document.createElement('button');b.className='frame'+(data.unsafeFrames.includes(i)?' unsafe':'')+(data.scaleUnsafeFrames.includes(i)?' scale-unsafe':'');b.innerHTML=`<img loading="lazy" src="${src}" alt="Frame ${i}">`;b.onclick=()=>{seek(i);if(i===0){active=0}else if(selected.includes(i)){active=selected.indexOf(i)}else{selected[active]=i;selected=[selected[0],...selected.slice(1).sort((a,b)=>a-b)];active=selected.indexOf(i);resetReview()}render()};grid.append(b)});setInterval(()=>{const slot=cycleFrame++%selected.length;const index=data.exactIdleSlots.includes(slot)?0:selected[slot];cycle.src=data.thumbnails[index]},125);
+copy.onclick=async()=>{await navigator.clipboard.writeText(data.commandPrefix+'"'+selected.join(',')+'" --force');status.textContent='Comando revisado copiado.'};download.onclick=()=>{const blob=new Blob([JSON.stringify({state:data.state,sample_indices:selected,fps:data.fps,review_contract:data.reviewContract,reviewed_checks:data.reviewContract.checks},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${data.state}-frame-selection.json`;a.click();URL.revokeObjectURL(a.href)};document.querySelector('#reset').onclick=()=>{selected=[...data.selected];active=1;resetReview();render()};render();</script></body></html>"""
     html = html.replace("__STATE__", state).replace("__STATE__", state).replace("__DATA__", encoded)
     output_dir.mkdir(parents=True, exist_ok=True)
     atomic_write_text(output_path, html)
+    timeline = write_timeline_pages(output_dir, thumbnails, fps)
     evidence = {
         "version": 1,
         "kind": "sprite-video-frame-selector-evidence",
@@ -186,6 +304,7 @@ document.querySelector('#copy').onclick=async()=>{await navigator.clipboard.writ
             "path": output_path.relative_to(run_root).as_posix(),
             "sha256": digest(output_path),
         },
+        "timeline": timeline,
     }
     atomic_write_text(evidence_path, json.dumps(evidence, ensure_ascii=False, indent=2) + "\n")
     return {
@@ -194,6 +313,7 @@ document.querySelector('#copy').onclick=async()=>{await navigator.clipboard.writ
         "evidence": str(evidence_path),
         "frames": len(thumbnails),
         "fps": fps,
+        "timeline_pages": len(timeline["pages"]),
     }
 
 

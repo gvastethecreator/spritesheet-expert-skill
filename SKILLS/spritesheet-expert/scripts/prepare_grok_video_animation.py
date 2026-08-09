@@ -24,6 +24,10 @@ def main() -> int:
     parser.add_argument("--state", required=True)
     parser.add_argument("--first-frame", required=True)
     parser.add_argument("--duration-seconds", type=int, choices=(6, 10), default=6)
+    parser.add_argument(
+        "--provider-action",
+        help="state-local generation instruction; does not mutate sprite-request.json",
+    )
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
     try:
@@ -33,6 +37,7 @@ def main() -> int:
             state=args.state,
             first_frame_name=args.first_frame,
             duration_seconds=args.duration_seconds,
+            provider_action_override=args.provider_action,
             force=args.force,
         )
         with acquire_run_lock(prepared.run_dir, "prepare-grok-video-animation"):

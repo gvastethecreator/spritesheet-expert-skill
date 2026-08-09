@@ -1192,6 +1192,21 @@ def compose_state_matte_reviews(
     return path.relative_to(run_dir).as_posix()
 
 
+def save_state_and_combined_matte_reviews(
+    entries: list[dict[str, Any]],
+    run_dir: Path,
+    state_order: list[str],
+) -> str | None:
+    """Refresh changed state panels and rebuild the durable all-state review."""
+    for entry in entries:
+        save_background_matte_review(
+            [entry],
+            run_dir,
+            filename=f"{entry['state']}-background-matte-review.png",
+        )
+    return compose_state_matte_reviews(run_dir, state_order)
+
+
 def connected_components(image: Image.Image) -> list[dict[str, Any]]:
     alpha = image.getchannel("A")
     width, height = image.size
@@ -1271,7 +1286,11 @@ def cell_geometry(cell: dict[str, Any]) -> tuple[int, int, int, int]:
 def state_tokens(state: str, entry: dict[str, Any] | None = None) -> set[str]:
     text = state
     if entry:
-        text = f"{text} {entry.get('action', '')}"
+        action = str(entry.get("action", ""))
+        # Constraint clauses describe forbidden poses. Do not let phrases such
+        # as "never squat" or "do not jump" activate pose-geometry inference.
+        action = re.split(r"\b(?:never|do not|don't|without)\b", action, maxsplit=1, flags=re.IGNORECASE)[0]
+        text = f"{text} {action}"
     return {token for token in re.split(r"[^a-z0-9]+", text.lower()) if token}
 
 
@@ -1300,7 +1319,8 @@ def inferred_pose_geometry(state: str, entry: dict[str, Any]) -> dict[str, Any] 
             "min_height_vs_reference": 0.45,
             "baseline": "collapse",
         }
-    if tokens & {"jump", "jumping", "leap", "leaping", "airborne"}:
+    state_only_tokens = state_tokens(state)
+    if tokens & {"jump", "jumping", "leap", "leaping"} or "airborne" in state_only_tokens:
         return {
             "kind": "jump",
             "grounded": False,
@@ -2282,6 +2302,7 @@ def reference_metrics_for_rows(
         return None
     states = request.get("states", {})
     registration = request.get("registration") if isinstance(request.get("registration"), dict) else {}
+    source_reference_scale = registration.get("scale_policy") == "source-reference"
     preferred = str(registration.get("reference_state", "idle"))
     resize_policy = resize_policy_from_sampling_policy(request.get("sampling_policy"))
     candidates = sorted(
@@ -2308,6 +2329,8 @@ def reference_metrics_for_rows(
         ]
         metrics = [metric for metric in metrics if metric]
         if metrics:
+            if source_reference_scale:
+                return dict(metrics[0])
             return {
                 "height": round(median([metric["height"] for metric in metrics])),
                 "width": round(median([metric["width"] for metric in metrics])),
@@ -2387,6 +2410,18 @@ def fit_pose_frames(
         max_height = None
         top_margin = None
         scale_override = stable_feature_scale(sprite, pose_geometry, reference_metrics)
+        if (
+            registration
+            and registration.get("scale_policy") == "source-reference"
+            and reference_metrics
+            and isinstance(reference_metrics.get("scale"), (int, float))
+            and reference_metrics["scale"] > 0
+        ):
+            # Wing strokes and other silhouette-changing actions must not make
+            # the body grow merely because each component is independently
+            # contain-fitted. Keep the approved first-frame pixel scale while
+            # adaptive segmentation still supplies per-frame bounds/alignment.
+            scale_override = float(reference_metrics["scale"])
         if pose_geometry and reference_height:
             ratio = float(pose_geometry.get("max_height_vs_reference", pose_geometry.get("max_height_vs_idle", 1.15)))
             max_height = max(1, round(reference_height * ratio))
@@ -3118,16 +3153,11 @@ def main() -> int:
             if not any(str(warning).startswith(f"{state}:") for state in selected_states)
         ] + all_warnings
 
-    if args.states == "all":
-        matte_review = save_background_matte_review(matte_review_entries, run_dir)
-    else:
-        for entry in matte_review_entries:
-            save_background_matte_review(
-                [entry],
-                run_dir,
-                filename=f"{entry['state']}-background-matte-review.png",
-            )
-        matte_review = compose_state_matte_reviews(run_dir, list(request["states"]))
+    matte_review = save_state_and_combined_matte_reviews(
+        matte_review_entries,
+        run_dir,
+        list(request["states"]),
+    )
     result = {
         "ok": not all_errors,
         "engine": "component-row",

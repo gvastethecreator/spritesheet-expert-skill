@@ -21,8 +21,10 @@ from spritecore.video_animation import (
     prepare_video_job,
     revalidate_prepared_sources,
     revalidate_video_sources,
+    reviewed_selection_metrics,
     reviewed_sample_indices,
     uniform_sample_indices,
+    validate_reviewed_locomotion_scale,
 )
 
 
@@ -114,6 +116,97 @@ def test_reviewed_sampling_accepts_a_chronological_phase_selection() -> None:
     assert reviewed_sample_indices(145, 4, [0, 7, 14, 21]) == [0, 7, 14, 21]
 
 
+def test_reviewed_locomotion_rejects_subject_scale_growth_before_extraction() -> None:
+    def subject(height: int) -> Image.Image:
+        image = Image.new("RGB", (64, 64), "black")
+        for y in range(32 - height // 2, 32 + height // 2):
+            for x in range(26, 38):
+                image.putpixel((x, y), (180, 110, 70))
+        return image
+
+    exact = _frame_signature(subject(30))
+    signatures = [
+        exact,
+        _frame_signature(subject(32)),
+        exact,
+        _frame_signature(subject(46)),
+    ]
+    request = {
+        "states": {
+            "idle-step": {
+                "animation_workflows": ["front-fps-creature-locomotion"]
+            }
+        }
+    }
+
+    with pytest.raises(VideoAnimationError, match="before background removal"):
+        validate_reviewed_locomotion_scale(
+            request,
+            "idle-step",
+            signatures,
+            [0, 1, 2, 3],
+            exact,
+            [0, 2],
+        )
+
+
+def test_reviewed_locomotion_accepts_wing_span_change_when_core_scale_is_fixed() -> None:
+    def winged(wing_top: int, wing_bottom: int) -> Image.Image:
+        image = Image.new("RGB", (64, 64), "black")
+        for y in range(20, 45):
+            for x in range(27, 38):
+                image.putpixel((x, y), (170, 90, 130))
+        for y in range(wing_top, wing_bottom):
+            for x in list(range(5, 20)) + list(range(45, 60)):
+                image.putpixel((x, y), (120, 70, 110))
+        return image
+
+    exact = _frame_signature(winged(25, 40))
+    signatures = [
+        exact,
+        _frame_signature(winged(8, 55)),
+        exact,
+        _frame_signature(winged(14, 50)),
+    ]
+    request = {
+        "states": {
+            "idle-step": {
+                "animation_workflows": ["front-fps-creature-locomotion"]
+            }
+        }
+    }
+
+    validate_reviewed_locomotion_scale(
+        request,
+        "idle-step",
+        signatures,
+        [0, 1, 2, 3],
+        exact,
+        [0, 2],
+    )
+
+
+def test_reviewed_selection_metrics_describe_reviewed_not_auto_indices() -> None:
+    def subject(height: int) -> Image.Image:
+        image = Image.new("RGB", (64, 64), "black")
+        for y in range(32 - height // 2, 32 + height // 2):
+            for x in range(26, 38):
+                image.putpixel((x, y), (180, 110, 70))
+        return image
+
+    signatures = [_frame_signature(subject(height)) for height in (30, 31, 32, 33)]
+    metrics = reviewed_selection_metrics(
+        signatures,
+        [0, 1, 2, 3],
+        signatures[0],
+        {"candidate_sets": [{"indices": [0, 3, 2, 1]}]},
+    )
+
+    assert metrics["reviewed_indices"] == [0, 1, 2, 3]
+    assert metrics["candidate_sets"][0]["indices"] == [0, 3, 2, 1]
+    assert metrics["reviewed_selection"]["bbox_height_ratio_vs_first_frame"][-1] > 1
+
+
 def test_adaptive_sampling_finds_pose_extremes_and_idle_recovery() -> None:
     def pose(offset: int) -> Image.Image:
         image = Image.new("RGB", (32, 32), "black")
@@ -186,6 +279,32 @@ def test_adaptive_sampling_ranks_source_edge_contact_below_safe_poses() -> None:
     assert set(metrics["source_edge_contact_frames"]) == {5, 13, 21}
     assert all(signatures[index].source_edge_foreground_ratio == 0 for index in indices)
     assert metrics["candidate_sets"][0]["source_edge_contact_frames"] == []
+
+
+def test_locomotion_sampling_marks_and_ranks_scale_drift_below_stable_poses() -> None:
+    def pose(height: int, offset: int) -> Image.Image:
+        image = Image.new("RGB", (64, 64), "black")
+        top = 32 - height // 2
+        bottom = top + height
+        for y in range(top, bottom):
+            for x in range(24 + offset, 40 + offset):
+                image.putpixel((x, y), (180, 90, 40))
+        return image
+
+    frames = []
+    for index in range(36):
+        offset = round(5 * __import__("math").sin(index / 36 * 12.56637))
+        height = 30 if index < 28 else 42
+        frames.append(pose(height, offset))
+
+    signatures = [_frame_signature(frame) for frame in frames]
+    indices, metrics = adaptive_sample_indices(
+        signatures, 4, enforce_scale_stability=True
+    )
+
+    assert set(range(28, 36)).issubset(metrics["scale_unstable_frames"])
+    assert all(index < 28 for index in (indices[1], indices[3]))
+    assert metrics["candidate_sets"][0]["scale_unstable_frames"] == []
 
 
 @pytest.mark.parametrize(
@@ -288,9 +407,23 @@ def test_front_fps_creature_prompt_uses_declared_anatomy_not_biped_mirroring(
     run_dir = tmp_path / "run"
     run_dir.mkdir()
     request = _request()
+    request["creature_motion"] = {
+        "anatomy": "multi-legged",
+        "locomotion": "crawl",
+        "camera": "front-fps",
+        "registration_anchor": "body-bottom",
+        "shared_idle": True,
+        "movement_source": "alternating diagonal groups across all eight legs",
+        "attack_source": "paired front claws",
+    }
     request["states"]["walk"]["animation_workflows"] = [
         "front-fps-creature-locomotion"
     ]
+    request["states"]["walk"]["video_prompt"] = {
+        "motion_window_seconds": 1.6,
+        "edge_margin_ratio": 0.15,
+        "motion_plane": "image-plane",
+    }
     (run_dir / "sprite-request.json").write_text(
         json.dumps(request), encoding="utf-8"
     )
@@ -308,8 +441,144 @@ def test_front_fps_creature_prompt_uses_declared_anatomy_not_biped_mirroring(
 
     assert "full-frontal fps view" in prompt
     assert "creature's declared anatomy" in prompt
+    assert "invoke image_to_video exactly once" in prompt
+    assert "do not generate alternatives" in prompt
     assert "generic biped mirror" in prompt
     assert "exact supplied idle anchor" in prompt
+    assert "subject type: multi-legged creature" in prompt
+    assert "alternating diagonal groups across all eight legs" in prompt
+    assert "within the first 1.6 seconds" in prompt
+    assert "toward the player' as pose readability only" in prompt
+    assert "clean articulated pose changes only" in prompt
+    assert "moving hands, feet, jaws, wings, claws, or tendrils" in prompt
+    assert "locomotion is in place" in prompt
+    assert "no mirror-flip substitute" in prompt
+    assert "hold each useful phase as a sharp recognizable pose" in prompt
+    assert prepared.job["prompt_contract"]["phase_semantics"] == [
+        "exact-idle",
+        "phase-a",
+        "exact-idle",
+        "phase-b",
+    ]
+    assert prepared.job["prompt_contract"]["pose_transition_policy"] == (
+        "articulated-pose-only"
+    )
+    assert prepared.job["prompt_contract"]["root_policy"] == (
+        "stationary-image-plane-anchor"
+    )
+
+
+def test_front_fps_attack_prompt_uses_declared_attack_anatomy_and_flat_depth(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    request = _request()
+    request["creature_motion"] = {
+        "anatomy": "quadruped",
+        "locomotion": "crawl",
+        "camera": "front-fps",
+        "registration_anchor": "body-bottom",
+        "shared_idle": True,
+        "movement_source": "alternating diagonal supports",
+        "attack_source": "both foreclaws and the exact mouth",
+    }
+    request["states"] = {
+        "attack": {
+            "frames": 4,
+            "fps": 10,
+            "loop": False,
+            "action": "strike toward the player",
+            "animation_workflows": ["front-fps-creature-attack"],
+            "raw_layout": {
+                "kind": "compact-grid",
+                "columns": 2,
+                "rows": 2,
+                "order": "row-major",
+                "delivery": "compose-runtime-row",
+            },
+        }
+    }
+    (run_dir / "sprite-request.json").write_text(
+        json.dumps(request), encoding="utf-8"
+    )
+    Image.new("RGBA", (32, 32), (128, 128, 128, 255)).save(
+        run_dir / "first-frame.png"
+    )
+
+    prepared = prepare_video_job(
+        repo_root=tmp_path,
+        run_dir=run_dir,
+        state="attack",
+        first_frame_name="first-frame.png",
+    )
+    prompt = prepared.prompt_text.lower()
+
+    assert "only motion driver: both foreclaws and the exact mouth" in prompt
+    assert "compact anticipation, clear threatening contact" in prompt
+    assert "no depth translation, foreshortening" in prompt
+    assert prepared.job["prompt_contract"]["phase_semantics"] == [
+        "exact-idle",
+        "anticipation",
+        "contact",
+        "exact-idle",
+    ]
+
+
+def test_front_fps_video_prompt_rejects_missing_motion_source(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    request = _request()
+    request["creature_motion"] = {
+        "anatomy": "quadruped",
+        "locomotion": "crawl",
+        "camera": "front-fps",
+        "registration_anchor": "body-bottom",
+        "shared_idle": True,
+    }
+    request["states"]["walk"]["animation_workflows"] = [
+        "front-fps-creature-locomotion"
+    ]
+    (run_dir / "sprite-request.json").write_text(
+        json.dumps(request), encoding="utf-8"
+    )
+    Image.new("RGBA", (32, 32), (128, 128, 128, 255)).save(
+        run_dir / "first-frame.png"
+    )
+
+    with pytest.raises(VideoAnimationError, match="movement_source"):
+        prepare_video_job(
+            repo_root=tmp_path,
+            run_dir=run_dir,
+            state="walk",
+            first_frame_name="first-frame.png",
+        )
+
+
+def test_provider_action_override_is_state_local_and_auditable(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    request = _request()
+    request_bytes = json.dumps(request).encode("utf-8")
+    (run_dir / "sprite-request.json").write_bytes(request_bytes)
+    Image.new("RGBA", (32, 32), (128, 128, 128, 255)).save(
+        run_dir / "first-frame.png"
+    )
+
+    prepared = prepare_video_job(
+        repo_root=tmp_path,
+        run_dir=run_dir,
+        state="walk",
+        first_frame_name="first-frame.png",
+        provider_action_override="one stricter state-local walk cycle",
+    )
+
+    assert "one stricter state-local walk cycle" in prepared.prompt_text
+    assert prepared.job["prompt_contract"]["provider_action_source"] == "cli-override"
+    assert prepared.job["prompt_contract"]["provider_action"] == (
+        "one stricter state-local walk cycle"
+    )
+    assert prepared.job["sprite_request"]["sha256"] == sha256(request_bytes).hexdigest()
 
 
 def test_faceless_creature_prompt_keeps_declared_anatomy_and_forbids_a_face(

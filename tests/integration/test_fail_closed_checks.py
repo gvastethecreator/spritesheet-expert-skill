@@ -6,6 +6,7 @@ import subprocess
 import sys
 from types import SimpleNamespace
 
+import pytest
 from PIL import Image, ImageDraw
 
 from check_animation_contracts import (
@@ -15,7 +16,11 @@ from check_animation_contracts import (
     normalized_visual_pair_diff,
 )
 from check_frame_alignment import row_kind
-from extract_sprite_row_frames import exact_idle_copy_pairs, restore_source_foreground_regions
+from extract_sprite_row_frames import (
+    exact_idle_copy_pairs,
+    inferred_pose_geometry,
+    restore_source_foreground_regions,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -30,6 +35,17 @@ def _run(name: str, *args: str) -> subprocess.CompletedProcess[str]:
         text=True,
         check=False,
     )
+
+
+def test_pose_geometry_ignores_forbidden_pose_words() -> None:
+    assert inferred_pose_geometry(
+        "attack",
+        {"action": "Remain airborne; never stand, squat, land, walk, or grow."},
+    ) is None
+    assert inferred_pose_geometry(
+        "crouch",
+        {"action": "Never rotate or zoom."},
+    )["kind"] == "crouch"
 
 
 def test_alignment_fails_when_manifest_is_missing_and_zero_rows_are_checked(tmp_path: Path) -> None:
@@ -343,13 +359,64 @@ def test_identity_allows_pose_width_change_when_head_and_upper_body_stay_stable(
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_identity_uses_visual_review_for_front_quadruped_head_proxy(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "front-quadruped"
+    (run_dir / "frames").mkdir(parents=True)
+    (run_dir / "sprite-request.json").write_text(
+        json.dumps(
+            {
+                "creature_motion": {
+                    "anatomy": "quadruped",
+                    "attack_source": "mouth and front limbs",
+                },
+                "states": {"idle-step": {"frames": 4, "fps": 8}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    records = [
+        {
+            "head_width_vs_reference": head_width,
+            "upper_width_vs_reference": 1.0,
+            "body_mass_width_80_vs_reference": 1.0,
+            "opaque_area_vs_reference": 1.0,
+        }
+        for head_width in (1.0, 0.69, 1.0, 0.71)
+    ]
+    (run_dir / "frames" / "frames-manifest.json").write_text(
+        json.dumps(
+            {
+                "ok": True,
+                "sprite_registration": {
+                    "reference_body_mass_width_80": 100,
+                    "reference_head_width": 30,
+                    "reference_upper_width": 60,
+                },
+                "rows": [{"state": "idle-step", "frame_records": records}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = _run("check_identity_consistency.py", "--run-dir", str(run_dir))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = json.loads(
+        (run_dir / "qa" / "identity-consistency-report.json").read_text()
+    )
+    assert report["unreliable_proxies"] == ["head_width_vs_reference"]
+    assert report["results"][0]["metrics"]["head_width_vs_reference"]["reliable"] is False
+
+
 def test_identity_allows_declared_arm_attack_width_without_relaxing_other_rows(
     tmp_path: Path,
 ) -> None:
     run_dir = tmp_path / "arm-attack"
     (run_dir / "frames").mkdir(parents=True)
     request = {
-        "creature_motion": {"attack_source": "both arms and hands"},
+        "creature_motion": {"attack_source": "mouth and both forward attack limbs"},
         "states": {"attack": {"frames": 4, "fps": 10}},
     }
     (run_dir / "sprite-request.json").write_text(
@@ -388,6 +455,253 @@ def test_identity_allows_declared_arm_attack_width_without_relaxing_other_rows(
     body = report["results"][0]["metrics"]["body_mass_width_80_vs_reference"]
     assert body["spread_policy"] == "declared-appendage-attack"
     assert body["ceiling"] == 1.85
+
+
+@pytest.mark.parametrize("attack_source", ["both arms and hands", "the exact oversized plant gauntlet"])
+def test_identity_allows_raised_appendages_to_cross_the_head_proxy_band(
+    tmp_path: Path, attack_source: str,
+) -> None:
+    run_dir = tmp_path / "raised-appendage-attack"
+    (run_dir / "frames").mkdir(parents=True)
+    (run_dir / "sprite-request.json").write_text(
+        json.dumps(
+            {
+                "creature_motion": {"attack_source": attack_source},
+                "states": {"attack": {"frames": 4, "fps": 10}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    records = [
+        {
+            "head_width_vs_reference": head_width,
+            "upper_width_vs_reference": 1.0,
+            "body_mass_width_80_vs_reference": 1.0,
+            "opaque_area_vs_reference": 1.0,
+        }
+        for head_width in (1.0, 0.76, 1.95, 1.0)
+    ]
+    (run_dir / "frames" / "frames-manifest.json").write_text(
+        json.dumps(
+            {"ok": True, "rows": [{"state": "attack", "frame_records": records}]}
+        ),
+        encoding="utf-8",
+    )
+
+    result = _run("check_identity_consistency.py", "--run-dir", str(run_dir))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = json.loads(
+        (run_dir / "qa" / "identity-consistency-report.json").read_text()
+    )
+    head = report["results"][0]["metrics"]["head_width_vs_reference"]
+    assert head["floor"] == 0.40
+    assert head["ceiling"] == 2.20
+    assert head["spread_policy"] == "declared-appendage-attack"
+
+
+def test_identity_allows_declared_mouth_attack_head_change(tmp_path: Path) -> None:
+    run_dir = tmp_path / "mouth-attack"
+    (run_dir / "frames").mkdir(parents=True)
+    (run_dir / "sprite-request.json").write_text(
+        json.dumps(
+            {
+                "creature_motion": {
+                    "attack_source": "both hands, claws, and open mouth"
+                },
+                "states": {"attack": {"frames": 4, "fps": 10}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    records = [
+        {
+            "head_width_vs_reference": head_width,
+            "upper_width_vs_reference": upper_width,
+            "body_mass_width_80_vs_reference": 1.0,
+            "opaque_area_vs_reference": 1.0,
+        }
+        for head_width, upper_width in zip(
+            (1.0, 0.88, 1.32, 1.0),
+            (1.0, 1.25, 1.91, 1.0),
+            strict=True,
+        )
+    ]
+    (run_dir / "frames" / "frames-manifest.json").write_text(
+        json.dumps(
+            {"ok": True, "rows": [{"state": "attack", "frame_records": records}]}
+        ),
+        encoding="utf-8",
+    )
+
+    result = _run("check_identity_consistency.py", "--run-dir", str(run_dir))
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    report = json.loads(
+        (run_dir / "qa" / "identity-consistency-report.json").read_text()
+    )
+    head = report["results"][0]["metrics"]["head_width_vs_reference"]
+    assert head["spread_policy"] == "declared-head-attack"
+    assert head["ceiling"] == 1.40
+    assert head["spread"] == 0.44
+    assert report["errors"] == [
+        "attack: upper_width_vs_reference grows to 1.91x reference; expected <= 1.85x"
+    ]
+
+
+def test_identity_uses_narrow_airborne_head_tolerance(tmp_path: Path) -> None:
+    run_dir = tmp_path / "airborne-hover"
+    (run_dir / "frames").mkdir(parents=True)
+    (run_dir / "sprite-request.json").write_text(
+        json.dumps(
+            {
+                "creature_motion": {"anatomy": "hovering", "locomotion": "hover"},
+                "states": {"idle-step": {"frames": 4, "fps": 8}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    records = [
+        {
+            "head_width_vs_reference": head_width,
+            "upper_width_vs_reference": 1.0,
+            "body_mass_width_80_vs_reference": 1.0,
+            "opaque_area_vs_reference": 1.0,
+        }
+        for head_width in (1.0, 0.81, 1.0, 0.81)
+    ]
+    (run_dir / "frames" / "frames-manifest.json").write_text(
+        json.dumps(
+            {
+                "ok": True,
+                "rows": [
+                    {
+                        "state": "idle-step",
+                        "frame_records": records,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = _run("check_identity_consistency.py", "--run-dir", str(run_dir))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = json.loads(
+        (run_dir / "qa" / "identity-consistency-report.json").read_text()
+    )
+    head = report["results"][0]["metrics"]["head_width_vs_reference"]
+    assert head["floor"] == 0.80
+
+
+def test_identity_uses_visual_review_for_fixed_scale_wing_flap_widths(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "fixed-scale-wing-flap"
+    (run_dir / "frames").mkdir(parents=True)
+    (run_dir / "sprite-request.json").write_text(
+        json.dumps(
+            {
+                "creature_motion": {"anatomy": "winged", "locomotion": "fly"},
+                "registration": {"scale_policy": "source-reference"},
+                "states": {"idle-step": {"frames": 4, "fps": 8}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    records = [
+        {
+            "head_width_vs_reference": 1.0,
+            "upper_width_vs_reference": upper_width,
+            "body_mass_width_80_vs_reference": body_width,
+            "opaque_area_vs_reference": 1.0,
+        }
+        for upper_width, body_width in zip(
+            (1.0, 1.68, 1.0, 1.65),
+            (1.0, 0.63, 1.0, 0.64),
+            strict=True,
+        )
+    ]
+    (run_dir / "frames" / "frames-manifest.json").write_text(
+        json.dumps(
+            {
+                "ok": True,
+                "sprite_registration": {
+                    "reference_head_width": 30,
+                    "reference_upper_width": 100,
+                    "reference_body_mass_width_80": 200,
+                },
+                "rows": [{"state": "idle-step", "frame_records": records}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = _run("check_identity_consistency.py", "--run-dir", str(run_dir))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = json.loads(
+        (run_dir / "qa" / "identity-consistency-report.json").read_text()
+    )
+    assert report["unreliable_proxies"] == [
+        "body_mass_width_80_vs_reference",
+        "upper_width_vs_reference",
+    ]
+    assert report["results"][0]["metrics"]["upper_width_vs_reference"]["reliable"] is False
+    assert report["results"][0]["metrics"]["body_mass_width_80_vs_reference"]["reliable"] is False
+
+
+def test_identity_uses_visual_review_for_declared_long_arm_counter_swing(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "long-arm-counter-swing"
+    (run_dir / "frames").mkdir(parents=True)
+    (run_dir / "sprite-request.json").write_text(
+        json.dumps(
+            {
+                "creature_motion": {
+                    "anatomy": "biped",
+                    "movement_source": "restrained long-arm counter-swing",
+                },
+                "states": {"idle-step": {"frames": 4, "fps": 8}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    records = [
+        {
+            "head_width_vs_reference": 1.0,
+            "upper_width_vs_reference": width,
+            "body_mass_width_80_vs_reference": 1.0,
+            "opaque_area_vs_reference": 1.0,
+        }
+        for width in (1.0, 1.44, 1.0, 1.38)
+    ]
+    (run_dir / "frames" / "frames-manifest.json").write_text(
+        json.dumps(
+            {
+                "ok": True,
+                "sprite_registration": {
+                    "reference_head_width": 40,
+                    "reference_upper_width": 100,
+                    "reference_body_mass_width_80": 200,
+                },
+                "rows": [{"state": "idle-step", "frame_records": records}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = _run("check_identity_consistency.py", "--run-dir", str(run_dir))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = json.loads(
+        (run_dir / "qa" / "identity-consistency-report.json").read_text()
+    )
+    assert report["unreliable_proxies"] == ["upper_width_vs_reference"]
+    upper = report["results"][0]["metrics"]["upper_width_vs_reference"]
+    assert upper["reliable"] is False
 
 
 def test_identity_allows_declared_wing_attack_width(tmp_path: Path) -> None:

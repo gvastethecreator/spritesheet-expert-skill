@@ -35,7 +35,42 @@ provider/grok-imagine/walk/prompt.txt
 provider/grok-imagine/walk/job.json
 ```
 
-The prompt keeps the camera, framing, subject scale, identity, and neutral background fixed. It requests one continuous 6-second action with no cuts, camera motion, text, extra objects, detached effects, motion blur, or cast shadow. Do not force an output aspect ratio; image-to-video should inherit the first frame instead of stretching it.
+The prompt is structured instead of one long prose sentence. It records a `prompt_contract` in `job.json` with anatomy, locomotion, workflow, allowed motion driver, motion plane, early action window, edge margin, and phase semantics. Front-FPS creature preparation fails closed when the camera or movement/attack source is missing.
+
+The prompt keeps camera, projection, framing, ground line, subject scale, center, identity, lighting, neutral background, and existing empty border fixed. It requests one continuous 6-second action with no cuts, camera motion, text, extra objects, detached effects, motion blur, or cast shadow. `image-plane` is the default for frontal sprites: “toward the player” means pose readability, not depth travel, foreshortening, giant foreground limbs, or body enlargement. Do not force an output aspect ratio; image-to-video should inherit the first frame instead of stretching it.
+
+The first line also instructs the worker to call `image_to_video` exactly once and stop after the requested video exists. The wrapper still rejects extra media. Do not request multiple takes in one call: use the full native-rate timeline as the candidate pool, then regenerate only when no reviewed frame set is usable.
+
+Optional state controls live under `states.<state>.video_prompt`:
+
+```json
+{
+  "provider_action": "one compact frontal crawl cycle driven by alternating diagonal supports",
+  "motion_window_seconds": 1.6,
+  "edge_margin_ratio": 0.15,
+  "motion_plane": "image-plane"
+}
+```
+
+Keep the full state `action` as the durable animation design contract. Use optional `provider_action` as its short generation instruction when the full design text is repetitive. It must retain the creature-specific motion or attack source; never replace it with “walk” or “attack” alone.
+
+The first complete action must occur inside the early motion window. Later motion may repeat only that stable action. This yields several candidate frames without asking the provider to target a low output frame rate.
+
+When only one state's generation wording failed, prepare that state again without editing the shared request:
+
+```bash
+python scripts/prepare_grok_video_animation.py \
+  --repo-root /abs/project \
+  --run-dir /abs/project/.scratch/sprite-run \
+  --state walk \
+  --first-frame provider/grok-imagine/walk/first-frame.png \
+  --provider-action "one stricter anatomy-specific in-place cycle" \
+  --force
+```
+
+The job records `prompt_contract.provider_action_source: cli-override`. This keeps accepted sibling-state request hashes valid. It is a prompt-only repair; it cannot change declared anatomy, motion source, camera, or QA policy.
+
+Before a retry, review every frame from the current video. If no selection works, make one state-local repair that names the joints, support/contact relation, centerline limit, and anatomy that must stay fixed. After two failures from the same driver, switch to a safer existing driver instead of repeating the same deformation. Examples include changing a fragile hand attack to a lower-shroud lash, or changing an unclear whole-body crawl to explicit diagonal paw pairs. Archive the old state under `rejected/<reason>` and do not regenerate its accepted sibling.
 
 For `gesture-loop`, prompt preparation adds a planted-body lock. Pelvis, legs,
 knees, ankles, both feet, and the contact footprint remain pixel-for-pixel
@@ -63,7 +98,7 @@ Ingestion fails before mutation unless all of these match:
 - wrapper-owned `media/video-01.*` inside the job output directory;
 - a decodable video with a stable size/fps and enough unique frames.
 
-Ingestion enters the common video analyzer. It scans every decoded frame and creates several candidate sequences.
+Ingestion enters the common video analyzer. It scans every decoded frame and creates several candidate sequences. Watch the entire video before selection; reject a bad state before Lucida. Then review every frame, compare several candidates, and inspect final active frames at full source size.
 
 The command also builds the required minimal selector. Re-ingest reviewed indices with `--force`. This action does not call Grok again.
 

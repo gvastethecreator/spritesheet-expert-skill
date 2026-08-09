@@ -1,7 +1,7 @@
 {
-  "current_commit": "6a687f002f7d9926e64d7cb65c556a6f9f1a183f",
+  "current_commit": "05ab47d5a895b6a6cd6cc1bc43ecbd9021efb46f",
   "working_tree_dirty": true,
-  "generated_at": "2026-08-08T10:25:59Z",
+  "generated_at": "2026-08-09T12:26:28Z",
   "scanned_scope": [
     "."
   ],
@@ -44,7 +44,7 @@
       "id": "SKILLS",
       "path": "SKILLS",
       "file_count": 168,
-      "fingerprint": "ea8b3ebaab700602b52b78869b13c635a8c4edc6dd83ef34a264a274e87eab66"
+      "fingerprint": "b31e7c60b366f25e5350df55720115628daf5e4d607acc983e1d57e3a2a68e8a"
     },
     {
       "id": "assets",
@@ -80,7 +80,7 @@
       "id": "tests",
       "path": "tests",
       "file_count": 54,
-      "fingerprint": "a339a540a8659242a7b00f143b82905cbc38619adf53aacc5f196efb6f2d7855"
+      "fingerprint": "ac44bd7019531de0c4393e14f9c6d153138960ca063d489de5509d29769596c0"
     }
   ]
 }
