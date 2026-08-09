@@ -52,6 +52,20 @@ Generate complete active sprites separately only after a whole-sheet attempt rep
 
 Record the reason. Never paste a local limb or body-part patch that creates a visible seam.
 
+## Video Prompt Contract
+
+For first-frame-to-video work, the provider prompt must say all of these before inference:
+
+- exact creature anatomy and locomotion family;
+- the only allowed movement or attack driver from `creature_motion`;
+- full-frontal camera, fixed center, fixed ground line or hover center, and fixed pixel scale;
+- same flat image plane by default; threat comes from pose, not zoom or foreshortening;
+- one complete readable action early in the video, with exact idle recovery;
+- the existing empty border stays visible and every appendage remains inside source bounds;
+- exact identity, face topology, limb count, body volume, weapon, palette, marks, and lighting remain unchanged.
+
+Reject missing `movement_source` for locomotion and missing `attack_source` for attacks. Do not let a generic provider prompt guess the creature's movement family.
+
 ## Attack Design
 
 Select the weapon before generation. Use teeth, jaws, horns, head, claws, wings, forelimbs, tendrils, body mass, or held weapons when appropriate.
@@ -94,3 +108,5 @@ Keep the standard failure report. If visual evidence proves stable identity, run
 Do not widen thresholds to hide visible scale drift.
 
 Record every rejection and accepted run in a creature decision ledger. Read that entry before another regeneration.
+
+For video-derived rows, review the whole video first, then all decoded frames, several candidate sequences, and the final selected frames at full source size. Run Lucida only after those semantic checks pass.

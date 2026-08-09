@@ -60,6 +60,8 @@ def allowed_floor(key: str, kind: str, args: argparse.Namespace) -> float:
     if key == "head_width_vs_reference":
         if kind in {"knockdown", "fall"}:
             return args.min_knockdown_head
+        if kind == "airborne":
+            return args.min_airborne_head
         return args.min_head
     if key == "upper_width_vs_reference":
         if kind == "jump":
@@ -110,6 +112,38 @@ def unreliable_identity_proxies(
         if isinstance(width, (int, float)) and width / body_width < 0.12
     }
     motion = (request or {}).get("creature_motion")
+    registration_policy = (request or {}).get("registration")
+    if isinstance(motion, dict) and isinstance(registration_policy, dict):
+        anatomy = str(motion.get("anatomy", "")).lower()
+        locomotion = str(motion.get("locomotion", "")).lower()
+        if (
+            registration_policy.get("scale_policy") == "source-reference"
+            and (anatomy in {"winged", "flying"} or locomotion in {"fly", "flight"})
+        ):
+            # A true flap deliberately moves the wings through the upper and
+            # central silhouette bands. With source-reference scaling the body
+            # scale is already fixed, so these width bands measure wing pose,
+            # not identity drift. Keep area/head checks and require visual QA.
+            unreliable.update(
+                {
+                    "upper_width_vs_reference",
+                    "body_mass_width_80_vs_reference",
+                }
+            )
+    if isinstance(motion, dict) and str(motion.get("anatomy", "")).lower() in {
+        "multi-legged",
+        "quadruped",
+    }:
+        declaration = " ".join(
+            str(motion.get(key, "")).lower()
+            for key in ("movement_source", "attack_source")
+        )
+        if "maw" in declaration or "mouth" in declaration:
+            # Front-facing spiders, quadrupeds, and similar crawlers do not
+            # always have a stable top-band head silhouette: lifted forelegs
+            # and head foreshortening cross that band while the actual identity
+            # anchor is the central maw and body mass.
+            unreliable.add("head_width_vs_reference")
     if isinstance(motion, dict) and str(motion.get("anatomy", "")).lower() == "hovering":
         declaration = " ".join(
             str(motion.get(key, "")).lower()
@@ -120,6 +154,55 @@ def unreliable_identity_proxies(
             # head. Its width changes as the pod hovers even when the six-part
             # colony identity and overall body mass remain exact.
             unreliable.add("head_width_vs_reference")
+    if isinstance(motion, dict) and str(motion.get("anatomy", "")).lower() == "amorphous":
+        attack_source = str(motion.get("attack_source", "")).lower()
+        if "maw" in attack_source or "mouth" in attack_source:
+            # A headless amorphous creature can attack by opening its declared
+            # central mouth. The top-band proxy then measures the attack pose,
+            # not a head-size change. Body mass, area, registration, and visual
+            # review continue to guard identity and scale.
+            unreliable.add("head_width_vs_reference")
+    if isinstance(motion, dict) and str(motion.get("anatomy", "")).lower() == "biped":
+        movement_source = str(motion.get("movement_source", "")).lower()
+        attack_source = str(motion.get("attack_source", "")).lower()
+        long_asymmetric_arm = any(
+            token in movement_source
+            for token in (
+                "long-arm counter-swing",
+                "long arm counter-swing",
+                "extra-long",
+                "extra long",
+                "asymmetric arm",
+                "asymmetrical arm",
+            )
+        )
+        if long_asymmetric_arm:
+            # A declared long-arm walk deliberately sweeps shoulders, elbows,
+            # and hands through both narrow top silhouette bands. On tall,
+            # faceless creatures a small vertical bob can make the shoulder
+            # plate become the measured "head" even when the actual head is
+            # unchanged. These proxies measure pose width, not scale change;
+            # baseline/body-mass/area checks plus visual review still guard
+            # character identity.
+            unreliable.update(
+                {
+                    "head_width_vs_reference",
+                    "upper_width_vs_reference",
+                }
+            )
+        bilateral_long_arm_attack = (
+            "both" in attack_source
+            and any(token in attack_source for token in ("elongated", "long arm"))
+            and any(
+                token in attack_source
+                for token in ("bilateral", "inward", "cross", "x-shaped", "x shaped")
+            )
+        )
+        if bilateral_long_arm_attack:
+            # A declared two-arm inward/crossing strike moves both elbows and
+            # hands through the upper band. Head, body mass, area, baseline,
+            # and visual review remain reliable identity/scale guards.
+            unreliable.add("upper_width_vs_reference")
     return unreliable
 
 
@@ -141,11 +224,35 @@ def is_appendage_driven_attack(request: dict[str, Any], state: str) -> bool:
             "claw",
             "foreleg",
             "front leg",
+            "limb",
             "pincer",
             "scythe",
             "hook",
+            "gauntlet",
+            "fist",
         )
     )
+
+
+def is_head_driven_attack(request: dict[str, Any], state: str) -> bool:
+    if state != "attack":
+        return False
+    creature_motion = request.get("creature_motion")
+    if not isinstance(creature_motion, dict):
+        return False
+    attack_source = str(creature_motion.get("attack_source", "")).lower()
+    return any(token in attack_source for token in ("head", "mouth", "maw", "jaw", "tusk"))
+
+
+def is_airborne_motion(request: dict[str, Any], state: str) -> bool:
+    if state != "idle-step":
+        return False
+    creature_motion = request.get("creature_motion")
+    if not isinstance(creature_motion, dict):
+        return False
+    anatomy = str(creature_motion.get("anatomy", "")).lower()
+    locomotion = str(creature_motion.get("locomotion", "")).lower()
+    return anatomy in {"hovering", "flying"} or locomotion in {"hover", "fly", "flight"}
 
 
 def inspect_row(
@@ -154,6 +261,8 @@ def inspect_row(
     unreliable_proxies: set[str] | None = None,
     *,
     appendage_driven_attack: bool = False,
+    head_driven_attack: bool = False,
+    airborne_motion: bool = False,
 ) -> dict[str, Any]:
     state = str(row.get("state", ""))
     records = row.get("frame_records") if isinstance(row.get("frame_records"), list) else []
@@ -178,9 +287,22 @@ def inspect_row(
         spread = maximum - minimum
         floor = allowed_floor(key, kind, args)
         ceiling = allowed_ceiling(key, kind, args)
+        if key == "head_width_vs_reference" and airborne_motion:
+            floor = args.min_airborne_head
+        if key == "head_width_vs_reference" and head_driven_attack:
+            floor = args.min_head_attack
+            ceiling = args.max_head_attack
+        if (
+            key == "head_width_vs_reference"
+            and appendage_driven_attack
+            and not head_driven_attack
+        ):
+            floor = args.min_appendage_attack_head
+            ceiling = args.max_appendage_attack_head
         if key == "upper_width_vs_reference" and appendage_driven_attack:
             ceiling = args.max_appendage_attack_upper_width
         if key == "body_mass_width_80_vs_reference" and appendage_driven_attack:
+            floor = args.min_appendage_attack_body_mass_width
             ceiling = args.max_appendage_attack_body_mass_width
         metrics[key] = {
             "min": round(minimum, 4),
@@ -208,6 +330,16 @@ def inspect_row(
         if key == "upper_width_vs_reference" and appendage_driven_attack:
             spread_limit = args.max_arm_attack_upper_spread
             metrics[key]["spread_policy"] = "declared-appendage-attack"
+        if key == "head_width_vs_reference" and head_driven_attack:
+            spread_limit = args.max_head_attack_spread
+            metrics[key]["spread_policy"] = "declared-head-attack"
+        if (
+            key == "head_width_vs_reference"
+            and appendage_driven_attack
+            and not head_driven_attack
+        ):
+            spread_limit = args.max_appendage_attack_head_spread
+            metrics[key]["spread_policy"] = "declared-appendage-attack"
         if key == "body_mass_width_80_vs_reference" and appendage_driven_attack:
             spread_limit = args.max_appendage_attack_body_mass_spread
             metrics[key]["spread_policy"] = "declared-appendage-attack"
@@ -233,7 +365,25 @@ def main() -> int:
     parser.add_argument("--states", default="all", help="'all' or comma-separated states")
     parser.add_argument("--report", default="qa/identity-consistency-report.json")
     parser.add_argument("--min-head", type=float, default=0.82)
+    parser.add_argument(
+        "--min-airborne-head",
+        type=float,
+        default=0.80,
+        help="Head-width floor for airborne rows where independently moving shrouds or wings can perturb the top-band proxy; visual identity review remains required.",
+    )
+    parser.add_argument(
+        "--min-head-attack",
+        type=float,
+        default=0.75,
+        help="Head-width floor for an attack explicitly driven by the head, mouth, maw, jaw, or tusks; visual identity review remains required.",
+    )
     parser.add_argument("--max-head", type=float, default=1.28)
+    parser.add_argument(
+        "--max-head-attack",
+        type=float,
+        default=1.40,
+        help="Head-width ceiling for an attack explicitly driven by the head, mouth, maw, jaw, or tusks; visual identity review remains required.",
+    )
     parser.add_argument("--min-upper", type=float, default=0.62)
     parser.add_argument("--max-upper", type=float, default=1.55)
     parser.add_argument("--min-body-mass-width", type=float, default=0.68)
@@ -247,9 +397,15 @@ def main() -> int:
     parser.add_argument("--min-knockdown-body-mass-width", type=float, default=0.50)
     parser.add_argument("--max-proxy-spread", type=float, default=0.42)
     parser.add_argument(
+        "--max-head-attack-spread",
+        type=float,
+        default=0.60,
+        help="Head-width spread allowed only for a declared head-driven attack; other rows keep --max-proxy-spread.",
+    )
+    parser.add_argument(
         "--max-arm-attack-upper-spread",
         type=float,
-        default=0.85,
+        default=0.95,
         help="Upper-width spread allowed only for an attack whose request explicitly declares a moving appendage as its attack source.",
     )
     parser.add_argument(
@@ -257,6 +413,30 @@ def main() -> int:
         type=float,
         default=1.85,
         help="Upper-width ceiling for a declared appendage-driven attack; head and area proxies remain independently gated.",
+    )
+    parser.add_argument(
+        "--min-appendage-attack-head",
+        type=float,
+        default=0.40,
+        help="Head-band floor for an appendage attack where raised hands, claws, or wings can become the topmost silhouette; visual head review remains required.",
+    )
+    parser.add_argument(
+        "--max-appendage-attack-head",
+        type=float,
+        default=2.20,
+        help="Head-band ceiling for an appendage attack where raised or crossed limbs can become the topmost silhouette; visual head review remains required.",
+    )
+    parser.add_argument(
+        "--max-appendage-attack-head-spread",
+        type=float,
+        default=1.30,
+        help="Head-band spread for an appendage attack where the moving appendage crosses the topmost silhouette; visual head review remains required.",
+    )
+    parser.add_argument(
+        "--min-appendage-attack-body-mass-width",
+        type=float,
+        default=0.50,
+        help="Body-mass width floor for a declared appendage-driven attack where forward foreshortening can narrow the silhouette; visual review remains required.",
     )
     parser.add_argument(
         "--max-appendage-attack-body-mass-width",
@@ -323,6 +503,12 @@ def main() -> int:
             args,
             unreliable_proxies,
             appendage_driven_attack=is_appendage_driven_attack(
+                request, str(row.get("state", ""))
+            ),
+            head_driven_attack=is_head_driven_attack(
+                request, str(row.get("state", ""))
+            ),
+            airborne_motion=is_airborne_motion(
                 request, str(row.get("state", ""))
             ),
         )

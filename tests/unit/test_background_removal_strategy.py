@@ -95,6 +95,37 @@ def test_matte_review_compares_checker_black_gray_white_and_alpha(
         assert review.height > 100
 
 
+def test_state_local_matte_refresh_keeps_sibling_state_in_combined_review(
+    tmp_path: Path,
+) -> None:
+    raw = _flat_source((128, 128, 128))
+    processed = backgrounds.remove_matte_background(raw, 28.0, 8)
+    entries = [
+        {"state": state, "method": "matte", "raw": raw, "processed": processed}
+        for state in ("idle-step", "attack")
+    ]
+
+    relative = backgrounds.save_state_and_combined_matte_reviews(
+        entries,
+        tmp_path,
+        ["idle-step", "attack"],
+    )
+    with Image.open(tmp_path / "qa" / "idle-step-background-matte-review.png") as idle:
+        idle_height = idle.height
+    with Image.open(tmp_path / "qa" / "attack-background-matte-review.png") as attack:
+        attack_height = attack.height
+    with Image.open(tmp_path / relative) as combined:
+        assert combined.height == idle_height + attack_height
+
+    backgrounds.save_state_and_combined_matte_reviews(
+        [entries[1]],
+        tmp_path,
+        ["idle-step", "attack"],
+    )
+    with Image.open(tmp_path / relative) as combined:
+        assert combined.height == idle_height + attack_height
+
+
 def test_pixel_art_edge_refinement_does_not_introduce_fractional_alpha() -> None:
     args = _args()
     args.edge_refine = "conservative"

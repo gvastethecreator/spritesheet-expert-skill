@@ -178,6 +178,7 @@
         "fps": { "type": "integer", "minimum": 1 },
         "loop": { "type": "boolean" },
         "action": { "type": "string" },
+        "video_prompt": { "$ref": "#/$defs/videoPrompt" },
         "durations_ms": {
           "type": "array",
           "items": { "type": "integer", "minimum": 1 },
@@ -187,6 +188,16 @@
         "vfx": { "$ref": "#/$defs/vfxMetadata" }
       },
       "additionalProperties": true
+    },
+    "videoPrompt": {
+      "type": "object",
+      "properties": {
+        "provider_action": { "type": "string", "minLength": 1, "maxLength": 800 },
+        "motion_window_seconds": { "type": "number", "minimum": 0.5, "maximum": 4.0 },
+        "edge_margin_ratio": { "type": "number", "minimum": 0.08, "maximum": 0.30 },
+        "motion_plane": { "enum": ["image-plane", "depth-allowed"] }
+      },
+      "additionalProperties": false
     },
     "normalizedPivot": {
       "type": "object",
