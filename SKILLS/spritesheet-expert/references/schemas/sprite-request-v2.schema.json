@@ -73,6 +73,11 @@
           "minimum": 1,
           "maximum": 255
         },
+        "enclosed_hole_max_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.5
+        },
         "post_rembg_chroma_cleanup": { "type": "boolean" },
         "source_family": { "enum": ["neutral", "legacy-chroma", "unknown"] }
       },

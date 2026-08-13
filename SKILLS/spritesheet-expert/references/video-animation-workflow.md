@@ -66,7 +66,60 @@ Use a bounded repair ladder when the result fails:
 
 If the batch is quota-sealed, step 3 is disabled. Exhaust the complete existing timeline, including early clean cycles and alternate chronological candidates. If exactly one semantic pose remains unusable, repair only that pose with `$imagegen` from the approved anchor and adjacent accepted poses. Do not regenerate the whole video or fabricate the frame procedurally. Record the repaired frame as mixed provenance, then rerun background removal, adaptive crop, registration, contact, onion, matte, white-background, and runtime checks for the state.
 
+After the repaired sheet replaces `raw/<state>.png`, synchronize its exact bytes with provenance:
+
+```bash
+python scripts/sync_imagegen_repair_provenance.py --run-dir /abs/run
+```
+
+The command reads `qa/quota-sealed-repair-plan.json`. It accepts only completed repair states. It changes those accepted sources to `imagegen`, updates their hashes and sizes, and keeps the other video states unchanged. A run that contains both source types becomes `mixed`. Run the provenance gate again after this command.
+
 Archive each rejected state and preserve accepted sibling-state sources, selected frames, matte panels, and provenance.
+
+## Batch Completion And Quota Accounting
+
+A passing run does not prove a passing batch. Keep these records separate:
+
+1. **Quota source:** the one provider video allocated to each required state. It remains quota evidence even when Imagegen later replaces one bad pose or state sheet.
+2. **Accepted source:** the exact raw sheet used by extraction and packaging. It can be Grok video, imported video, Imagegen, or mixed provenance.
+3. **Archived source:** an old, rejected, overflow, or alternate `video-source.json`. It is retained for diagnosis and never increases the quota count.
+
+Do not count every recursive `video-source.json`. Prefer the canonical state report at `provider/grok-imagine/<state>/video-source.json`, then `provider/video/<state>/video-source.json`. If both are historical or the active quota record lives elsewhere, pin the intended report in the batch entry:
+
+```json
+{
+  "review": {
+    "quota_sources": {
+      "idle-step": "provider/video/idle-step/video-source.json",
+      "attack": "provider/grok-imagine/attack/video-source.json"
+    }
+  }
+}
+```
+
+The batch manifest also pins the approved identity source hash, reviewed state sources, validation fingerprint, and packaged candidate hash. Declare reusable policy at the top level:
+
+```json
+{
+  "generation_policy": {
+    "quota_sealed": true,
+    "identity_fields": ["biome", "enemy"],
+    "states_per_identity": ["idle-step", "attack"],
+    "expected_identities": 110,
+    "max_provider_videos_per_identity": 2
+  }
+}
+```
+
+After all runs are reviewed, validated, and packaged, audit the complete set:
+
+```bash
+python scripts/check_animation_batch_completion.py \
+  --repo-root /abs/project \
+  --batch-manifest /abs/project/path/to/batch-manifest.json
+```
+
+The command writes `batch-completion-report.json` beside the manifest by default. It verifies unique identities, exact identity-source bytes, reviewed states, requested and extracted frame counts, source provenance, quota video bytes, selector/editor and timeline hashes, completed Imagegen repair plans, final workbench evidence, pre-package validation, source atlas, and packaged candidate. It reports archived provider records without counting them as active work. Any changed byte, stale selector, missing evidence, unplanned repair, duplicate identity, missing state, or quota mismatch fails the batch.
 
 For creatures with oversized hands, very long forearms, tendrils, or other long levers, inspect non-driver anatomy first: providers often preserve the torso while stretching those distal parts late in the shot. Prefer a short clean early window. If hand- or body-mass attacks fail twice, switch to a compact existing driver such as jaw, head, lower shroud, or tail instead of asking the same long limbs to move again.
 
@@ -139,6 +192,17 @@ For paired-limb attacks, name both original limbs, their permitted joints, maxim
 
 Tall faceless bipeds with declared long-arm counter-swing are a special identity-proxy case: shoulder and hand motion can cross the narrow top bands and look like head-width growth numerically. For this anatomy, rely on body-mass, opaque-area, baseline, scale, contact/onion evidence, and explicit visual confirmation of the actual head and eyes.
 
+Do not widen global identity thresholds to silence pose-driven proxy failures. After reviewing the exact affected contact sheet, onion skin, matte, final sheet, and runtime playback, record a confirmed false positive with:
+
+```bash
+python scripts/record_identity_proxy_review.py --run-dir /abs/run --reason "The declared appendage crosses the narrow proxy band while the reviewed head, torso, scale, and root stay exact."
+python scripts/check_identity_consistency.py --run-dir /abs/run
+```
+
+The review covers the current exact error strings and hashes its request, extracted manifest, sheet, matte, contact, and onion evidence. It fails closed if any covered error or artifact changes. A proxy review is not an anatomy waiver and cannot replace an uncertain or failed visual inspection.
+
+Explicit workflow ids also win over action prose during QA routing. `front-fps-creature-attack` is never sent through the locomotion variation gate merely because its action mentions retreat or recovery. Legacy rows without `animation_workflows` still use state/action word matching.
+
 Re-ingestion uses `--sample-indices` and `--force`. It does not call the provider.
 
 ```bash
@@ -159,6 +223,8 @@ Re-ingestion records `reviewed_indices` and `reviewed_selection` metrics for the
 Run `extract_sprite_row_frames.py` after frame selection.
 
 Video-derived grids use independent-frame removal. Lucida processes each selected frame separately.
+
+Start Lucida at `384` input pixels for a clean, high-contrast neutral sheet. Review the matte before another run. Increase to `512`, then `1024`, only when the smaller input loses fur, translucent edges, thin appendages, or glow. Process one Lucida extractor at a time. Do not reduce the request default or batch-approve the faster matte without visual review.
 
 The extractor adds a neutral context border before model inference. Then it removes small disconnected matte noise.
 
@@ -203,6 +269,8 @@ python scripts/check_motion_variation.py --run-dir /abs/run
 python scripts/build_preview_workbench.py --run-dir /abs/run --force
 python scripts/validate_run.py --run-dir /abs/run --stage post-extract --allow-imported-source
 ```
+
+`render_runtime_preview.py` uses an automatic viewport by default. The viewport fits the largest manifest frame at the requested scale. Use `--viewport WIDTHxHEIGHT` only when the project requires a larger fixed capture surface.
 
 Use `register_sprite_frames.py` only for an imported or legacy run that cannot declare registration before extraction. Do not register an already registered output a second time.
 

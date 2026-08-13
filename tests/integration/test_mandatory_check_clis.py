@@ -155,6 +155,60 @@ def test_motion_fails_when_the_expected_locomotion_selector_checks_zero_states(
     assert any("nothing checked" in message for message in report["errors"])
 
 
+def test_motion_locomotion_selector_respects_declared_attack_workflow(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    _write_json(
+        run_dir / "sprite-request.json",
+        {
+            "states": {
+                "walk": {
+                    "frames": 1,
+                    "fps": 8,
+                    "loop": True,
+                    "action": "walk in place",
+                    "animation_workflows": ["front-fps-creature-locomotion"],
+                },
+                "attack": {
+                    "frames": 1,
+                    "fps": 10,
+                    "loop": False,
+                    "action": "strike, retreat, and recover",
+                    "animation_workflows": ["front-fps-creature-attack"],
+                },
+            },
+        },
+    )
+    _write_opaque_box(run_dir / "frames" / "walk" / "frame-0.png")
+    _write_opaque_box(run_dir / "frames" / "attack" / "frame-0.png")
+    _write_json(
+        run_dir / "frames" / "frames-manifest.json",
+        {
+            "ok": True,
+            "rows": [
+                {"state": "walk", "files": ["frames/walk/frame-0.png"]},
+                {"state": "attack", "files": ["frames/attack/frame-0.png"]},
+            ],
+        },
+    )
+
+    result = _run_check(
+        "check_motion_variation.py",
+        "--run-dir",
+        str(run_dir),
+        "--states",
+        "locomotion",
+        "--warn-only",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = json.loads(
+        (run_dir / "qa" / "motion-variation-report.json").read_text(encoding="utf-8")
+    )
+    assert report["checked_states"] == ["walk"]
+
+
 def test_motion_all_selector_fails_when_zero_states_are_checked(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
     _write_json(run_dir / "sprite-request.json", {"states": {}})

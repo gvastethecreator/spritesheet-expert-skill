@@ -190,6 +190,23 @@ def test_runtime_preview_renders_one_runtime_still(tmp_path: Path) -> None:
     assert report["durations_ms"] == [200]
 
 
+def test_runtime_preview_auto_fits_manifest_cell(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    _write_run(run_dir)
+
+    completed = _run(run_dir, "--kind", "runtime-playback")
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    report = json.loads(
+        (run_dir / json.loads(completed.stdout)["report_path"]).read_text(
+            encoding="utf-8"
+        )
+    )
+    assert report["viewport"] == {"width": 8, "height": 8, "dpr": 1.0}
+    assert report["placements"][0]["width"] == 8
+    assert report["placements"][0]["height"] == 8
+
+
 def test_runtime_preview_rejects_stale_or_wrong_atlas_before_mutation(
     tmp_path: Path,
 ) -> None:

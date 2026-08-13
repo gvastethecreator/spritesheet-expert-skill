@@ -40,6 +40,7 @@ Block done unless:
 - When no base image was provided, `references/identity-anchor.png` exists and later generated rows visibly follow that anchor instead of drifting into a new character.
 - User-facing generated art was backed by the declared `$imagegen` or `$grok-imagine` source media; synthetic fixtures are labeled as fixtures only.
 - Every video row has a hash-bound `video-source.json`. Grok rows also retain the completed invocation and exact first-frame evidence.
+- Multi-identity animation batches have a passing `batch-completion-report.json` from `check_animation_batch_completion.py`. Quota videos, final accepted sources, Imagegen repairs, and archived reports are counted separately; recursive file count is never quota evidence.
 - Every video row has `qa/<state>-video-frame-selector/index.html` and `selector.evidence.json`. The evidence matches the report, video, selected indices, candidates, and HTML hashes.
 - Video extraction applies background removal per selected frame. Each segmentation span records alpha bounds, crop padding, context padding, discarded noise, and source-edge contacts.
 - A video row fails when a significant source component touches a video boundary. It also fails when opaque pixels enter the final safe margin.
@@ -116,6 +117,7 @@ provider/video/<state>/video-source.json
 provider/video/<state>/source.mp4
 qa/<state>-video-frame-selector/index.html
 qa/<state>-video-frame-selector/selector.evidence.json
+batch-completion-report.json  # beside a multi-identity batch manifest
 ```
 
 Use `manifest.json.frame_layout` as runtime SSoT. Do not recover frame rectangles from alpha at runtime.
@@ -129,3 +131,11 @@ python scripts/validate_run.py --run-dir /abs/run --stage pre-package
 ```
 
 `pre-package` returns `2` while required visual review is missing, `1` for contract/quality failures, and `3` for operational failures. A partial `--gate` selection is diagnostic and can never produce an aggregate final green.
+
+For a complete animation batch, run the batch gate after every run has passed `pre-package` and its runtime candidate has been packaged:
+
+```bash
+python scripts/check_animation_batch_completion.py --repo-root /abs/project --batch-manifest /abs/project/path/to/batch-manifest.json
+```
+
+The batch report is the final machine decision for inventory, quota accounting, provenance, selector freshness, repairs, and packaged-candidate freshness. It does not replace individual visual approval.

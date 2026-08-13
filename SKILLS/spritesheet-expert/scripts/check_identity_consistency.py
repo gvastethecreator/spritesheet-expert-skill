@@ -16,6 +16,7 @@ from statistics import median
 from typing import Any
 
 from runio import atomic_write_text
+from spritecore.visual_review import compute_input_fingerprint, snapshot_review_artifact
 
 
 IDENTITY_KEYS = (
@@ -24,6 +25,92 @@ IDENTITY_KEYS = (
     "body_mass_width_80_vs_reference",
     "opaque_area_vs_reference",
 )
+IDENTITY_PROXY_REVIEW = "qa/identity-proxy-review.json"
+IDENTITY_PROXY_REVIEW_KIND = "identity-proxy-visual-review"
+
+
+def apply_identity_proxy_review(
+    run_dir: Path,
+    results: list[dict[str, Any]],
+    quality_errors: list[str],
+) -> tuple[list[str], list[str], dict[str, Any] | None]:
+    review_path = run_dir / IDENTITY_PROXY_REVIEW
+    if not review_path.is_file() or not quality_errors:
+        return quality_errors, [], None
+    review = load_json(review_path)
+    issues: list[str] = []
+    if review.get("version") != 1:
+        issues.append("version must be 1")
+    if review.get("kind") != IDENTITY_PROXY_REVIEW_KIND:
+        issues.append(f"kind must be {IDENTITY_PROXY_REVIEW_KIND!r}")
+    if review.get("status") != "approved":
+        issues.append("status must be 'approved'")
+    if review.get("reviewer_kind") not in {"human", "vision-model"}:
+        issues.append("reviewer_kind must be 'human' or 'vision-model'")
+    if not isinstance(review.get("reason"), str) or len(review["reason"].strip()) < 20:
+        issues.append("reason must explain the proxy false positive")
+    covered = review.get("covered_errors")
+    if covered != quality_errors:
+        issues.append("covered_errors no longer match the current identity proxy failures")
+    declared_artifacts = review.get("reviewed_artifacts")
+    if not isinstance(declared_artifacts, list) or not declared_artifacts:
+        issues.append("reviewed_artifacts must be a non-empty list")
+        declared_artifacts = []
+    actual_artifacts: list[dict[str, Any]] = []
+    for index, declared in enumerate(declared_artifacts):
+        if not isinstance(declared, dict) or not isinstance(declared.get("path"), str):
+            issues.append(f"reviewed_artifacts.{index} is invalid")
+            continue
+        try:
+            actual = snapshot_review_artifact(run_dir, declared["path"])
+        except Exception as exc:  # safe path and missing-file errors become review failures
+            issues.append(f"reviewed_artifacts.{index}: {exc}")
+            continue
+        actual_artifacts.append(actual)
+        if declared != actual:
+            issues.append(f"reviewed_artifacts.{index}: artifact changed")
+    affected_states = sorted({error.split(":", 1)[0] for error in quality_errors})
+    required_paths = {
+        "sprite-request.json",
+        "frames/frames-manifest.json",
+        "sprite-sheet-alpha.png",
+        "qa/background-matte-review.png",
+        *{f"qa/{state}-contact.png" for state in affected_states},
+        *{f"qa/{state}-onion.png" for state in affected_states},
+    }
+    actual_paths = {artifact["path"] for artifact in actual_artifacts}
+    missing = sorted(required_paths - actual_paths)
+    if missing:
+        issues.append(f"reviewed_artifacts missing required evidence: {', '.join(missing)}")
+    if actual_artifacts:
+        fingerprint = compute_input_fingerprint(actual_artifacts)
+        if review.get("input_fingerprint") != fingerprint:
+            issues.append("input_fingerprint no longer matches reviewed artifacts")
+    if issues:
+        return [
+            *quality_errors,
+            *[f"identity proxy review invalid: {issue}" for issue in issues],
+        ], [], None
+
+    covered_set = set(quality_errors)
+    for row in results:
+        state = str(row.get("state", ""))
+        row_errors = [f"{state}: {error}" for error in row.get("errors", [])]
+        if row_errors and set(row_errors) <= covered_set:
+            row["warnings"].extend(
+                f"visually reviewed proxy false positive: {error}" for error in row["errors"]
+            )
+            row["errors"] = []
+            row["ok"] = True
+            row["proxy_review"] = IDENTITY_PROXY_REVIEW
+    warnings = [
+        f"identity proxy visual review accepted {len(quality_errors)} exact metric failure(s)"
+    ]
+    return [], warnings, {
+        "path": IDENTITY_PROXY_REVIEW,
+        "input_fingerprint": review["input_fingerprint"],
+        "covered_errors": quality_errors,
+    }
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -176,20 +263,25 @@ def unreliable_identity_proxies(
                 "asymmetrical arm",
             )
         )
-        if long_asymmetric_arm:
-            # A declared long-arm walk deliberately sweeps shoulders, elbows,
-            # and hands through both narrow top silhouette bands. On tall,
-            # faceless creatures a small vertical bob can make the shoulder
-            # plate become the measured "head" even when the actual head is
-            # unchanged. These proxies measure pose width, not scale change;
-            # baseline/body-mass/area checks plus visual review still guard
-            # character identity.
-            unreliable.update(
-                {
-                    "head_width_vs_reference",
-                    "upper_width_vs_reference",
-                }
+        long_arm_attack = any(
+            token in attack_source
+            for token in (
+                "extra-long",
+                "extra long",
+                "long claw",
+                "long arm",
+                "elongated",
+                "asymmetric arm",
+                "asymmetrical arm",
             )
+        )
+        if long_asymmetric_arm:
+            # Counter-swing crosses the upper silhouette band. Keep the head
+            # proxy active unless the attack contract also drives a declared
+            # long arm through that narrow top band.
+            unreliable.add("upper_width_vs_reference")
+            if long_arm_attack:
+                unreliable.add("head_width_vs_reference")
         bilateral_long_arm_attack = (
             "both" in attack_source
             and any(token in attack_source for token in ("elongated", "long arm"))
@@ -515,8 +607,12 @@ def main() -> int:
         for row in selected
     ]
     quality_errors = [f"{row['state']}: {error}" for row in results for error in row["errors"]]
+    quality_errors, review_warnings, proxy_review = apply_identity_proxy_review(
+        run_dir, results, quality_errors
+    )
     errors = precondition_errors + quality_errors
     warnings = [f"{row['state']}: {warning}" for row in results for warning in row["warnings"]]
+    warnings.extend(review_warnings)
     payload = {
         "ok": not precondition_errors and (not quality_errors or args.warn_only),
         "engine": "identity-consistency-proxy",
@@ -528,6 +624,8 @@ def main() -> int:
         "warnings": warnings,
         "results": results,
     }
+    if proxy_review is not None:
+        payload["identity_proxy_review"] = proxy_review
     report_path = run_dir / args.report
     report_path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_text(report_path, json.dumps(payload, indent=2, ensure_ascii=False) + "\n")

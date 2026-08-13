@@ -116,6 +116,8 @@ Inspect these files before atlas composition:
 
 Reject missing limbs, cross-assigned effects, clipped glow, merged poses, detached noise, or inconsistent order. Then inspect onion skin and runtime playback. A clean cut does not prove correct game placement.
 
+If Lucida removes a large black subject cavity that is fully enclosed by accepted foreground, set `background_removal.enclosed_hole_max_ratio` for that reviewed run. Use the smallest value that restores the cavity. The default `0.02` prevents large spaces between limbs or rings from becoming opaque. Never use this setting for a border-connected gap.
+
 For neutral sources, do not treat black, gray, or white subject pixels as chroma leakage. Chroma checks apply only to `legacy-chroma` sources.
 
 If an identity proxy marks raised forearms or wings as a larger head or torso, keep the standard report. Inspect the contact, onion, and runtime playback. Run a pose-aware comparison only when those images prove that the stable body parts did not change. Record the reason and thresholds. Do not use this protocol to excuse visible scale drift.

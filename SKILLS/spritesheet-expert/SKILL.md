@@ -21,19 +21,14 @@ Use `$imagegen` as the default still-image generator. Use `$grok-imagine` only a
 
 ## Mandatory Imagegen Rule And Grok Exception
 
-`$imagegen` is the primary still-image art engine. `spritesheet-expert` owns contracts, prompts, layout guides, extraction, registration, atlas composition, previews, curation, and QA. `$imagegen` owns default bitmap creation; `$grok-imagine` may own bitmap or video creation only when its route is selected explicitly.
-
-For ordinary user-facing sprite, character, tileset, texture, prop, icon, VFX, or atlas art generation, load and follow `$imagegen`. Generate on a flat neutral gray, black, or white background; do not request green, blue, cyan, or magenta chroma. Preserve valid neutral colors in the subject and remove only the connected source background or use a model-backed cutout.
-
-Local scripted/PIL/procedural drawing is allowed only for deterministic smoke tests, regression fixtures, and geometry debugging. It must never be presented as representative production art, even when `$imagegen` is unavailable. If `$imagegen` cannot be used, stop the generated-art path, write a blocked status, or continue only with explicit user-provided/imported art.
-
-Pipeline validation for generated art must include provider-produced source media before calling the result visually representative. The local scripts can prepare prompts, guides, decode accepted video, extract frames, compose atlases, and produce previews, but they do not replace `$imagegen` or `$grok-imagine` for final visual content.
-
-Before final QA or packaging, run `scripts/check_generation_provenance.py --run-dir /abs/run`. It must pass for generated production art. Use `--allow-imported-source` only for explicit user-provided or existing sheets. Use `--allow-fixture` only for local smoke/regression fixtures.
-
-When `$imagegen` outputs are meant for the project, copy or move the selected generated image from the default generated-images location into the run folder before extraction. Do not leave project-referenced row art only under `$CODEX_HOME`.
-
-Requires Python with Pillow and jsonschema. From the installed skill directory run `python -m pip install -r scripts/requirements-core.txt`, then `python scripts/check_python_env.py`. Repository maintainers use the root `pyproject.toml` for the complete test gate. Install `scripts/requirements-lucida.txt` for the preferred Lucida sprite lane, `scripts/requirements-background.txt` for rembg/BiRefNet, and `scripts/requirements-video.txt` only for video ingestion. These extras remain optional so core request preparation stays lightweight.
+- Use `$imagegen` for default still-image creation. Use `$grok-imagine` only when the user explicitly selects its still or video route.
+- Generate isolated art on flat neutral gray, black, or white. Do not request chroma colors for new production art.
+- Local PIL or procedural drawing is limited to deterministic fixtures and geometry debugging. Never present it as production art.
+- Generated-art validation requires provider-produced source media. Local scripts own contracts, extraction, registration, atlases, previews, and QA, not paid inference.
+- Generated production art uses gray, black, or white neutral backgrounds; green, blue, cyan, or magenta are legacy-import chroma only. Model-backed removal and a contact sheet prove the representative production-art boundary.
+- Before final QA, run `scripts/check_generation_provenance.py --run-dir /abs/run`. Use `--allow-imported-source` only for explicit imported art and `--allow-fixture` only for tests.
+- Move selected provider output into the project run folder before extraction; do not leave project sources only in a client cache.
+- Core setup requires Pillow and jsonschema through `scripts/requirements-core.txt`. Install Lucida, background-removal, or video extras only for the selected lane.
 
 ## Provider-Neutral Video Animation
 
@@ -55,36 +50,16 @@ Read `references/video-animation-workflow.md` for every video source.
 
 ### Fast Video Production Gate
 
-Use this order for each state. Do not batch-approve creatures.
+Read `references/video-animation-workflow.md` before preparing or accepting any video-derived state. It owns the detailed prompt, selection, quota, repair, and batch-completion contract.
 
-1. Prepare the structured provider prompt. It must name the anatomy, allowed motion driver, motion plane, early action window, edge margin, identity locks, slot semantics, articulated-pose policy, stationary root, non-driver anatomy lock, and phase readability.
-2. Reject the first frame before inference if it is not full frontal, fully inside the canvas, correctly scaled, or the wrong creature type.
-3. After inference, inspect the complete video once at native speed. Reject immediately for camera motion, scale drift, three-quarter/top-down rotation, identity morphing, missing/extra anatomy, wrong movement family, or source-edge contact.
-4. Only for a viable video, inspect every decoded frame in the selector. Compare several candidate sets and inspect the chosen active frames at full source resolution. `BORDE` marks source clipping; `ESCALA` marks locomotion outside `0.78x..1.22x` of the anchor. Both block export for the selected active slot.
-5. Re-ingest explicit indices. The ingestion gate records metrics for those exact reviewed frames and rejects locomotion whose active-pose subject height leaves `0.78x..1.22x` of the exact first frame. Run Lucida and adaptive extraction only after that gate and semantic selection pass. This keeps expensive cutout work away from rejected videos.
-6. Review matte, adaptive boxes, atlas, onion skin, and runtime playback for that state before starting the next creature.
-
-Automatic candidate score is navigation only. It cannot identify anatomical support limbs, creature type, attack intent, perspective errors, or identity drift.
-
-Reviewed source indices must be strictly chronological. Choose semantic phases in time order even when an exact-idle output slot will later be replaced from the approved anchor. Reject or reselect before background removal; never spend Lucida time on an ingestion command that did not pass.
-
-If one provider action needs stricter wording, rerun `prepare_grok_video_animation.py` for only that state with `--provider-action`. This changes the state prompt/job without mutating the shared `sprite-request.json`, so accepted sibling-state provenance remains valid. The override must still obey the request's anatomy, motion source, identity, camera, and margin contract.
-
-Request exactly one provider video and stop after the first successful media call. Never ask for alternatives in the same invocation. One long native-rate video is the candidate pool; compare several frame sets from it before paying for another generation.
-
-For a quota-sealed batch, inspect every approved first frame before preparing jobs. Describe the anatomy that is visibly present, not the legacy enemy class: count support limbs, attack limbs, wings, tendrils, mouths, weapons, and identity-critical faces or markings. Give each state one explicit motion driver, exact left/right or grouped phase mechanics, pixel-stable non-driver anatomy, fixed image-plane scale, and a complete early action with held readable poses. Prepare exactly one movement job and one attack job per identity, dry-run and audit all jobs, then execute each job once. After successful media exists, mark video generation frozen for that identity and solve selection, segmentation, alignment, or recovery from those videos only.
-
-Provider overproduction is not permission to regenerate. If a one-video job accidentally returns several valid videos in one completed invocation, recover only the first discovered deliverable, record every discarded overflow path in provenance, and mark the job complete. Do not invoke the provider again for that state. Any other provider failure stops the batch for diagnosis; never blind-retry a quota-sealed job.
-
-When video generation is frozen, never spend quota to repair one bad selected pose. Search the full existing timeline and compare alternate chronological phase sets first. If no clean frame exists but the other three semantic poses are valid, use `$imagegen` for a single identity-locked replacement frame based on the approved anchor plus adjacent accepted poses. The repair must keep the same canvas, camera, full-frontal orientation, apparent scale, registered root, lighting, palette, limb count, and background; change only the named articulation. Record mixed provenance and rerun Lucida, adaptive crop, registration, contact, onion, matte, white-background, and runtime QA for the repaired state.
-
-Use this repair ladder after a rejected state: first search the complete existing video for another clean phase set; next rewrite only that state's `provider_action` with stricter joint, support, and centerline rules; then regenerate only that state. A clean complete early cycle may be salvaged before later video corruption only when every chosen phase precedes the first unsafe frame and exact recovery uses the approved anchor. If two attempts deform the same motion driver, stop repeating it and choose another identity-safe driver already present in the creature, such as a lower shroud, tail, jaw, paired forelimbs, wings, or body mass. Long hands, forearms, tendrils, and other distal levers need extra identity review because providers often stretch them after the useful early window. Preserve the accepted sibling state and archive every rejected attempt with its reason.
-
-The regeneration step in that ladder applies only while quota is open. A quota-sealed batch skips it and moves from full-timeline salvage to the isolated `$imagegen` frame repair above.
-
-For rigid-region prompts, describe the creature as two explicit masks: the small animated driver region and the pixel-locked remainder. Give a measurable driver boundary such as `bottom 15 percent`, `below the fixed hips`, or `existing jaw only`; lock total height, center, ground line, and named landmarks. For bilateral attacks, require both original limbs to stay same-size, below a named height, on one flat image plane, and to reach one readable shared contact pose. This is faster and more reliable than broad verbs such as `lunge`, `strike toward the player`, or `attack with the body`.
-
-The generated provider prompt favors selectable animation evidence over cinematic motion. It requires articulated pose changes, fixed segment lengths and body volume, a stationary root and average center, stable non-driver anatomy, and sharp phase plateaus. Moving hands, feet, jaws, wings, claws, and tendrils keep their exact palm, digit, segment, and tip lengths; threat comes from jointed pose, not enlarged anatomy. It forbids mirror substitution, morphing, liquify, squash/stretch, whole-creature scaling, approach, and blurred transitional smears. Keep the state-local `provider_action` positive and concrete: name the exact moving anatomy, support/contact relationship, anticipation, contact, and recovery. Do not repeat the global negative locks there.
+- Validate the exact first frame, visible anatomy, motion driver, camera, scale, identity locks, and source margins before inference.
+- Request one provider video per state and stop after the first successful media call. Review the complete timeline before considering another generation.
+- Reject camera movement, scale drift, perspective rotation, identity morphing, anatomy changes, wrong motion, or source-edge contact.
+- Review all decoded frames in the selector, then re-ingest exact chronological indices before Lucida or adaptive extraction.
+- A quota-sealed batch never regenerates after media succeeds. Exhaust the timeline first; use one identity-locked `$imagegen` pose repair only when the documented repair contract allows it.
+- After an Imagegen repair, run `scripts/sync_imagegen_repair_provenance.py` and repeat provenance, matte, registration, contact, onion, runtime, and packaging checks.
+- Before declaring a multi-identity batch complete, run `scripts/check_animation_batch_completion.py`. Recursive file count is not quota evidence.
+- Explicit `animation_workflows` own QA routing. Action prose is only a legacy fallback.
 
 ## Optional Grok Imagine Provider
 
@@ -109,25 +84,14 @@ Read `references/grok-video-animation.md` before this route. On Zero Data Retent
 
 ## Local Handoff Runner Contract
 
-When this skill is driven by a local app such as Sprite Bench, keep the skill as the atlas engine and use a separate handoff layer for providers:
+When a local app drives this skill, keep provider execution in a separate handoff layer and keep the skill scripts as the only extraction, curation, atlas, preview, and QA path.
 
-```text
-codex-handoff/
-  inbox/   # structured generation/regeneration jobs
-  outbox/  # real returned images or blocked sidecars
-  status/  # runner status per job
-  logs/    # stdout/stderr tails from codex exec or adapters
-```
-
-The app or runner may write a job JSON that points to `sprite-request.json`, `prompts/<state>.txt`, `references/layout-guides/<state>.png`, optional `references/identity-anchor.png`, and the expected output row. Locomotion jobs must also point to the accepted `references/motion-references/<state>.png`. Codex, a manual operator, or a future provider should return a real image file to `outbox/` using the job id prefix. The runner then copies the accepted result into `raw/<state>.png` before extraction.
-
-Locomotion tries an approved reusable Image Gen template first. The catalog at `assets/motion-reference-templates/` reserves five 8-frame master slots for side, front, back, three-quarter-front, and three-quarter-back views; an entry marked `needs-imagegen` is a pending slot, not a bundled master. Left-facing variants mirror an approved right-facing master, and 4/6-frame variants select protected phases from it. If no approved/hash-matching template exists, generate the neutral color-coded mannequin once from `prompts/motion-references/<state>.txt`, review it, and promote it into the library instead of regenerating it per character. Every run copy has adjacent provenance with `art_engine: "imagegen"`, matching `state`, and `selected_source`. Run `scripts/check_motion_references.py --run-dir /abs/run`; only after it passes may the runner submit the final character-row job. Never send the deterministic layout guide as a substitute motion/anatomy reference.
-
-Returned final row files should be named like `<jobId>-<state>.png|webp|jpg`. Do not place contact sheets, comparison sheets, preview grids, temp candidates, QA JSON, debug images, staging files, or work-in-progress files in the outbox root as final import candidates.
-
-If generation is blocked by safety, policy, missing imagegen capability, provider failure, no returned image, or user cancellation, write a small `<jobId>-blocked.json` sidecar with `status=blocked`, `reasonKind`, `userMessage`, and `suggestion`. Allowed `reasonKind` values are `policy_or_safety`, `imagegen_unavailable`, `runner_failed`, `no_image_returned`, and `unknown`. Do not create a placeholder image, deterministic drawing, SVG, or text preview to keep the pipeline moving.
-
-Provider adapters must not mutate browser-only state. They should emit bounded events, update status/log files, and write artifacts back into the run folder or handoff outbox. The existing skill scripts remain the only supported path for extraction, curation, atlas composition, previews, and QA.
+- Jobs point to the exact request, state prompt, layout guide, optional identity anchor, expected output, and required motion reference.
+- Reusable motion templates must be approved and hash-matching. A pending template is not a bundled master.
+- Accept returned art only through the executable source-intake contract in `references/workflows.md`; it verifies job, state, kind, bytes, and provenance.
+- Final returned files use `<jobId>-<state>.png|webp|jpg`. Keep contact sheets, debug images, reports, and temporary candidates out of the final-import location.
+- A blocked job writes `<jobId>-blocked.json` with `status`, `reasonKind`, `userMessage`, and `suggestion`. Never fabricate a placeholder to keep the pipeline moving.
+- Provider adapters emit bounded status and artifacts. They do not mutate browser-only state or bypass the run-folder contracts.
 
 ## Reference Gates
 
@@ -179,6 +143,8 @@ Completion criterion: atlas contract names asset kind, extraction mode, backgrou
    - For imported/generated whole sheets, do not trust a nominal grid when dimensions, gutters, or visual placement drift. New compact sprite grids use Lucida before adaptive two-dimensional component assignment. Review `qa/<state>-adaptive-segmentation.png` and the recorded variable source boxes. Use fixed cells only for a true exact grid. Auto-detect and slot fallback remain diagnostic until reviewed.
    - Compare the extracted baseline with the game's real runtime cell and actor pivot. When they differ, run `register_sprite_frames.py` with the explicit target and use the registered run for composition, previews, and QA. Never infer the target from the sprite image alone.
    - New generation uses flat neutral gray, black, or white. Lucida is the preferred sprite cutout because it preserves illustration, line art, and glow. `auto` remains the compatibility path for other assets. It preserves existing alpha, uses edge-connected matte removal for a clean flat source, and falls back to `rembg` with `birefnet-general` for ambiguous backgrounds. Chroma is legacy-import compatibility only. BEN2 is an explicit comparison path. Review raw, checker, black, gray, white, and alpha panels in `qa/background-matte-review.png`; over-removal of clothing, outlines, props, interiors, or antialiasing is a hard failure.
+   - When Lucida removes a large dark cavity that is fully enclosed by the accepted subject, set a reviewed per-run `background_removal.enclosed_hole_max_ratio`. Keep the default `0.02` for other runs. Never fill a border-connected limb, wing, ring, or silhouette gap.
+   - For a clean, high-contrast neutral sheet, start Lucida with `--background-input-size 384`. Review the matte. Increase to `512`, then `1024`, only when fine fur, transparency, thin appendages, or glow is lost. Run one Lucida extractor at a time. Do not lower the request default or approve a faster matte by batch metrics alone.
    - For video sources, remove the background from each selected frame. Do not send the complete grid through one model inference. Use dynamic alpha bounds and transparent crop padding.
    - Treat source-edge contact and final safe-margin intrusion as hard failures. Registration cannot recover missing source pixels.
    - Render deterministic runtime playback for every animated state, finish the QA reports, then build or rebuild `qa/preview-workbench/index.html` with `scripts/build_preview_workbench.py --force`. Use its pause/step/scrub/speed/zoom/state controls, full frame strip, and checker/black/gray/white edge microscope for human review. Keeping this order prevents a stale self-contained workbench from omitting late evidence.
@@ -186,41 +152,22 @@ Completion criterion: atlas contract names asset kind, extraction mode, backgrou
    - If a second provider attempt still fails exact `repeat_mode: self` edges, `repair_repeat_edges.py` may harmonize only the provider-derived edge band. Keep its original backups/hash report and rerun the all-item 3x3 preview; this is post-processing, never procedural replacement art.
    - For isometric tilesets, do not approve isolated slots only. Run `check_asset_slots.py` and `check_isometric_tiles.py`, then review pivot, 2:1 footprint, map-repeat, edge/corner, and depth-sort proof images. Runtime/prototype placement must consume `qa/isometric-runtime-metadata.json` or a reviewed catalog copied from `qa/isometric-calibrated-catalog.json`; never place isometric cells from rectangular top-lefts or stale declared pivots.
 
-Done when source provenance, required video selector evidence, transparent frames, atlas PNG, manifest, previews, the workbench, and QA reports match the asset kind.
+Done when source provenance, required video selector evidence, transparent frames, atlas PNG, manifest, previews, the workbench, and QA reports match the asset kind. A multi-identity animation batch is done only after `check_animation_batch_completion.py` also passes for the complete manifest.
 
 ## Identity And Motion Rules
 
-- Base image creates identity source.
-- Creature motion starts from the declared anatomy. Do not apply mirrored biped sway to winged, hovering, multi-legged, amorphous, serpentine, or custom bodies.
-- Compact four-frame movement uses exact idle, phase A, exact idle, phase B. Compact attack uses exact idle, anticipation, contact, exact idle.
-- Replace repeated generated idles with the accepted idle pixels before final registration and QA. Visual similarity is not pixel identity.
-- Choose registration from stable anatomy. Do not align multi-legged bodies from a changing leg tip or hovering bodies from a changing shroud edge.
-- If no base image exists, the first accepted idle/neutral frame becomes the identity source. Promote it to `references/identity-anchor.png` before generating action rows.
-- Direction-sensitive work should create accepted idle anchors before action rows.
-- Later rows should solve motion, not rediscover identity.
-- Jump, fall, land, crouch, duck, and squat rows must preserve idle/direction scale. Show height changes through body compression or vertical placement, not zoom-to-fill.
-- Crouch/duck/squat transition rows use per-frame height curves plus scale-lock checks. The first frame may remain near standing height, then later frames compress toward a final pose around 65-75% idle height while feet stay on the shared baseline. Preserve head, hands, feet, line weight, outfit scale, and body thickness; the final crouch should not become a uniformly smaller whole character.
-- Jump rows use per-frame vertical placement checks at the idle reference scale. Do not compute one global jump-peak scale for the whole row; compare each frame against its own expected height, width, head/upper-body proxy, and bottom position.
-- Jump takeoff and landing frames must return to the same shared baseline. Airborne frames may leave the baseline, but the arc must be visible, the root x should not drift unless the state is intentionally forward/back, and onion-skin overlay must show clean takeoff/landing closure.
-- Fall/knockdown rows must settle back to the ground baseline by the final frame. Falling/collapsing frames may rotate and get lower/wider, but they must not slide because of registration drift or uniformly shrink to fit.
-- Pose corrections require visual comparison, not only numeric checks. Open `qa/pose-scale-review.png`, `qa/<state>-contact.png`, GIFs, or the prototype viewer and compare idle/reference, transition, and final frames for readable body pose, locked character scale, baseline, silhouette, head/hand/foot size, outfit texture, and no "miniature final pose" effect.
-- For humanoid/mascot sprites, use stable-part proxy metrics as a guardrail: `head_width_vs_reference` and `upper_width_vs_reference` should stay near idle scale for jump/fall/land/crouch even when full-body bbox height changes. If these proxies shrink, the row likely scaled the whole character down instead of changing pose.
-- Run `check_identity_consistency.py` after extraction for animated character runs. It gates head width, upper-body width, and opaque-area proxy drift across all rows. Head-size wobble, upper-body shrink, or inflated/miniaturized frames are identity failures even when motion, alignment, and atlas composition pass.
-- Treat identity proxies as guardrails. If raised limbs enter a head or torso proxy band, preserve the standard failure, inspect contact/onion/runtime evidence, and document any pose-aware rerun. Never hide visible drift by widening thresholds.
-- Run the same identity gate for every multi-frame static character pose or direction set. `frame_semantics=variants` does not waive same-character scale, face construction, or body-volume consistency, and every declared slot must be occupied once.
-- Grounded pose rows keep feet on the shared baseline. Airborne rows keep the same body size and move through the slot using the jump/fall arc.
-- Side-view and mascot locomotion rows also keep feet on the shared baseline so body bob, stride, and distinct contact/pass poses survive extraction.
-- Generate paired basis row first for directional locomotion, then paired row with basis as rhythm reference.
-- 4-, 6-, and 8-frame `walk/run/move/advance/retreat/dash` rows get motion-phase layout guides by default so legs alternate contact/passing poses instead of drifting in one direction. Prefer 8 frames for fighting-game advance/retreat when quality matters.
-- Run `check_animation_contracts.py` for every animated row that has or infers an `animation_workflow`. It checks workflow-specific phase evidence for locomotion, combat, top-down attacks, jumps, reactions, VFX, water, wind, pickups, idles, and tiny sprites, then writes the visual checklist that still gates approval.
-- For `gesture-loop`, freeze pelvis through both feet in both the still/video provider prompt and the final visual result. Require `metrics.gesture_planted_lower_body.ok: true` as well as loop closure; never use registration to hide leg, foot, contact-footprint, or root travel.
-- Run `check_frame_alignment.py` for every animated sprite run. It writes `qa/frame-alignment-report.json` plus `qa/<state>-onion.png` overlays that compare real extracted frames, baseline, bboxes, and alpha centers. Do not approve jump, fall, land, crouch, knockdown, block, idle, or locomotion rows without reviewing the relevant onion skin.
-- Run `check_motion_variation.py` for walk/run/move rows. It checks lower-body silhouette change, screen-space balance variation, opposite-contact pose difference, and body-center drift so frozen or duplicated phases get caught before done. Screen-space left/right is diagnostic only; it cannot identify the anatomical support leg.
-- Treat the motion report as a heuristic, never final approval. For every walk/run/move row, inspect chronological playback/contact sheets and confirm frame 1 and the halfway contact frame use opposite anatomical support legs with a visible crossover/depth swap. Pass/down frames must connect those contacts without both legs drifting together. Same-leg contact is a hard row failure even when the JSON says `ok`.
-- Mirror only when user approves and asymmetric details stay correct.
-- Locomotion is experimental until the deterministic GIF and interactive workbench playback pass motion QA.
-- If a row partially works, use `compose_selected_cycle.py`; do not pretend full row passed.
-- Tiles/textures declare `asset_catalog.items.*.repeat_mode` as `self`, `adjacency`, or `overlay`. Self-repeat outputs fill the cell edge-to-edge and pass numeric opposite-edge QA. Adjacency and overlay outputs require their role-aware hash-bound visual review; a contact sheet alone is not proof.
+- Establish one accepted identity anchor before later rows. Later generation solves motion, not identity.
+- Derive creature motion from declared anatomy and one explicit motion driver. Lock non-driver anatomy, camera, image-plane scale, root, and margins.
+- Preserve exact-idle pixels where the workflow requires them. Use chronological, readable anticipation, contact, passing, recovery, and loop phases.
+- Keep grounded baselines stable and preserve character scale through crouch, jump, fall, land, knockdown, and direction changes.
+- Run `check_identity_consistency.py`, `check_animation_contracts.py`, `check_frame_alignment.py`, and the workflow-specific motion gates for every applicable row.
+- Treat numeric reports as guardrails. Review contact sheets, onion skins, deterministic playback, and the interactive workbench before approval.
+- Use `record_identity_proxy_review.py` only for exact, visually confirmed proxy false positives. Any changed source, frame, crop, request, or atlas invalidates that review.
+- Treat explicit `animation_workflows` as authoritative in `check_motion_variation.py`; word matching is only for legacy rows without a workflow id.
+- Mirror only with approval and after checking asymmetric details. Registration may remove extraction jitter; it must not hide real anatomy or root drift.
+- Tiles and textures must honor their declared repeat or adjacency contract and its matching visual evidence.
+
+Read `references/professional-sprite-animation.md`, `references/creature-animation.md`, `references/pixel-animation-workflows.md`, `references/video-animation-workflow.md`, and `references/qa-and-outputs.md` for the complete branch-specific rules and proof gates.
 
 ## QA And Outputs
 

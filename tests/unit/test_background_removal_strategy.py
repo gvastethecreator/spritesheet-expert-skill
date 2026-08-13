@@ -256,6 +256,40 @@ def test_enclosed_hole_recovery_keeps_border_connected_gap_transparent() -> None
     assert restored.getpixel((4, 4))[3] == 0
 
 
+def test_lucida_can_restore_a_declared_large_enclosed_subject_cavity(
+    monkeypatch,
+) -> None:
+    source = Image.new("RGBA", (21, 21), (0, 0, 0, 255))
+    cutout = Image.new("RGBA", source.size, (0, 0, 0, 0))
+    for value in range(4, 17):
+        cutout.putpixel((value, 4), (100, 120, 140, 255))
+        cutout.putpixel((value, 16), (100, 120, 140, 255))
+        cutout.putpixel((4, value), (100, 120, 140, 255))
+        cutout.putpixel((16, value), (100, 120, 140, 255))
+    monkeypatch.setattr(
+        backgrounds,
+        "remove_lucida_background",
+        lambda image, config, sessions: cutout.copy(),
+    )
+
+    restored, method = backgrounds.remove_background(
+        source,
+        (255, 0, 255),
+        {
+            "method": "lucida",
+            "alpha_mode": "hard",
+            "hard_alpha_threshold": 64,
+            "source_recovery_enabled": False,
+            "enclosed_hole_max_ratio": 0.3,
+        },
+        _args(),
+        {},
+    )
+
+    assert method == "lucida"
+    assert restored.getpixel((10, 10)) == (0, 0, 0, 255)
+
+
 def test_canonical_reference_state_prefers_non_attack_state() -> None:
     request = {
         "states": {

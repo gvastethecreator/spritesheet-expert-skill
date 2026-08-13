@@ -545,6 +545,15 @@ def normalize_background_removal(request: dict[str, Any], args: argparse.Namespa
         raise SystemExit(
             "background_removal.source_recovery_enabled must be boolean"
         )
+    enclosed_hole_max_ratio = config.get("enclosed_hole_max_ratio", 0.02)
+    if (
+        isinstance(enclosed_hole_max_ratio, bool)
+        or not isinstance(enclosed_hole_max_ratio, (int, float))
+        or not 0 <= float(enclosed_hole_max_ratio) <= 0.5
+    ):
+        raise SystemExit(
+            "background_removal.enclosed_hole_max_ratio must be between 0 and 0.5"
+        )
     post_source_recovery_cleanup = config.get(
         "post_source_recovery_cleanup", False
     )
@@ -584,6 +593,7 @@ def normalize_background_removal(request: dict[str, Any], args: argparse.Namespa
         "source_recovery_radius": source_recovery_radius,
         "source_recovery_accept_detached": source_recovery_accept_detached,
         "source_recovery_enabled": source_recovery_enabled,
+        "enclosed_hole_max_ratio": float(enclosed_hole_max_ratio),
         "post_source_recovery_cleanup": post_source_recovery_cleanup,
         "post_source_recovery_threshold": float(post_source_recovery_threshold),
         "post_source_recovery_passes": post_source_recovery_passes,
@@ -1052,6 +1062,7 @@ def remove_background(
         cutout, _restored_enclosed_pixels = restore_enclosed_source_holes(
             source,
             cutout,
+            max_hole_ratio=float(config.get("enclosed_hole_max_ratio", 0.02)),
         )
         if bool(config.get("post_source_recovery_cleanup", False)):
             cutout = refine_cutout_edges(

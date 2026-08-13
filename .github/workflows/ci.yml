@@ -23,4 +23,4 @@ jobs:
       - name: Install test dependencies
         run: python -m pip install -e ".[test]"
       - name: Run complete gate
-        run: npm run check
+        run: corepack pnpm install --frozen-lockfile && pnpm run check

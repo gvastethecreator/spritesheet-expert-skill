@@ -16,7 +16,7 @@ video = [
   "imageio-ffmpeg==0.6.0",
 ]
 background = [
-  "rembg[cpu]==2.0.77",
+  "rembg[cpu]==2.0.78",
 ]
 
 [tool.setuptools]
