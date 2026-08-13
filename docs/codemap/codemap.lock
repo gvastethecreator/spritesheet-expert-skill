@@ -1,16 +1,19 @@
 {
-  "current_commit": "05ab47d5a895b6a6cd6cc1bc43ecbd9021efb46f",
+  "current_commit": "b45014658172ac954352d532ad1a5bcd55de4c7e",
   "working_tree_dirty": true,
-  "generated_at": "2026-08-09T12:26:28Z",
+  "generated_at": "2026-08-12T06:50:40Z",
   "scanned_scope": [
     "."
   ],
   "excluded_directories": [
+    "*.egg-info",
     ".cache",
     ".git",
     ".hg",
     ".next",
     ".nuxt",
+    ".pytest_cache",
+    ".scratch",
     ".svn",
     ".turbo",
     ".venv",
@@ -32,19 +35,19 @@
       "id": ".",
       "path": ".",
       "file_count": 6,
-      "fingerprint": "7c392888bfb97759537c56f34a6cbc3fe3f9025e9e808d711af0c508fa18feca"
+      "fingerprint": "7339bde3c2eb7a2f511edc44546d8ba74ae444f0aac4bbab94085c64b343a5a9"
     },
     {
       "id": ".github",
       "path": ".github",
       "file_count": 1,
-      "fingerprint": "97fed3606becb15d05ce06264e9894168e5c217905e5d1185e0a6569b4420a18"
+      "fingerprint": "c22dfa626f4503ce38f234f3939e4f47b2636a361880fe4318ed287bf1f30e1a"
     },
     {
       "id": "SKILLS",
       "path": "SKILLS",
       "file_count": 168,
-      "fingerprint": "b31e7c60b366f25e5350df55720115628daf5e4d607acc983e1d57e3a2a68e8a"
+      "fingerprint": "649b8ce75084bc479a8c6edca9ee213322e55704df2fa5057e60f288bfab4daa"
     },
     {
       "id": "assets",
@@ -56,7 +59,7 @@
       "id": "docs",
       "path": "docs",
       "file_count": 6,
-      "fingerprint": "de349900e4f8ebec565ad8e2f52069564192cd164e6c4c7b8effa201c67f1f4d"
+      "fingerprint": "ee8b5436c4f8dd3069c81bb02f661b681541aa7c3a1eed1065268e5b03764aa8"
     },
     {
       "id": "evals",
@@ -79,8 +82,8 @@
     {
       "id": "tests",
       "path": "tests",
-      "file_count": 54,
-      "fingerprint": "ac44bd7019531de0c4393e14f9c6d153138960ca063d489de5509d29769596c0"
+      "file_count": 55,
+      "fingerprint": "54c973e6b24f8c2a51616f3d598ee8b59fbd1b8f49df072165556d83d7145802"
     }
   ]
 }

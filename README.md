@@ -41,8 +41,8 @@ python .\SKILLS\spritesheet-expert\scripts\smoke_pipeline.py
 Prepare the pinned Python environment and check it:
 
 ```powershell
-npm run setup:test
-npm run doctor:test
+pnpm run setup:test
+pnpm run doctor:test
 ```
 
 The smoke test uses fixtures. Representative game art still requires real generated or imported source images.
@@ -50,14 +50,14 @@ The smoke test uses fixtures. Representative game art still requires real genera
 Validate the public skill package:
 
 ```powershell
-npm run validate
+pnpm run validate
 ```
 
 Run the complete contract and integration suite, or the full release gate:
 
 ```powershell
-npm test
-npm run check
+pnpm test
+pnpm run check
 ```
 
 ## What's Inside

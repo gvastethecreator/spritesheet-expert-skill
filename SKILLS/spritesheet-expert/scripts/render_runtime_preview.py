@@ -46,7 +46,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--frame", type=int, default=0)
     parser.add_argument("--out")
     parser.add_argument("--report")
-    parser.add_argument("--viewport", default="256x256")
+    parser.add_argument(
+        "--viewport",
+        default="auto",
+        help="WIDTHxHEIGHT, or auto to fit the largest state frame (default).",
+    )
     parser.add_argument("--dpr", type=float, default=1.0)
     parser.add_argument("--scale", type=int, default=1)
     parser.add_argument("--background", default="#101018")

@@ -27,11 +27,12 @@ def is_locomotion_state(state: str, entry: dict[str, Any]) -> bool:
     action = str(entry.get("action", "")).lower()
     workflows = entry.get("animation_workflows", [])
     workflow_text = " ".join(str(item) for item in workflows) if isinstance(workflows, list) else str(workflows)
+    if workflow_text.strip():
+        return "locomotion" in workflow_text.lower()
     text = f"{state} {action} {workflow_text}".lower()
     tokens = {token for token in re.split(r"[^a-z0-9]+", text) if token}
     return bool(
         LOCOMOTION_RE.search(state.lower())
-        or "locomotion" in workflow_text
         or tokens & {"walk", "walking", "run", "running", "move", "moving", "advance", "retreat", "dash", "dashing"}
     )
 

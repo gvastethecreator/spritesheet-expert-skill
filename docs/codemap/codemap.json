@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-09T12:26:28Z",
-  "generated_from_commit": "05ab47d5a895b6a6cd6cc1bc43ecbd9021efb46f",
+  "generated_at": "2026-08-12T06:50:40Z",
+  "generated_from_commit": "b45014658172ac954352d532ad1a5bcd55de4c7e",
   "scope": [
     "."
   ],
@@ -248,33 +248,9 @@
           }
         ]
       }
-    },
-    {
-      "from": "skills",
-      "to": "repository",
-      "type": "reads",
-      "evidence": {
-        "status": "verified",
-        "locations": [
-          {
-            "path": "SKILLS/spritesheet-expert/SKILL.md",
-            "symbol": "pyproject.toml"
-          }
-        ]
-      }
     }
   ],
   "flows": [
-    {
-      "trigger": "Tracked reference SKILLS/spritesheet-expert/SKILL.md:pyproject.toml",
-      "steps": [
-        "skills",
-        "repository",
-        "scripts",
-        "external-dependencies"
-      ],
-      "outcome": "The verified dependency path reaches external-dependencies through 3 step(s)."
-    },
     {
       "trigger": "Tracked reference package.json:scripts/check_python_env.py",
       "steps": [
@@ -308,6 +284,14 @@
         "skills"
       ],
       "outcome": "The verified dependency path reaches skills through 1 step(s)."
+    },
+    {
+      "trigger": "Tracked reference scripts/check_python_env.py:__future__",
+      "steps": [
+        "scripts",
+        "external-dependencies"
+      ],
+      "outcome": "The verified dependency path reaches external-dependencies through 1 step(s)."
     }
   ]
 }

@@ -173,7 +173,15 @@ def prepare_preview(
             f"atlas dimensions {actual_dimensions} do not match manifest {expected_dimensions}"
         )
 
-    width, height = _parse_viewport(viewport)
+    if viewport.strip().lower() == "auto":
+        width = max(int(rect["w"]) for rect in rects) * scale
+        height = max(int(rect["h"]) for rect in rects) * scale
+        if width > 8192 or height > 8192:
+            raise RuntimePreviewError(
+                "auto viewport dimensions must be between 1 and 8192"
+            )
+    else:
+        width, height = _parse_viewport(viewport)
     stem = f"{state}-playback" if kind == "runtime-playback" else f"{state}-frame-{frame}"
     suffix = ".gif" if kind == "runtime-playback" else ".png"
     output_name = output_name or f"qa/runtime-preview/{stem}{suffix}"

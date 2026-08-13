@@ -29,7 +29,7 @@ Decode accepted videos through an optional `imageio-ffmpeg` extra. Its common-pl
 Later implementation verification installed the pinned `imageio-ffmpeg==0.6.0` extra in an isolated test environment. Its bundled FFmpeg decoded a real MP4 through the new two-pass ingestion path; the core environment remains free of the video dependency.
 
 Representative matte verification also installed the pinned
-`rembg[cpu]==2.0.77` background extra in an isolated environment and downloaded
+`rembg[cpu]==2.0.78` background extra in an isolated environment and downloaded
 the `birefnet-general` ONNX model. The provider-backed green mascot tests used
 that runtime successfully on gray, black, and white inputs; the model remains
 optional and is not installed into the core environment.
