@@ -2,9 +2,11 @@
 
 ## Background Removal
 
-New generation uses one perfectly flat neutral background: gray `#808080`, black `#000000`, or white `#FFFFFF`. New sprite component runs use black as the no-reference fallback for the Lucida lane. `prepare_sprite_run.py` chooses the neutral color with the greatest contrast when an accepted reference exists. Other asset modes keep gray as the no-reference fallback. The prompt forbids gradients, texture, vignettes, floor planes, cast shadows, and background lighting variation. It does not ban black, gray, or white from the subject palette.
+New isolated still generation first requests clean provider-native transparency. The prompt requires a fully transparent exterior, clean semitransparent edges, no floor plane, backdrop, cast shadow, halo, matte fringe, or cross-slot bleed. Accept native alpha only after pixel and visual checks pass.
 
-New sprite component runs default to `lucida` plus `grid_segmentation: adaptive`. Read `lucida-adaptive-workflow.md` for the pinned model, alpha policy, variable source boxes, and review gates.
+If native alpha is absent or invalid, use one perfectly flat neutral background: gray `#808080`, black `#000000`, or white `#FFFFFF`. New sprite component runs use black as the no-reference fallback for the Lucida lane. `prepare_sprite_run.py` chooses the neutral color with the greatest contrast when an accepted reference exists. Other asset modes keep gray as the no-reference fallback. The fallback prompt forbids gradients, texture, vignettes, floor planes, cast shadows, and background lighting variation. It does not ban black, gray, or white from the subject palette.
+
+New sprite component runs use verified provider alpha when available. Otherwise, they use `lucida` plus `grid_segmentation: adaptive`. Read `lucida-adaptive-workflow.md` for the pinned model, alpha policy, variable source boxes, and review gates.
 
 Other asset modes keep `auto`:
 
@@ -53,7 +55,7 @@ python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id hero --re
 python scripts/extract_sprite_row_frames.py --run-dir /abs/run --background-device auto
 ```
 
-`extract_sprite_row_frames.py` reads the request. New sprite component requests use the pinned Lucida model and adaptive grid segmentation. Other requests keep `auto`: existing alpha first, edge-connected matte for simple flat neutral borders, and `rembg` for ambiguous backgrounds. The chroma branch runs only for `source_family: legacy-chroma`. Missing model dependencies fail clearly instead of silently using bad alpha. Review `frames/frames-manifest.json.background_removal`, `rows[*].segmentation.spans`, and `qa/<state>-adaptive-segmentation.png`.
+`extract_sprite_row_frames.py` reads the request. New sprite component requests preserve verified provider alpha. If alpha is absent or invalid, they use the pinned Lucida model and adaptive grid segmentation. Other requests keep `auto`: existing alpha first, edge-connected matte for simple flat neutral borders, and `rembg` for ambiguous backgrounds. The chroma branch runs only for `source_family: legacy-chroma`. Missing model dependencies fail clearly instead of silently using bad alpha. Review `frames/frames-manifest.json.background_removal`, `rows[*].segmentation.spans`, and `qa/<state>-adaptive-segmentation.png`.
 
 `ben2` is never selected silently by `auto`; choose it explicitly for final/high-risk cutouts after a BiRefNet pass fails visual QA. It writes `background_method: ben2` into manifests and uses `background_removal.device` (`auto`, `cpu`, `cuda`, `cuda:0`, etc.) so slow CPU cutouts are not mistaken for a broken pipeline.
 
@@ -136,7 +138,7 @@ Built-ins:
 - `vector`: flat vector-like game sprite.
 - `custom`: use `--style` text as the contract.
 
-Keep atlas constraints stable: one row per state or asset group, flat neutral source background where transparency is needed, no text, no scene background, no guide marks, no slot overlap.
+Keep atlas constraints stable: one row per state or asset group, native transparent source background when valid, flat neutral fallback when needed, no text, no scene background, no guide marks, no slot overlap.
 
 Sprites use `asset_kind: sprite` and component extraction. Tiles, textures, icons, props, VFX, and full-cell assets use `asset_kind` plus `extraction_mode: slots` so full-cell art does not depend on connected-component detection.
 
