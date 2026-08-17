@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -115,7 +115,7 @@
     .frame-thumb.selected { border: 2px solid var(--accent); padding: 3px; background: #ffe0d1; }
     .frame-thumb.multi-selected { box-shadow: 0 0 0 2px var(--guide); }
     .frame-thumb.queued span::before { content: "QUEUE · "; color: var(--guide); font-weight: 850; }
-    .frame-thumb.dirty span::after { content: " • ajustado"; color: var(--accent-ink); }
+    .frame-thumb.dirty span::after { content: " • adjusted"; color: var(--accent-ink); }
     .frame-thumb[data-qa="pass"] { box-shadow: inset 0 -3px 0 var(--pass); }
     .frame-thumb[data-qa="fail"] { box-shadow: inset 0 -3px 0 var(--danger); }
     .frame-thumb.locked canvas { opacity: .62; }
@@ -207,112 +207,112 @@
   </style>
 </head>
 <body>
-  <a class="skip" href="#stage">Saltar al frame</a>
+  <a class="skip" href="#stage">Skip to frame</a>
   <div class="shell">
     <aside class="rail" aria-label="Workbenches">
-      <div class="brand"><div class="brand-mark"><span>Sprite Workbench</span></div><p>Corrección pose a pose. Nada se aprueba por accidente.</p></div>
+      <div class="brand"><div class="brand-mark"><span>Sprite Workbench</span></div><p>Pose-by-pose correction. Nothing passes by accident.</p></div>
       <div class="rail-scroll">
         <section class="rail-section" aria-labelledby="projectHeading">
-          <h2 id="projectHeading">Proyecto</h2>
+          <h2 id="projectHeading">Project</h2>
           <div class="project-grid">
-            <label>Nombre<input id="projectName" type="text" value="Walk lateral · 6 frames" spellcheck="false"></label>
-            <div class="project-actions"><button id="newProject" class="quiet" type="button">Nuevo</button><button id="saveProject" class="primary" type="button">Guardar</button></div>
-            <p class="session-status" id="sessionStatus">Sesión local preparando…</p>
+            <label>Name<input id="projectName" type="text" value="Side-view walk · 6 frames" spellcheck="false"></label>
+            <div class="project-actions"><button id="newProject" class="quiet" type="button">New</button><button id="saveProject" class="primary" type="button">Save</button></div>
+            <p class="session-status" id="sessionStatus">Preparing local session…</p>
           </div>
         </section>
         <section class="rail-section" aria-labelledby="referencesHeading">
-          <h2 id="referencesHeading">Referencias del trabajo</h2>
+          <h2 id="referencesHeading">Working references</h2>
           <div class="reference-grid">
-            <button id="referenceIdentity" class="reference-slot" type="button" title="Cargar referencia de identidad">
-              <span class="reference-preview" aria-hidden="true">ID</span><strong>Identidad</strong>
+            <button id="referenceIdentity" class="reference-slot" type="button" title="Load identity reference">
+              <span class="reference-preview" aria-hidden="true">ID</span><strong>Identity</strong>
             </button>
-            <button id="referenceMechanics" class="reference-slot" type="button" title="Cargar referencia mecánica o maniquí">
-              <span class="reference-preview" aria-hidden="true">MEC</span><strong>Mecánica</strong>
+            <button id="referenceMechanics" class="reference-slot" type="button" title="Load mechanics or mannequin reference">
+              <span class="reference-preview" aria-hidden="true">MEC</span><strong>Mechanics</strong>
             </button>
-            <div class="reference-slot has-asset" title="Derivada del frame anterior">
-              <span class="reference-preview"><canvas id="referencePrevious" width="120" height="72" aria-label="Referencia del frame anterior"></canvas></span><strong>Anterior</strong>
+            <div class="reference-slot has-asset" title="Derived from the previous frame">
+              <span class="reference-preview"><canvas id="referencePrevious" width="120" height="72" aria-label="Previous-frame reference"></canvas></span><strong>Previous</strong>
             </div>
-            <div class="reference-slot has-asset" title="Derivada del frame siguiente">
-              <span class="reference-preview"><canvas id="referenceNext" width="120" height="72" aria-label="Referencia del frame siguiente"></canvas></span><strong>Siguiente</strong>
+            <div class="reference-slot has-asset" title="Derived from the next frame">
+              <span class="reference-preview"><canvas id="referenceNext" width="120" height="72" aria-label="Next-frame reference"></canvas></span><strong>Next</strong>
             </div>
           </div>
           <input id="referenceIdentityFile" class="hidden-input" type="file" accept="image/png,image/jpeg,image/webp">
           <input id="referenceMechanicsFile" class="hidden-input" type="file" accept="image/png,image/jpeg,image/webp">
-          <p class="mini-note">Identidad y mecánica se exportan como roles separados; anterior y siguiente se derivan del ciclo.</p>
-          <button id="useWorkbenchTemplates" class="quiet" style="width:100%;margin-top:8px" type="button">Usar templates versionados</button>
+          <p class="mini-note">Identity and mechanics export as separate roles; previous and next are derived from the cycle.</p>
+          <button id="useWorkbenchTemplates" class="quiet" style="width:100%;margin-top:8px" type="button">Use versioned templates</button>
         </section>
         <nav class="workflows">
-          <h2>Áreas especializadas</h2>
-          <button class="workflow active" type="button"><strong>Walk lateral</strong><small>activo · candidato</small><span class="dot" aria-hidden="true"></span></button>
-          <button class="workflow" type="button" disabled><strong>Vistas</strong><small>próximo contrato</small><span class="dot" aria-hidden="true"></span></button>
-          <button class="workflow" type="button" disabled><strong>Run</strong><small>próximo contrato</small><span class="dot" aria-hidden="true"></span></button>
-          <button class="workflow" type="button" disabled><strong>Idle</strong><small>próximo contrato</small><span class="dot" aria-hidden="true"></span></button>
-          <button class="workflow" type="button" disabled><strong>Jump</strong><small>próximo contrato</small><span class="dot" aria-hidden="true"></span></button>
-          <button class="workflow" type="button" disabled><strong>Combat</strong><small>próximo contrato</small><span class="dot" aria-hidden="true"></span></button>
-          <button class="workflow" type="button" disabled><strong>VFX</strong><small>próximo contrato</small><span class="dot" aria-hidden="true"></span></button>
-          <button class="workflow" type="button" disabled><strong>Stills</strong><small>próximo contrato</small><span class="dot" aria-hidden="true"></span></button>
+          <h2>Specialized workspaces</h2>
+          <button class="workflow active" type="button"><strong>Side-view walk</strong><small>active · candidate</small><span class="dot" aria-hidden="true"></span></button>
+          <button class="workflow" type="button" disabled><strong>Views</strong><small>next contract</small><span class="dot" aria-hidden="true"></span></button>
+          <button class="workflow" type="button" disabled><strong>Run</strong><small>next contract</small><span class="dot" aria-hidden="true"></span></button>
+          <button class="workflow" type="button" disabled><strong>Idle</strong><small>next contract</small><span class="dot" aria-hidden="true"></span></button>
+          <button class="workflow" type="button" disabled><strong>Jump</strong><small>next contract</small><span class="dot" aria-hidden="true"></span></button>
+          <button class="workflow" type="button" disabled><strong>Combat</strong><small>next contract</small><span class="dot" aria-hidden="true"></span></button>
+          <button class="workflow" type="button" disabled><strong>VFX</strong><small>next contract</small><span class="dot" aria-hidden="true"></span></button>
+          <button class="workflow" type="button" disabled><strong>Stills</strong><small>next contract</small><span class="dot" aria-hidden="true"></span></button>
         </nav>
-        <p class="rail-note">Originales y variantes permanecen separados. El orden de poses lo fija el contrato.</p>
+        <p class="rail-note">Originals and variants stay separate. The contract fixes pose order.</p>
       </div>
     </aside>
 
     <main class="workspace">
       <header class="topbar">
-        <div class="title"><h1>Walk lateral · 6 frames</h1><p>Mesa de alineación y lectura mecánica</p></div>
+        <div class="title"><h1>Side-view walk · 6 frames</h1><p>Alignment and motion-mechanics workbench</p></div>
         <label class="source">Sheet URL<input id="sheetUrl" type="text" spellcheck="false"></label>
         <div class="compact-inputs">
           <label>Cols<input id="columns" type="number" min="1" max="32" value="3"></label>
           <label>Rows<input id="rows" type="number" min="1" max="32" value="2"></label>
           <label>FPS<input id="fps" type="number" min="1" max="60" value="8"></label>
         </div>
-        <button id="load" class="primary" type="button">Cargar</button>
+        <button id="load" class="primary" type="button">Load</button>
         <span class="review-state">candidate only</span>
       </header>
 
-      <section class="stage-wrap" aria-label="Editor de frames">
+      <section class="stage-wrap" aria-label="Frame editor">
         <div class="stage-area" id="stage">
-          <div class="viewer-tools" aria-label="Vista">
-            <button id="zoomOut" class="quiet" type="button" aria-label="Alejar">−</button>
+          <div class="viewer-tools" aria-label="View">
+            <button id="zoomOut" class="quiet" type="button" aria-label="Zoom out">−</button>
             <output id="zoomReadout">100%</output>
-            <button id="zoomIn" class="quiet" type="button" aria-label="Acercar">+</button>
-            <button id="fitView" class="quiet" type="button" aria-label="Ajustar vista" title="Ajustar vista · 0">□</button>
+            <button id="zoomIn" class="quiet" type="button" aria-label="Zoom in">+</button>
+            <button id="fitView" class="quiet" type="button" aria-label="Fit view" title="Fit view · 0">□</button>
             <span aria-hidden="true">·</span>
-            <button id="undo" class="quiet" type="button" aria-label="Deshacer" title="Deshacer · Ctrl+Z" disabled>↶</button>
-            <button id="redo" class="quiet" type="button" aria-label="Rehacer" title="Rehacer · Ctrl+Shift+Z" disabled>↷</button>
+            <button id="undo" class="quiet" type="button" aria-label="Undo" title="Undo · Ctrl+Z" disabled>↶</button>
+            <button id="redo" class="quiet" type="button" aria-label="Redo" title="Redo · Ctrl+Shift+Z" disabled>↷</button>
           </div>
           <div class="light-table" id="lightTable">
-            <canvas id="frameCanvas" width="1024" height="1024" aria-label="Frame seleccionado"></canvas>
+            <canvas id="frameCanvas" width="1024" height="1024" aria-label="Selected frame"></canvas>
             <canvas id="guideCanvas" width="1024" height="1024" aria-hidden="true"></canvas>
             <div class="stage-caption"><span class="frame-chip" id="stageFrame">F01</span><span class="phase-chip" id="stagePhase">contact A</span></div>
-            <button id="scaleHandle" class="transform-handle" type="button" aria-label="Escalar frame directamente" title="Arrastra para escalar"></button>
+            <button id="scaleHandle" class="transform-handle" type="button" aria-label="Scale frame directly" title="Drag to scale"></button>
           </div>
         </div>
         <div class="timeline">
           <div class="transport">
-            <button id="previous" class="icon quiet" type="button" aria-label="Frame anterior">←</button>
-            <button id="play" class="accent" type="button">Reproducir</button>
-            <button id="next" class="icon quiet" type="button" aria-label="Frame siguiente">→</button>
-            <input id="scrubber" type="range" min="0" max="5" value="0" aria-label="Frame actual">
+            <button id="previous" class="icon quiet" type="button" aria-label="Previous frame">←</button>
+            <button id="play" class="accent" type="button">Play</button>
+            <button id="next" class="icon quiet" type="button" aria-label="Next frame">→</button>
+            <input id="scrubber" type="range" min="0" max="5" value="0" aria-label="Current frame">
             <span id="frameLabel">01 / 06</span>
           </div>
-          <div class="filmstrip" id="filmstrip" aria-label="Frames del ciclo"></div>
-          <div class="selection-bar" aria-label="Acciones en lote">
-            <label class="selection-toggle"><input id="selectionMode" type="checkbox">Selección múltiple</label>
-            <output id="selectionSummary">1 frame seleccionado</output>
-            <select id="batchQaStatus" aria-label="QA para frames seleccionados"><option value="review">Marcar: revisar</option><option value="pass">Marcar: aprobado</option><option value="fail">Marcar: bloqueado</option></select>
-            <button id="applyBatchQa" class="quiet" type="button">Aplicar QA</button>
+          <div class="filmstrip" id="filmstrip" aria-label="Cycle frames"></div>
+          <div class="selection-bar" aria-label="Batch actions">
+            <label class="selection-toggle"><input id="selectionMode" type="checkbox">Multiple selection</label>
+            <output id="selectionSummary">1 frame selected</output>
+            <select id="batchQaStatus" aria-label="QA for selected frames"><option value="review">Mark: review</option><option value="pass">Mark: approved</option><option value="fail">Mark: blocked</option></select>
+            <button id="applyBatchQa" class="quiet" type="button">Apply QA</button>
           </div>
         </div>
       </section>
     </main>
 
-    <aside class="inspector" aria-label="Inspector de corrección">
-      <header><h2>Frame inspector</h2><p>Registro, QA contractual, variantes y trabajos de Image Gen.</p></header>
-      <nav class="inspector-tabs" aria-label="Paneles del inspector">
-        <button class="inspector-tab active" data-panel-target="align" type="button">Alinear</button>
+    <aside class="inspector" aria-label="Correction inspector">
+      <header><h2>Frame inspector</h2><p>Registration, contract QA, variants, and Image Gen jobs.</p></header>
+      <nav class="inspector-tabs" aria-label="Inspector panels">
+        <button class="inspector-tab active" data-panel-target="align" type="button">Align</button>
         <button class="inspector-tab" data-panel-target="qa" type="button">QA</button>
-        <button class="inspector-tab" data-panel-target="correct" type="button">Corregir</button>
-        <button class="inspector-tab" data-panel-target="export" type="button">Salida</button>
+        <button class="inspector-tab" data-panel-target="correct" type="button">Correct</button>
+        <button class="inspector-tab" data-panel-target="export" type="button">Export</button>
       </nav>
       <div data-inspector-panel="align">
       <section class="group">
@@ -320,100 +320,100 @@
         <div class="fields">
           <label>Offset X<input id="offsetX" type="number" step="1" value="0"></label>
           <label>Offset Y<input id="offsetY" type="number" step="1" value="0"></label>
-          <label class="wide">Escala %<input id="scale" type="number" min="50" max="150" step="0.25" value="100"></label>
+          <label class="wide">Scale %<input id="scale" type="number" min="50" max="150" step="0.25" value="100"></label>
         </div>
-        <div class="button-row" style="margin-top:8px"><button id="resetFrame" class="quiet" type="button">Reset frame</button><button id="copyTransform" class="quiet" type="button">Copiar ajuste</button></div>
-        <button id="pasteTransform" class="quiet" style="width:100%;margin-top:7px" type="button" disabled>Pegar ajuste</button>
-        <label class="check" style="margin-top:10px"><input id="frameLocked" type="checkbox">Bloquear frame</label>
-        <p class="status">Arrastra para mover · handle azul para escala · flechas 1 px · Shift 10 px.</p>
+        <div class="button-row" style="margin-top:8px"><button id="resetFrame" class="quiet" type="button">Reset frame</button><button id="copyTransform" class="quiet" type="button">Copy adjustment</button></div>
+        <button id="pasteTransform" class="quiet" style="width:100%;margin-top:7px" type="button" disabled>Paste adjustment</button>
+        <label class="check" style="margin-top:10px"><input id="frameLocked" type="checkbox">Lock frame</label>
+        <p class="status">Drag to move · blue handle to scale · arrow keys 1 px · Shift 10 px.</p>
       </section>
       <section class="group">
-        <h3>Guías técnicas</h3>
+        <h3>Technical guides</h3>
         <div class="checks">
           <label class="check"><input id="showBaseline" type="checkbox" checked>Baseline</label>
-          <label class="check"><input id="showCenter" type="checkbox" checked>Ejes de root</label>
-          <label class="check"><input id="showThirds" type="checkbox">Tercios</label>
+          <label class="check"><input id="showCenter" type="checkbox" checked>Root axes</label>
+          <label class="check"><input id="showThirds" type="checkbox">Thirds</label>
           <label class="check"><input id="showBounds" type="checkbox" checked>Safe bounds</label>
         </div>
         <label style="margin-top:11px">Baseline %<input id="baseline" type="range" min="50" max="98" step="0.1" value="89"></label>
         <div class="readout" id="guideReadout">baseline 89.0% · root 50%</div>
       </section>
       <section class="group">
-        <h3>Comparación</h3>
-        <label>Modo<select id="compareMode"><option value="onion">Onion skin</option><option value="difference">Diferencia con anterior</option><option value="current">Solo actual</option></select></label>
+        <h3>Comparison</h3>
+        <label>Mode<select id="compareMode"><option value="onion">Onion skin</option><option value="difference">Difference from previous</option><option value="current">Current only</option></select></label>
         <div class="checks">
-          <label class="check"><input id="onionPrevious" type="checkbox" checked>Frame anterior</label>
-          <label class="check"><input id="onionNext" type="checkbox">Frame siguiente</label>
+          <label class="check"><input id="onionPrevious" type="checkbox" checked>Previous frame</label>
+          <label class="check"><input id="onionNext" type="checkbox">Next frame</label>
         </div>
-        <label style="margin-top:11px">Opacidad<input id="onionOpacity" type="range" min="0" max="0.8" step="0.02" value="0.24"></label>
+        <label style="margin-top:11px">Opacity<input id="onionOpacity" type="range" min="0" max="0.8" step="0.02" value="0.24"></label>
       </section>
       </div>
       <div data-inspector-panel="qa" hidden>
       <section class="group">
-        <h3>Contrato de animación</h3>
+        <h3>Animation contract</h3>
         <div class="contract-card" id="workflowContract">
-          <strong>Walk lateral derecho · 6 poses fijas</strong>
-          <span>Vista lateral estricta · loop · un frame por generación</span>
-          <div class="contract-order" aria-label="Orden de generación"><b>1</b><b>6</b><b>4</b><b>2</b><b>3</b><b>5</b></div>
+          <strong>Right-facing side-view walk · 6 fixed poses</strong>
+          <span>Strict side view · loop · one frame per generation</span>
+          <div class="contract-order" aria-label="Generation order"><b>1</b><b>6</b><b>4</b><b>2</b><b>3</b><b>5</b></div>
         </div>
       </section>
       <section class="group">
-        <h3>QA del frame</h3>
+        <h3>Frame QA</h3>
         <div class="fields">
-          <label>Estado<select id="qaStatus"><option value="review">Revisar</option><option value="pass">Aprobado</option><option value="fail">Bloqueado</option></select></label>
-          <label>Snap<select id="snapMode"><option value="both">Centro + baseline</option><option value="center">Solo centro</option><option value="baseline">Solo baseline</option><option value="off">Desactivado</option></select></label>
+          <label>Status<select id="qaStatus"><option value="review">Review</option><option value="pass">Approved</option><option value="fail">Blocked</option></select></label>
+          <label>Snap<select id="snapMode"><option value="both">Center + baseline</option><option value="center">Center only</option><option value="baseline">Baseline only</option><option value="off">Off</option></select></label>
         </div>
-        <label style="margin-top:10px">Notas<textarea id="frameNote" placeholder="Qué falla, qué debe conservarse y qué gate debe repetir."></textarea></label>
+        <label style="margin-top:10px">Notes<textarea id="frameNote" placeholder="What failed, what must stay, and which gate needs another run."></textarea></label>
       </section>
       <section class="group">
-        <h3>Quality gates del frame</h3>
+        <h3>Frame quality gates</h3>
         <div class="gate-list" id="gateChecklist"></div>
-        <div class="gate-summary" id="gateSummary">Sin evaluación.</div>
-        <p class="mini-note">QA es triage. Un candidato solo queda listo cuando todos los gates duros pasan.</p>
+        <div class="gate-summary" id="gateSummary">Not assessed.</div>
+        <p class="mini-note">QA is triage. A candidate is ready only after every hard gate passes.</p>
       </section>
       </div>
       <div data-inspector-panel="correct" hidden>
       <section class="group">
-        <h3>Variantes no destructivas</h3>
+        <h3>Non-destructive variants</h3>
         <div class="variant-list" id="variantList"></div>
-        <div class="button-row" style="margin-top:8px"><button id="addVariant" class="quiet" type="button">Importar variante</button><button id="activateVariant" class="primary" type="button">Activar</button></div>
+        <div class="button-row" style="margin-top:8px"><button id="addVariant" class="quiet" type="button">Import variant</button><button id="activateVariant" class="primary" type="button">Activate</button></div>
         <input id="variantFile" class="hidden-input" type="file" accept="image/png,image/jpeg,image/webp">
-        <button id="clearReplacement" class="quiet danger" style="width:100%;margin-top:7px" type="button" disabled>Volver al original</button>
+        <button id="clearReplacement" class="quiet danger" style="width:100%;margin-top:7px" type="button" disabled>Return to original</button>
       </section>
       <section class="group">
-        <h3>Corrección contextual</h3>
-        <label>Pedido para ImageGen<textarea id="correctionPrompt" placeholder="Ej.: bajar la rodilla del pie en paso sin cambiar identidad, brazos ni escala."></textarea></label>
+        <h3>Contextual correction</h3>
+        <label>Image Gen request<textarea id="correctionPrompt" placeholder="Example: lower the passing-foot knee without changing identity, arms, or scale."></textarea></label>
         <div class="button-stack" style="margin-top:8px">
-          <button id="queueCorrection" class="accent" type="button">Enviar selección a la cola</button>
-          <button id="exportPacket" class="primary" type="button">Exportar paquete del frame</button>
-          <button id="replaceFrame" class="quiet" type="button">Importar retorno de Image Gen</button>
+          <button id="queueCorrection" class="accent" type="button">Send selection to queue</button>
+          <button id="exportPacket" class="primary" type="button">Export frame packet</button>
+          <button id="replaceFrame" class="quiet" type="button">Import Image Gen return</button>
           <input id="replaceFrameFile" class="hidden-input" type="file" accept="image/png,image/jpeg,image/webp">
         </div>
       </section>
       <section class="group">
-        <h3>Cola de correcciones</h3>
+        <h3>Correction queue</h3>
         <div class="queue-list" id="correctionQueue"></div>
-        <div class="button-row" style="margin-top:8px"><button id="acceptCorrection" class="quiet" type="button">Aceptar retorno</button><button id="rejectCorrection" class="quiet danger" type="button">Rechazar retorno</button></div>
-        <button id="exportCorrectionQueue" class="quiet" style="width:100%;margin-top:8px" type="button">Exportar manifest de cola</button>
+        <div class="button-row" style="margin-top:8px"><button id="acceptCorrection" class="quiet" type="button">Accept return</button><button id="rejectCorrection" class="quiet danger" type="button">Reject return</button></div>
+        <button id="exportCorrectionQueue" class="quiet" style="width:100%;margin-top:8px" type="button">Export queue manifest</button>
       </section>
       </div>
       <div data-inspector-panel="export" hidden>
       <section class="group">
-        <h3>Proyecto y entregables</h3>
+        <h3>Project and deliverables</h3>
         <div class="button-stack">
-          <button id="exportJson" class="primary" type="button">Exportar proyecto JSON</button>
-          <button id="exportAlignment" class="quiet" type="button">Exportar alignment profile v2</button>
-          <button id="importJson" class="quiet" type="button">Importar proyecto</button>
+          <button id="exportJson" class="primary" type="button">Export project JSON</button>
+          <button id="exportAlignment" class="quiet" type="button">Export alignment profile v2</button>
+          <button id="importJson" class="quiet" type="button">Import project</button>
           <input id="importFile" class="hidden-input" type="file" accept="application/json,.json">
-          <button id="exportPng" class="accent" type="button">Exportar sheet corregido</button>
-          <button id="resetAll" class="quiet danger" type="button">Reset completo</button>
+          <button id="exportPng" class="accent" type="button">Export corrected sheet</button>
+          <button id="resetAll" class="quiet danger" type="button">Full reset</button>
         </div>
-        <p class="status" id="status" role="status" aria-live="polite">Esperando sheet.</p>
+        <p class="status" id="status" role="status" aria-live="polite">Waiting for sheet.</p>
       </section>
       <section class="group">
-        <h3>Promoción</h3>
-        <div class="readout" id="readinessSummary">Draft manual · todavía sin evidencia CLI verificada.</div>
-        <p class="mini-note">El editor prepara y revisa. La aprobación final continúa siendo hash-bound en el pipeline.</p>
+        <h3>Promotion</h3>
+        <div class="readout" id="readinessSummary">Manual draft · no verified CLI evidence yet.</div>
+        <p class="mini-note">The editor prepares and reviews. Final approval remains hash-bound in the pipeline.</p>
       </section>
       </div>
     </aside>
@@ -444,14 +444,14 @@
       generation_dependencies: { 1: [], 6: [1], 4: [1, 6], 2: [1, 4], 3: [2, 4], 5: [4, 6] }
     };
     const quality_gates = [
-      { id: "opposite-contacts", label: "Contactos opuestos A/B", hard: true },
-      { id: "passing-foot-clearance", label: "Altura del pie en passing", hard: true },
-      { id: "arm-counter-swing", label: "Contraposición de brazos", hard: true },
-      { id: "root-lock", label: "Root y baseline estables", hard: true },
-      { id: "scale-lock", label: "Escala y encuadre estables", hard: true },
-      { id: "background-clean", label: "Fondo y bordes limpios", hard: true },
-      { id: "loop-seam", label: "Continuidad del cierre", hard: true },
-      { id: "identity-transfer", label: "Identidad y anatomía", hard: true }
+      { id: "opposite-contacts", label: "Opposite contacts A/B", hard: true },
+      { id: "passing-foot-clearance", label: "Passing-foot clearance", hard: true },
+      { id: "arm-counter-swing", label: "Arm counter-swing", hard: true },
+      { id: "root-lock", label: "Stable root and baseline", hard: true },
+      { id: "scale-lock", label: "Stable scale and framing", hard: true },
+      { id: "background-clean", label: "Clean background and edges", hard: true },
+      { id: "loop-seam", label: "Loop continuity", hard: true },
+      { id: "identity-transfer", label: "Identity and anatomy", hard: true }
     ];
     const $ = selector => document.querySelector(selector);
     const controls = {
@@ -490,15 +490,15 @@
     let correctionQueue = [];
     let projectState = {
       id: localStorage.getItem(CURRENT_PROJECT_KEY) || "sideview-walk-six-frame",
-      name: "Walk lateral · 6 frames",
+      name: "Side-view walk · 6 frames",
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
     let projectDirty = false;
     let assetDbPromise = null;
     const referenceSlots = {
-      identity: { role: "identity", name: "Sin identidad", image: null, asset_key: null, source_url: null },
-      mechanics: { role: "mechanics", name: "Sin mecánica", image: null, asset_key: null, source_url: null, frame_urls: [], frame_images: [] },
+      identity: { role: "identity", name: "No identity", image: null, asset_key: null, source_url: null },
+      mechanics: { role: "mechanics", name: "No mechanics", image: null, asset_key: null, source_url: null, frame_urls: [], frame_images: [] },
       previous: { role: "previous", derived: true },
       next: { role: "next", derived: true }
     };
@@ -520,7 +520,7 @@
       const columns = Number.parseInt(controls.columns.value, 10);
       const rows = Number.parseInt(controls.rows.value, 10);
       const fps = Number.parseInt(controls.fps.value, 10);
-      if (![columns, rows, fps].every(Number.isInteger) || columns < 1 || rows < 1 || fps < 1) throw new Error("Grid y FPS deben ser enteros positivos.");
+      if (![columns, rows, fps].every(Number.isInteger) || columns < 1 || rows < 1 || fps < 1) throw new Error("Grid values and FPS must be positive integers.");
       return { columns, rows, fps };
     }
 
@@ -532,7 +532,7 @@
     function isDirty(transform) { return transform.x !== 0 || transform.y !== 0 || Math.abs(transform.scale - 1) > 0.0001; }
     function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
     function uniqueId(prefix) { return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`; }
-    function safeName(value) { return String(value || "sprite-project").trim().toLowerCase().replace(/[^a-z0-9áéíóúñ]+/gi, "-").replace(/^-|-$/g, "") || "sprite-project"; }
+    function safeName(value) { return String(value || "sprite-project").trim().toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "sprite-project"; }
     function setSessionStatus(message, dirty = projectDirty) {
       controls.sessionStatus.textContent = message;
       controls.sessionStatus.classList.toggle("dirty", dirty);
@@ -541,7 +541,7 @@
     function openAssetDb() {
       if (assetDbPromise) return assetDbPromise;
       assetDbPromise = new Promise((resolve, reject) => {
-        if (!window.indexedDB) return reject(new Error("IndexedDB no disponible"));
+        if (!window.indexedDB) return reject(new Error("IndexedDB is unavailable"));
         const request = indexedDB.open(ASSET_DB_NAME, 1);
         request.addEventListener("upgradeneeded", () => { if (!request.result.objectStoreNames.contains("assets")) request.result.createObjectStore("assets"); });
         request.addEventListener("success", () => resolve(request.result));
@@ -626,7 +626,7 @@
       if (Array.isArray(stored.frame_meta) && stored.frame_meta.length === frameCount) frameMeta = stored.frame_meta.map(normalizeMeta);
       if (stored.kind === PROJECT_KIND) {
         projectState = { ...projectState, ...(stored.project || {}) };
-        projectState.name = String(projectState.name || "Walk lateral · 6 frames");
+        projectState.name = String(projectState.name || "Side-view walk · 6 frames");
         controls.projectName.value = projectState.name;
         correctionQueue = Array.isArray(stored.correction_jobs) ? stored.correction_jobs.map(job => ({ ...job })) : [];
         frameVariants = Array.from({ length: frameCount }, (_, index) => Array.isArray(stored.frame_variants?.[index]) ? stored.frame_variants[index].map(normalizeVariant) : []);
@@ -635,7 +635,7 @@
         for (const role of ["identity", "mechanics"]) {
           const savedReference = stored.reference_slots?.[role];
           if (savedReference) referenceSlots[role] = {
-            ...referenceSlots[role], name: String(savedReference.name || `Sin ${role}`), asset_key: savedReference.asset_key || null,
+            ...referenceSlots[role], name: String(savedReference.name || `No ${role}`), asset_key: savedReference.asset_key || null,
             source_url: savedReference.source_url || null, frame_urls: role === "mechanics" && Array.isArray(savedReference.frame_urls) ? [...savedReference.frame_urls] : [],
             image: null, frame_images: role === "mechanics" ? [] : undefined
           };
@@ -670,19 +670,19 @@
         let stored = JSON.parse(localStorage.getItem(storageKey()) || "null");
         if (!stored) stored = JSON.parse(localStorage.getItem(legacyStorageKey()) || "null");
         if (stored?.kind === PROJECT_KIND && (stored.source !== controls.url.value || Number(stored.grid?.columns) !== settings().columns || Number(stored.grid?.rows) !== settings().rows)) {
-          projectState = { id: uniqueId("walk-project"), name: `${projectState.name} · nueva source`, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+          projectState = { id: uniqueId("walk-project"), name: `${projectState.name} · new source`, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
           controls.projectName.value = projectState.name;
-          setStatus("La sheet o el grid no coinciden con el proyecto guardado. Se abrió un estado limpio para evitar mezclar candidatos.", "error");
-          setSessionStatus("Source nueva · proyecto sin guardar", true); return "mismatch";
+          setStatus("The sheet or grid does not match the saved project. A clean state was opened to keep candidates separate.", "error");
+          setSessionStatus("New source · unsaved project", true); return "mismatch";
         }
         if (applyProjectPayload(stored)) {
           await restoreDurableAssets();
-          setStatus(stored.kind === PROJECT_KIND ? "Proyecto v3 restaurado." : "Proyecto v2 migrado al editor.", "success");
-          setSessionStatus("Guardado local restaurado", false);
+          setStatus(stored.kind === PROJECT_KIND ? "Project v3 restored." : "Project v2 migrated into the editor.", "success");
+          setSessionStatus("Local save restored", false);
           return "restored";
         }
-        setSessionStatus("Proyecto nuevo · sin guardar", true); return "new";
-      } catch { setStatus("No se pudo restaurar el proyecto local.", "error"); return "error"; }
+        setSessionStatus("New project · unsaved", true); return "new";
+      } catch { setStatus("The local project could not be restored.", "error"); return "error"; }
     }
 
     function correctionPayload() {
@@ -729,9 +729,9 @@
         localStorage.setItem(PROJECT_INDEX_KEY, JSON.stringify(index.slice(0, 20)));
         projectDirty = false;
         setSessionStatus(explicit ? `Guardado · ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Autoguardado local", false);
-      } catch { setStatus("El navegador no pudo persistir el proyecto.", "error"); setSessionStatus("Sin persistencia local", true); }
+      } catch { setStatus("The browser could not persist the project.", "error"); setSessionStatus("No local persistence", true); }
     }
-    function markDirty() { projectDirty = true; setSessionStatus("Cambios pendientes", true); }
+    function markDirty() { projectDirty = true; setSessionStatus("Pending changes", true); }
     function setStatus(message, kind = "") { const node = $("#status"); node.textContent = message; node.className = `status ${kind}`.trim(); }
 
     function captureState() {
@@ -868,8 +868,8 @@
       quality_gates.forEach(gate => {
         const row = document.createElement("label"); row.className = "gate-row";
         const label = document.createElement("span"); label.textContent = gate.label;
-        const select = document.createElement("select"); select.dataset.gate = gate.id; select.setAttribute("aria-label", `${gate.label} del frame ${frame + 1}`);
-        [["pending", "Pendiente"], ["pass", "Pasa"], ["fail", "Falla"], ["stale", "Repetir"]].forEach(([value, text]) => { const option = document.createElement("option"); option.value = value; option.textContent = text; select.append(option); });
+        const select = document.createElement("select"); select.dataset.gate = gate.id; select.setAttribute("aria-label", `${gate.label} for frame ${frame + 1}`);
+        [["pending", "Pending"], ["pass", "Pass"], ["fail", "Fail"], ["stale", "Rerun"]].forEach(([value, text]) => { const option = document.createElement("option"); option.value = value; option.textContent = text; select.append(option); });
         select.value = meta.gates[gate.id] || "pending";
         select.addEventListener("change", () => { recordHistory(); frameMeta[frame].gates[gate.id] = select.value; markDirty(); saveProject(); updateGateSummary(); updateReadiness(); });
         row.append(label, select); controls.gateChecklist.append(row);
@@ -882,7 +882,7 @@
       const passed = assessments.filter(value => value === "pass").length;
       const failed = assessments.filter(value => value === "fail").length;
       const stale = assessments.filter(value => value === "stale").length;
-      controls.gateSummary.textContent = `${passed}/${assessments.length} aprobados · ${failed} fallos · ${stale} por repetir`;
+      controls.gateSummary.textContent = `${passed}/${assessments.length} approved · ${failed} failed · ${stale} to rerun`;
       controls.gateSummary.className = `gate-summary ${failed ? "fail" : passed === assessments.length ? "pass" : ""}`.trim();
     }
 
@@ -891,7 +891,7 @@
       const assessments = frameMeta.flatMap(meta => quality_gates.map(gate => meta.gates?.[gate.id] || "pending"));
       const unresolvedJobs = correctionQueue.filter(job => !["accepted", "rejected"].includes(job.status)).length;
       const ready = assessments.length > 0 && assessments.every(value => value === "pass") && unresolvedJobs === 0 && referencesReady();
-      node.textContent = ready ? "Manual gates completos · falta convertir la revisión en evidencia CLI hash-bound." : `Draft bloqueado · ${assessments.filter(value => value !== "pass").length} gates pendientes/fallidos · ${unresolvedJobs} trabajos abiertos.`;
+      node.textContent = ready ? "Manual gates complete · convert the review into hash-bound CLI evidence." : `Draft blocked · ${assessments.filter(value => value !== "pass").length} pending/failed gates · ${unresolvedJobs} open jobs.`;
       node.style.borderColor = ready ? "var(--pass)" : "var(--danger)";
     }
 
@@ -905,13 +905,13 @@
 
     function renderVariantList() {
       controls.variantList.replaceChildren();
-      const items = [{ id: "original", name: "Original de la sheet", created_at: "base", image: image }].concat(frameVariants[frame] || []);
+      const items = [{ id: "original", name: "Original sheet frame", created_at: "base", image: image }].concat(frameVariants[frame] || []);
       if (!items.some(item => item.id === selectedVariantId)) selectedVariantId = activeVariantIds[frame] || "original";
       items.forEach(item => {
         const button = document.createElement("button"); button.type = "button"; button.className = "variant-item";
         button.classList.toggle("active", item.id === activeVariantIds[frame]); button.classList.toggle("selected", item.id === selectedVariantId);
         const title = document.createElement("strong"); title.textContent = item.name;
-        const detail = document.createElement("small"); detail.textContent = item.id === "original" ? "Fuente inmutable" : `${item.image ? "Disponible" : "Asset no cargado"} · ${new Date(item.created_at).toLocaleString()}`;
+        const detail = document.createElement("small"); detail.textContent = item.id === "original" ? "Immutable source" : `${item.image ? "Available" : "Asset not loaded"} · ${new Date(item.created_at).toLocaleString()}`;
         button.append(title, detail); button.addEventListener("click", () => { selectedVariantId = item.id; renderVariantList(); }); controls.variantList.append(button);
       });
       controls.activateVariant.disabled = selectedVariantId === activeVariantIds[frame] || (selectedVariantId !== "original" && !frameVariants[frame]?.find(item => item.id === selectedVariantId)?.image);
@@ -927,9 +927,9 @@
         const activeReference = referenceImage(role, frame);
         if (activeReference) {
           const thumbnail = document.createElement("img"); thumbnail.src = activeReference.src; thumbnail.alt = ""; preview.append(thumbnail);
-          node.classList.add("has-asset"); title.textContent = `${role === "identity" ? "Identidad" : "Mecánica"} · ${referenceSlots[role].name}`;
+          node.classList.add("has-asset"); title.textContent = `${role === "identity" ? "Identity" : "Mechanics"} · ${referenceSlots[role].name}`;
         } else {
-          preview.textContent = role === "identity" ? "ID" : "MEC"; node.classList.remove("has-asset"); title.textContent = role === "identity" ? "Identidad" : "Mecánica";
+          preview.textContent = role === "identity" ? "ID" : "MEC"; node.classList.remove("has-asset"); title.textContent = role === "identity" ? "Identity" : "Mechanics";
         }
       }
       updateReadiness();
@@ -979,7 +979,7 @@
       const root = $("#filmstrip"); root.replaceChildren();
       for (let index = 0; index < frameCount; index += 1) {
         const button = document.createElement("button"); button.type = "button"; button.className = "frame-thumb"; button.dataset.frame = String(index);
-        button.setAttribute("aria-label", `Seleccionar frame ${index + 1}: ${phases[index] || "sin fase"}`);
+        button.setAttribute("aria-label", `Select frame ${index + 1}: ${phases[index] || "no phase"}`);
         const canvas = document.createElement("canvas"); const label = document.createElement("span");
         label.dataset.base = `${String(index + 1).padStart(2, "0")} · ${phases[index] || "frame"}`;
         button.append(canvas, label); button.addEventListener("click", event => toggleFrameSelection(index, event)); root.append(button); drawThumbnail(canvas, index);
@@ -1004,7 +1004,7 @@
 
     function updateSelectionSummary() {
       const ordered = [...selectedFrames].sort((a, b) => a - b);
-      controls.selectionSummary.textContent = ordered.length ? `${ordered.length} frame${ordered.length === 1 ? "" : "s"}: ${ordered.map(index => `F${index + 1}`).join(", ")} · orden fijo` : "Sin frames seleccionados";
+      controls.selectionSummary.textContent = ordered.length ? `${ordered.length} frame${ordered.length === 1 ? "" : "s"}: ${ordered.map(index => `F${index + 1}`).join(", ")} · fixed order` : "No frames selected";
     }
     function toggleFrameSelection(index, event = {}) {
       const multi = controls.selectionMode.checked || event.ctrlKey || event.metaKey || event.shiftKey;
@@ -1022,22 +1022,22 @@
       if (!lightweight) updateInspector();
       drawStage(); updateFilmstripState();
     }
-    function stop() { const wasPlaying = timer !== null; if (wasPlaying) window.clearInterval(timer); timer = null; controls.play.textContent = "Reproducir"; if (wasPlaying) updateInspector(); }
-    function play() { if (timer !== null) { stop(); return; } controls.play.textContent = "Pausar"; timer = window.setInterval(() => selectFrame(frame + 1, false, true), 1000 / settings().fps); }
+    function stop() { const wasPlaying = timer !== null; if (wasPlaying) window.clearInterval(timer); timer = null; controls.play.textContent = "Play"; if (wasPlaying) updateInspector(); }
+    function play() { if (timer !== null) { stop(); return; } controls.play.textContent = "Pause"; timer = window.setInterval(() => selectFrame(frame + 1, false, true), 1000 / settings().fps); }
 
-    function loadSheet() { stop(); history = []; future = []; fitView(); setStatus("Cargando sheet…"); image.src = controls.url.value; }
+    function loadSheet() { stop(); history = []; future = []; fitView(); setStatus("Loading sheet…"); image.src = controls.url.value; }
     image.addEventListener("load", async () => {
       try {
         const { columns, rows } = settings();
-        if (image.naturalWidth % columns || image.naturalHeight % rows) throw new Error("Las dimensiones no son divisibles por el grid declarado.");
+        if (image.naturalWidth % columns || image.naturalHeight % rows) throw new Error("The dimensions are not divisible by the declared grid.");
         frameCount = columns * rows; cellWidth = image.naturalWidth / columns; cellHeight = image.naturalHeight / rows;
         frameCanvas.width = guideCanvas.width = cellWidth; frameCanvas.height = guideCanvas.height = cellHeight;
         controls.scrubber.max = String(frameCount - 1); frame = 0;
         const projectLoadState = await loadStoredProject(); rebuildFilmstrip(); updateInspector(); drawStage(); updateHistoryButtons(); requestAnimationFrame(fitView);
-        if (projectLoadState !== "mismatch" && projectLoadState !== "error") setStatus(`${frameCount} frames cargados. Editor no destructivo listo.`, "success");
+        if (projectLoadState !== "mismatch" && projectLoadState !== "error") setStatus(`${frameCount} frames loaded. Non-destructive editor ready.`, "success");
       } catch (error) { setStatus(error.message, "error"); }
     });
-    image.addEventListener("error", () => { stop(); setStatus("No se pudo cargar la sheet. Revisa URL o servidor local.", "error"); });
+    image.addEventListener("error", () => { stop(); setStatus("The sheet could not be loaded. Check the URL or local server.", "error"); });
 
     function applyInspector() {
       if (frameMeta[frame]?.locked) return updateInspector();
@@ -1056,17 +1056,17 @@
     controls.zoomIn.addEventListener("click", () => setZoom(viewer.zoom * 1.2)); controls.zoomOut.addEventListener("click", () => setZoom(viewer.zoom / 1.2)); controls.fitView.addEventListener("click", fitView);
     controls.stage.addEventListener("wheel", event => { event.preventDefault(); setZoom(viewer.zoom * (event.deltaY < 0 ? 1.1 : .9)); }, { passive: false });
 
-    controls.frameLocked.addEventListener("change", () => { recordHistory(); frameMeta[frame].locked = controls.frameLocked.checked; markDirty(); saveProject(); updateInspector(); updateFilmstripState(); setStatus(`Frame ${frame + 1} ${frameMeta[frame].locked ? "bloqueado" : "desbloqueado"}.`, "success"); });
+    controls.frameLocked.addEventListener("change", () => { recordHistory(); frameMeta[frame].locked = controls.frameLocked.checked; markDirty(); saveProject(); updateInspector(); updateFilmstripState(); setStatus(`Frame ${frame + 1} ${frameMeta[frame].locked ? "locked" : "unlocked"}.`, "success"); });
     controls.qaStatus.addEventListener("change", () => { recordHistory(); frameMeta[frame].qa = controls.qaStatus.value; markDirty(); saveProject(); updateFilmstripState(); updateReadiness(); });
     controls.frameNote.addEventListener("focus", recordHistory); controls.frameNote.addEventListener("input", () => { frameMeta[frame].note = controls.frameNote.value; markDirty(); saveProject(); });
     controls.correctionPrompt.addEventListener("focus", recordHistory); controls.correctionPrompt.addEventListener("input", () => { frameMeta[frame].correction = controls.correctionPrompt.value; markDirty(); saveProject(); });
 
-    $("#resetFrame").addEventListener("click", () => { if (frameMeta[frame].locked) return; recordHistory(); transforms[frame] = blankTransform(); invalidateFrameGates(frame, "registration reset"); markDirty(); saveProject(); updateInspector(); drawStage(); refreshThumbnail(frame); updateFilmstripState(); setStatus(`Frame ${frame + 1} restaurado.`, "success"); });
-    $("#copyTransform").addEventListener("click", () => { clipboardTransform = { ...transforms[frame] }; updateInspector(); setStatus(`Ajuste de frame ${frame + 1} copiado.`, "success"); });
+    $("#resetFrame").addEventListener("click", () => { if (frameMeta[frame].locked) return; recordHistory(); transforms[frame] = blankTransform(); invalidateFrameGates(frame, "registration reset"); markDirty(); saveProject(); updateInspector(); drawStage(); refreshThumbnail(frame); updateFilmstripState(); setStatus(`Frame ${frame + 1} reset.`, "success"); });
+    $("#copyTransform").addEventListener("click", () => { clipboardTransform = { ...transforms[frame] }; updateInspector(); setStatus(`Frame ${frame + 1} adjustment copied.`, "success"); });
     $("#pasteTransform").addEventListener("click", () => { if (!clipboardTransform || frameMeta[frame].locked) return; recordHistory(); transforms[frame] = { ...clipboardTransform }; invalidateFrameGates(frame, "registration pasted"); markDirty(); saveProject(); updateInspector(); drawStage(); refreshThumbnail(frame); updateFilmstripState(); });
     $("#resetAll").addEventListener("click", () => {
-      if (!window.confirm("¿Restaurar transforms, QA, notas y reemplazos de todos los frames?")) return;
-      recordHistory(); initializeProjectFrames(); markDirty(); saveProject(); updateInspector(); drawStage(); rebuildFilmstrip(); renderCorrectionQueue(); setStatus("Proyecto restaurado.", "success");
+      if (!window.confirm("Reset transforms, QA, notes, and replacements for every frame?")) return;
+      recordHistory(); initializeProjectFrames(); markDirty(); saveProject(); updateInspector(); drawStage(); rebuildFilmstrip(); renderCorrectionQueue(); setStatus("Project reset.", "success");
     });
 
     document.querySelectorAll(".inspector-tab").forEach(tab => tab.addEventListener("click", () => {
@@ -1075,18 +1075,18 @@
     }));
 
     controls.projectName.addEventListener("input", () => { projectState.name = controls.projectName.value; markDirty(); });
-    $("#saveProject").addEventListener("click", () => { saveProject(true); setStatus("Proyecto y metadatos guardados localmente.", "success"); });
+    $("#saveProject").addEventListener("click", () => { saveProject(true); setStatus("Project and metadata saved locally.", "success"); });
     $("#newProject").addEventListener("click", () => {
-      if (!window.confirm("¿Crear un proyecto limpio? La sheet original no cambia y el proyecto actual seguirá disponible en el almacenamiento local.")) return;
-      stop(); projectState = { id: uniqueId("walk-project"), name: "Walk lateral · nuevo candidato", created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
-      controls.projectName.value = projectState.name; referenceSlots.identity = { role: "identity", name: "Sin identidad", image: null, asset_key: null, source_url: null }; referenceSlots.mechanics = { role: "mechanics", name: "Sin mecánica", image: null, asset_key: null, source_url: null, frame_urls: [], frame_images: [] };
-      initializeProjectFrames(); frame = 0; history = []; future = []; updateReferenceSlots(); rebuildFilmstrip(); updateInspector(); drawStage(); saveProject(true); setStatus("Proyecto nuevo creado con el contrato de 6 frames intacto.", "success");
+      if (!window.confirm("Create a clean project? The original sheet will not change, and the current project will remain in local storage.")) return;
+      stop(); projectState = { id: uniqueId("walk-project"), name: "Side-view walk · new candidate", created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      controls.projectName.value = projectState.name; referenceSlots.identity = { role: "identity", name: "No identity", image: null, asset_key: null, source_url: null }; referenceSlots.mechanics = { role: "mechanics", name: "No mechanics", image: null, asset_key: null, source_url: null, frame_urls: [], frame_images: [] };
+      initializeProjectFrames(); frame = 0; history = []; future = []; updateReferenceSlots(); rebuildFilmstrip(); updateInspector(); drawStage(); saveProject(true); setStatus("New project created with the six-frame contract intact.", "success");
     });
 
     controls.selectionMode.addEventListener("change", () => { if (!controls.selectionMode.checked) selectedFrames = new Set([frame]); updateSelectionSummary(); updateFilmstripState(); saveProject(); });
     $("#applyBatchQa").addEventListener("click", () => {
-      if (!selectedFrames.size) return setStatus("Selecciona al menos un frame.", "error");
-      recordHistory(); selectedFrames.forEach(index => { frameMeta[index].qa = controls.batchQaStatus.value; }); markDirty(); saveProject(); updateInspector(); updateFilmstripState(); setStatus(`QA aplicado a ${selectedFrames.size} frames. Los gates contractuales no se modificaron.`, "success");
+      if (!selectedFrames.size) return setStatus("Select at least one frame.", "error");
+      recordHistory(); selectedFrames.forEach(index => { frameMeta[index].qa = controls.batchQaStatus.value; }); markDirty(); saveProject(); updateInspector(); updateFilmstripState(); setStatus(`QA applied to ${selectedFrames.size} frames. Contract gates were not changed.`, "success");
     });
 
     async function loadReference(role, file) {
@@ -1095,26 +1095,26 @@
         const assetKey = `${projectState.id}:reference:${role}`;
         const referenceImage = await imageFromBlob(file);
         referenceSlots[role] = { role, name: file.name, image: referenceImage, asset_key: assetKey, source_url: null, frame_urls: [], frame_images: [] };
-        try { await putAsset(assetKey, file); } catch { setStatus("Referencia cargada para la sesión; IndexedDB no está disponible.", "error"); }
+        try { await putAsset(assetKey, file); } catch { setStatus("Reference loaded for this session; IndexedDB is unavailable.", "error"); }
         correctionQueue.forEach(job => { if (!["accepted", "rejected"].includes(job.status)) { job.status = "stale"; job.stale_reason = `${role} reference changed`; } });
-        markDirty(); saveProject(); updateReferenceSlots(); renderCorrectionQueue(); updateFilmstripState(); setStatus(`Referencia de ${role === "identity" ? "identidad" : "mecánica"} preparada.`, "success");
-      } catch { setStatus("No se pudo leer la referencia.", "error"); }
+        markDirty(); saveProject(); updateReferenceSlots(); renderCorrectionQueue(); updateFilmstripState(); setStatus(`${role === "identity" ? "Identity" : "Mechanics"} reference ready.`, "success");
+      } catch { setStatus("The reference could not be read.", "error"); }
     }
     $("#referenceIdentity").addEventListener("click", () => $("#referenceIdentityFile").click());
     $("#referenceMechanics").addEventListener("click", () => $("#referenceMechanicsFile").click());
     $("#referenceIdentityFile").addEventListener("change", async event => { await loadReference("identity", event.target.files[0]); event.target.value = ""; });
     $("#referenceMechanicsFile").addEventListener("change", async event => { await loadReference("mechanics", event.target.files[0]); event.target.value = ""; });
     $("#useWorkbenchTemplates").addEventListener("click", async () => {
-      if (frameCount !== animation_contract.frame_count) return setStatus("Los templates versionados pertenecen al contrato walk de 6 frames.", "error");
+      if (frameCount !== animation_contract.frame_count) return setStatus("The versioned templates belong to the six-frame walk contract.", "error");
       try {
-        setStatus("Cargando templates versionados…");
+        setStatus("Loading versioned templates…");
         const identityImage = await imageFromUrl(defaultIdentityReference);
         const mechanicsImages = await Promise.all(defaultMechanicsReferences.map(url => imageFromUrl(url)));
         referenceSlots.identity = { role: "identity", name: "Character transfer · identity anchor", image: identityImage, asset_key: null, source_url: defaultIdentityReference };
         referenceSlots.mechanics = { role: "mechanics", name: "Articulated mannequin · frame mapped", image: null, asset_key: null, source_url: null, frame_urls: [...defaultMechanicsReferences], frame_images: mechanicsImages };
         correctionQueue.forEach(job => { if (!["accepted", "rejected"].includes(job.status)) { job.status = "stale"; job.stale_reason = "workbench references changed"; } });
-        markDirty(); saveProject(); updateReferenceSlots(); renderCorrectionQueue(); updateFilmstripState(); setStatus("Templates de identidad y mecánica enlazados sin regeneración.", "success");
-      } catch { setStatus("No se pudieron cargar los templates versionados desde el workbench.", "error"); }
+        markDirty(); saveProject(); updateReferenceSlots(); renderCorrectionQueue(); updateFilmstripState(); setStatus("Identity and mechanics templates linked without regeneration.", "success");
+      } catch { setStatus("The workbench could not load the versioned templates.", "error"); }
     });
 
     async function importVariant(file, provenance = "imported-imagegen-return") {
@@ -1122,19 +1122,19 @@
       try {
         const variantImage = await imageFromBlob(file); const id = uniqueId(`f${frame + 1}-variant`); const assetKey = `${projectState.id}:frame:${frame + 1}:${id}`;
         const expectedRatio = cellWidth / cellHeight; const actualRatio = variantImage.naturalWidth / variantImage.naturalHeight;
-        if (Math.abs(expectedRatio - actualRatio) > .01) throw new Error("La variante no conserva la relación de aspecto del frame.");
+        if (Math.abs(expectedRatio - actualRatio) > .01) throw new Error("The variant does not preserve the frame aspect ratio.");
         const variant = { id, name: file.name, created_at: new Date().toISOString(), asset_key: assetKey, provenance, image: variantImage };
-        try { await putAsset(assetKey, file); } catch { setStatus("Variante disponible solo durante esta sesión.", "error"); }
+        try { await putAsset(assetKey, file); } catch { setStatus("Variant available for this session only.", "error"); }
         recordHistory(); frameVariants[frame].push(variant); activeVariantIds[frame] = id; selectedVariantId = id; syncFrameOverrides(frame); invalidateFrameGates(frame, "active variant changed");
         correctionQueue.forEach(job => { if (job.target_frame === frame + 1 && !["accepted", "rejected"].includes(job.status)) job.status = "returned"; });
-        markDirty(); saveProject(); drawStage(); refreshThumbnail(frame); updateInspector(); updateFilmstripState(); setStatus(`Variante importada y activada en F${frame + 1}. El original sigue intacto.`, "success");
-      } catch (error) { setStatus(error.message || "No se pudo cargar la variante.", "error"); }
+        markDirty(); saveProject(); drawStage(); refreshThumbnail(frame); updateInspector(); updateFilmstripState(); setStatus(`Variant imported and activated for F${frame + 1}. The original remains intact.`, "success");
+      } catch (error) { setStatus(error.message || "The variant could not be loaded.", "error"); }
     }
     $("#addVariant").addEventListener("click", () => $("#variantFile").click());
     $("#variantFile").addEventListener("change", async event => { await importVariant(event.target.files[0], "manual-variant"); event.target.value = ""; });
     controls.activateVariant.addEventListener("click", () => {
       if (selectedVariantId === activeVariantIds[frame]) return;
-      recordHistory(); activeVariantIds[frame] = selectedVariantId; syncFrameOverrides(frame); invalidateFrameGates(frame, "active variant changed"); markDirty(); saveProject(); drawStage(); refreshThumbnail(frame); updateInspector(); updateFilmstripState(); setStatus(`Variante activa de F${frame + 1} actualizada.`, "success");
+      recordHistory(); activeVariantIds[frame] = selectedVariantId; syncFrameOverrides(frame); invalidateFrameGates(frame, "active variant changed"); markDirty(); saveProject(); drawStage(); refreshThumbnail(frame); updateInspector(); updateFilmstripState(); setStatus(`Active variant for F${frame + 1} updated.`, "success");
     });
 
     function applySnap(next, threshold) {
@@ -1180,7 +1180,7 @@
       if (!gesture) return;
       if (gesture.captureTarget?.hasPointerCapture?.(gesture.pointerId)) gesture.captureTarget.releasePointerCapture(gesture.pointerId);
       const type = gesture.type; gesture = null; snapGuides = { x: false, y: false }; controls.stage.classList.remove("panning");
-      if (type !== "pan") { invalidateFrameGates(frame, "registration changed"); markDirty(); saveProject(); drawStage(); renderGateChecklist(); renderCorrectionQueue(); setStatus(`Frame ${frame + 1} ajustado directamente.`, "success"); }
+      if (type !== "pan") { invalidateFrameGates(frame, "registration changed"); markDirty(); saveProject(); drawStage(); renderGateChecklist(); renderCorrectionQueue(); setStatus(`Frame ${frame + 1} adjusted directly.`, "success"); }
     }
     window.addEventListener("pointerup", finishGesture);
     window.addEventListener("pointercancel", finishGesture);
@@ -1206,7 +1206,7 @@
         workflow_contract_id: animation_contract.id,
         target_frame: index + 1,
         target_phase: phases[index] || `frame ${index + 1}`,
-        correction_request: meta.correction || `Corregir F${index + 1} conservando identidad, encuadre y todas las partes no mencionadas.`,
+        correction_request: meta.correction || `Correct F${index + 1} while preserving identity, framing, and every unmentioned part.`,
         qa_status: meta.qa,
         qa_note: meta.note,
         generation_dependencies: animation_contract.generation_dependencies[index + 1] || [],
@@ -1224,17 +1224,17 @@
       $("#rejectCorrection").disabled = !currentJob || currentJob.status !== "returned";
       const order = new Map(animation_contract.generation_order.map((value, index) => [value, index]));
       const jobs = [...correctionQueue].sort((a, b) => (order.get(a.target_frame) ?? 99) - (order.get(b.target_frame) ?? 99));
-      if (!jobs.length) { const empty = document.createElement("p"); empty.className = "queue-empty"; empty.textContent = "Sin trabajos. Selecciona frames y prepara sus correcciones."; controls.correctionQueue.append(empty); return; }
+      if (!jobs.length) { const empty = document.createElement("p"); empty.className = "queue-empty"; empty.textContent = "No jobs. Select frames and prepare their corrections."; controls.correctionQueue.append(empty); return; }
       jobs.forEach(job => {
         const item = document.createElement("button"); item.type = "button"; item.className = "queue-item"; item.dataset.status = job.status;
         const title = document.createElement("strong"); title.textContent = `F${job.target_frame} · ${job.phase}`;
-        const detail = document.createElement("small"); detail.textContent = `${job.status} · intento ${job.attempt} · deps ${job.dependencies.length ? job.dependencies.join("+") : "inicio"}`;
+        const detail = document.createElement("small"); detail.textContent = `${job.status} · attempt ${job.attempt} · deps ${job.dependencies.length ? job.dependencies.join("+") : "start"}`;
         item.append(title, detail); item.addEventListener("click", () => { controls.selectionMode.checked = false; selectedFrames = new Set([job.target_frame - 1]); selectFrame(job.target_frame - 1, true); }); controls.correctionQueue.append(item);
       });
     }
 
     function queueSelectedCorrections() {
-      if (!selectedFrames.size) return setStatus("Selecciona al menos un frame.", "error");
+      if (!selectedFrames.size) return setStatus("Select at least one frame.", "error");
       recordHistory();
       const ordered = animation_contract.generation_order.map(value => value - 1).filter(index => selectedFrames.has(index));
       ordered.forEach(index => {
@@ -1249,17 +1249,17 @@
         };
         if (existing) Object.assign(existing, next); else correctionQueue.push(next);
       });
-      markDirty(); saveProject(); renderCorrectionQueue(); updateFilmstripState(); updateReadiness(); setStatus(`${ordered.length} trabajo${ordered.length === 1 ? "" : "s"} preparado${ordered.length === 1 ? "" : "s"} en orden ${animation_contract.generation_order.join(" → ")}.`, "success");
+      markDirty(); saveProject(); renderCorrectionQueue(); updateFilmstripState(); updateReadiness(); setStatus(`${ordered.length} job${ordered.length === 1 ? "" : "s"} prepared in order ${animation_contract.generation_order.join(" → ")}.`, "success");
     }
     $("#queueCorrection").addEventListener("click", queueSelectedCorrections);
 
     $("#acceptCorrection").addEventListener("click", () => {
       const job = correctionQueue.find(item => item.target_frame === frame + 1 && item.status === "returned"); if (!job || activeVariantIds[frame] === "original") return;
-      recordHistory(); job.status = "accepted"; job.accepted_variant = activeVariantIds[frame]; job.resolved_at = new Date().toISOString(); markDirty(); saveProject(); renderCorrectionQueue(); updateFilmstripState(); updateReadiness(); setStatus(`Retorno de F${frame + 1} aceptado como variante; los gates siguen siendo obligatorios.`, "success");
+      recordHistory(); job.status = "accepted"; job.accepted_variant = activeVariantIds[frame]; job.resolved_at = new Date().toISOString(); markDirty(); saveProject(); renderCorrectionQueue(); updateFilmstripState(); updateReadiness(); setStatus(`F${frame + 1} return accepted as a variant; gates remain mandatory.`, "success");
     });
     $("#rejectCorrection").addEventListener("click", () => {
       const job = correctionQueue.find(item => item.target_frame === frame + 1 && item.status === "returned"); if (!job) return;
-      recordHistory(); job.status = "rejected"; job.resolved_at = new Date().toISOString(); activeVariantIds[frame] = "original"; selectedVariantId = "original"; syncFrameOverrides(frame); invalidateFrameGates(frame, "return rejected"); markDirty(); saveProject(); drawStage(); refreshThumbnail(frame); updateInspector(); updateFilmstripState(); setStatus(`Retorno de F${frame + 1} rechazado; la variante queda conservada para auditoría.`, "success");
+      recordHistory(); job.status = "rejected"; job.resolved_at = new Date().toISOString(); activeVariantIds[frame] = "original"; selectedVariantId = "original"; syncFrameOverrides(frame); invalidateFrameGates(frame, "return rejected"); markDirty(); saveProject(); drawStage(); refreshThumbnail(frame); updateInspector(); updateFilmstripState(); setStatus(`F${frame + 1} return rejected; the variant remains available for audit.`, "success");
     });
 
     $("#exportCorrectionQueue").addEventListener("click", () => {
@@ -1268,23 +1268,23 @@
         version: 1, kind: "sprite-imagegen-correction-queue", project_id: projectState.id,
         animation_contract, correction_jobs: [...correctionQueue].sort((a, b) => (order.get(a.target_frame) ?? 99) - (order.get(b.target_frame) ?? 99)).map(job => ({ ...job, packet: packetForFrame(job.target_frame - 1) }))
       };
-      downloadBlob(new Blob([JSON.stringify(manifest, null, 2) + "\n"], { type: "application/json" }), `${safeName(projectState.name)}-correction-queue.json`); setStatus("Manifest de correcciones exportado en orden contractual.", "success");
+      downloadBlob(new Blob([JSON.stringify(manifest, null, 2) + "\n"], { type: "application/json" }), `${safeName(projectState.name)}-correction-queue.json`); setStatus("Correction manifest exported in contract order.", "success");
     });
 
     function downloadBlob(blob, filename) { const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = filename; link.click(); window.setTimeout(() => URL.revokeObjectURL(link.href), 1000); }
     function canvasBlob(canvas) { return new Promise(resolve => canvas.toBlob(resolve, "image/png")); }
     function renderedFrameCanvas(index) { const output = document.createElement("canvas"); output.width = cellWidth; output.height = cellHeight; drawSourceFrame(output.getContext("2d"), index, transforms[index], 1); return output; }
-    $("#exportJson").addEventListener("click", () => { downloadBlob(new Blob([JSON.stringify(correctionPayload(), null, 2) + "\n"], { type: "application/json" }), `${safeName(projectState.name)}-project-v3.json`); setStatus("Proyecto v3 exportado. Los assets binarios permanecen en IndexedDB y se entregan por separado.", "success"); });
-    $("#exportAlignment").addEventListener("click", () => { downloadBlob(new Blob([JSON.stringify(alignmentProfilePayload(), null, 2) + "\n"], { type: "application/json" }), `${safeName(projectState.name)}-alignment-profile.json`); setStatus("Alignment profile v2 exportado para los scripts actuales.", "success"); });
+    $("#exportJson").addEventListener("click", () => { downloadBlob(new Blob([JSON.stringify(correctionPayload(), null, 2) + "\n"], { type: "application/json" }), `${safeName(projectState.name)}-project-v3.json`); setStatus("Project v3 exported. Binary assets remain in IndexedDB and ship separately.", "success"); });
+    $("#exportAlignment").addEventListener("click", () => { downloadBlob(new Blob([JSON.stringify(alignmentProfilePayload(), null, 2) + "\n"], { type: "application/json" }), `${safeName(projectState.name)}-alignment-profile.json`); setStatus("Alignment profile v2 exported for the current scripts.", "success"); });
     $("#importJson").addEventListener("click", () => $("#importFile").click());
     $("#importFile").addEventListener("change", async event => {
       try {
         const payload = JSON.parse(await event.target.files[0].text());
-        if (![PROJECT_KIND, "sprite-frame-registration-corrections"].includes(payload?.kind) || payload?.transforms?.length !== frameCount) throw new Error("El JSON no corresponde a esta sheet.");
-        if (payload.source && payload.source !== controls.url.value) throw new Error("El proyecto apunta a otra sheet. Carga primero esa source para evitar aplicar transforms al candidato equivocado.");
+        if (![PROJECT_KIND, "sprite-frame-registration-corrections"].includes(payload?.kind) || payload?.transforms?.length !== frameCount) throw new Error("The JSON does not belong to this sheet.");
+        if (payload.source && payload.source !== controls.url.value) throw new Error("The project points to another sheet. Load that source first to avoid applying transforms to the wrong candidate.");
         recordHistory(); initializeProjectFrames();
-        if (!applyProjectPayload(payload)) throw new Error("No se pudo migrar el proyecto.");
-        localStorage.setItem(CURRENT_PROJECT_KEY, projectState.id); await restoreDurableAssets(); saveProject(true); updateInspector(); drawStage(); rebuildFilmstrip(); renderCorrectionQueue(); setStatus(payload.kind === PROJECT_KIND ? "Proyecto v3 importado." : "Proyecto v2 migrado a v3.", "success");
+        if (!applyProjectPayload(payload)) throw new Error("The project could not be migrated.");
+        localStorage.setItem(CURRENT_PROJECT_KEY, projectState.id); await restoreDurableAssets(); saveProject(true); updateInspector(); drawStage(); rebuildFilmstrip(); renderCorrectionQueue(); setStatus(payload.kind === PROJECT_KIND ? "Project v3 imported." : "Project v2 migrated to v3.", "success");
       } catch (error) { setStatus(error.message, "error"); }
       event.target.value = "";
     });
@@ -1293,16 +1293,16 @@
       await importVariant(event.target.files[0], "imagegen-return");
       event.target.value = "";
     });
-    $("#clearReplacement").addEventListener("click", () => { if (activeVariantIds[frame] === "original") return; recordHistory(); activeVariantIds[frame] = "original"; selectedVariantId = "original"; syncFrameOverrides(frame); invalidateFrameGates(frame, "returned to original"); markDirty(); saveProject(); drawStage(); refreshThumbnail(frame); updateInspector(); updateFilmstripState(); setStatus(`F${frame + 1} volvió al original; sus variantes siguen disponibles.`, "success"); });
+    $("#clearReplacement").addEventListener("click", () => { if (activeVariantIds[frame] === "original") return; recordHistory(); activeVariantIds[frame] = "original"; selectedVariantId = "original"; syncFrameOverrides(frame); invalidateFrameGates(frame, "returned to original"); markDirty(); saveProject(); drawStage(); refreshThumbnail(frame); updateInspector(); updateFilmstripState(); setStatus(`F${frame + 1} returned to the original; its variants remain available.`, "success"); });
     $("#exportPacket").addEventListener("click", async () => {
       const previousIndex = (frame - 1 + frameCount) % frameCount; const nextIndex = (frame + 1) % frameCount;
       const contextSheet = document.createElement("canvas"); contextSheet.width = cellWidth * 5; contextSheet.height = cellHeight + 42; const context = contextSheet.getContext("2d");
       context.fillStyle = "#171714"; context.fillRect(0, 0, contextSheet.width, 42); context.font = "700 18px system-ui"; context.textAlign = "center"; context.fillStyle = "#fffdf8";
-      ["IDENTIDAD", "MECÁNICA", "ANTERIOR", "OBJETIVO", "SIGUIENTE"].forEach((label, index) => context.fillText(label, cellWidth * (index + .5), 27));
+      ["IDENTITY", "MECHANICS", "PREVIOUS", "TARGET", "NEXT"].forEach((label, index) => context.fillText(label, cellWidth * (index + .5), 27));
       function drawReferenceImage(referenceImage, column) {
         context.save(); context.translate(column * cellWidth, 42); context.fillStyle = "#f4f0e7"; context.fillRect(0, 0, cellWidth, cellHeight);
         if (referenceImage?.naturalWidth) { const ratio = Math.min(cellWidth / referenceImage.naturalWidth, cellHeight / referenceImage.naturalHeight) * .94; context.drawImage(referenceImage, (cellWidth - referenceImage.naturalWidth * ratio) / 2, (cellHeight - referenceImage.naturalHeight * ratio) / 2, referenceImage.naturalWidth * ratio, referenceImage.naturalHeight * ratio); }
-        else { context.fillStyle = "#6d6b63"; context.font = "700 16px system-ui"; context.fillText("REFERENCIA FALTANTE", cellWidth / 2, cellHeight / 2); }
+        else { context.fillStyle = "#6d6b63"; context.font = "700 16px system-ui"; context.fillText("MISSING REFERENCE", cellWidth / 2, cellHeight / 2); }
         context.restore();
       }
       drawReferenceImage(referenceImage("identity", frame), 0); drawReferenceImage(referenceImage("mechanics", frame), 1);
@@ -1313,12 +1313,12 @@
       downloadBlob(await canvasBlob(contextSheet), `${prefix}-context.png`);
       downloadBlob(new Blob([JSON.stringify(packet, null, 2) + "\n"], { type: "application/json" }), `${prefix}.json`);
       const job = correctionQueue.find(item => item.target_frame === frame + 1 && !["accepted", "rejected"].includes(item.status)); if (job) { job.status = "exported"; job.exported_at = new Date().toISOString(); saveProject(); renderCorrectionQueue(); updateFilmstripState(); }
-      setStatus(`Paquete contextual de frame ${frame + 1} exportado.`, "success");
+      setStatus(`Context packet for frame ${frame + 1} exported.`, "success");
     });
     $("#exportPng").addEventListener("click", () => {
       const { columns, rows } = settings(); const output = document.createElement("canvas"); output.width = cellWidth * columns; output.height = cellHeight * rows; const context = output.getContext("2d");
       for (let index = 0; index < frameCount; index += 1) { const column = index % columns; const row = Math.floor(index / columns); context.save(); context.translate(column * cellWidth, row * cellHeight); context.beginPath(); context.rect(0, 0, cellWidth, cellHeight); context.clip(); drawSourceFrame(context, index, transforms[index], 1); context.restore(); }
-      output.toBlob(blob => { if (!blob) return setStatus("El navegador no pudo exportar el PNG.", "error"); downloadBlob(blob, "sideview-walk-corrected.png"); setStatus("Sheet corregido exportado; conserva también el proyecto JSON.", "success"); }, "image/png");
+      output.toBlob(blob => { if (!blob) return setStatus("The browser could not export the PNG.", "error"); downloadBlob(blob, "sideview-walk-corrected.png"); setStatus("Corrected sheet exported; keep the project JSON as well.", "success"); }, "image/png");
     });
 
     document.addEventListener("keydown", event => {

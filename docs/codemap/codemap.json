@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-12T06:50:40Z",
-  "generated_from_commit": "b45014658172ac954352d532ad1a5bcd55de4c7e",
+  "generated_at": "2026-08-15T09:31:48Z",
+  "generated_from_commit": "88f84eed8e9b9a65a3c3f822dc847696bc45987a",
   "scope": [
     "."
   ],
@@ -35,7 +35,7 @@
       "type": "module",
       "boundary": "Repository",
       "entrypoints": [
-        "README.md:Spritesheet Expert"
+        "README.md:Review evidence"
       ],
       "tests": [],
       "constraints": [
@@ -46,7 +46,7 @@
         "locations": [
           {
             "path": "README.md",
-            "symbol": "Spritesheet Expert"
+            "symbol": "Review evidence"
           }
         ]
       }
@@ -148,15 +148,15 @@
         "locations": [
           {
             "path": "README.md",
+            "symbol": "./SKILLS/README.md"
+          },
+          {
+            "path": "README.md",
             "symbol": "./SKILLS/spritesheet-expert/SKILL.md"
           },
           {
             "path": "README.md",
             "symbol": "./SKILLS/spritesheet-expert/agents/openai.yaml"
-          },
-          {
-            "path": "README.md",
-            "symbol": "./SKILLS/README.md"
           },
           {
             "path": "README.md",
