@@ -2,11 +2,11 @@
 
 ## Background Removal
 
-New isolated still generation first requests clean provider-native transparency. The prompt requires a fully transparent exterior, clean semitransparent edges, no floor plane, backdrop, cast shadow, halo, matte fringe, or cross-slot bleed. Accept native alpha only after pixel and visual checks pass.
+New isolated stills first request clean provider-native transparency: fully transparent exterior, clean semitransparent edges, no floor plane, backdrop, cast shadow, halo, matte fringe, or cross-slot bleed. Accept native alpha only after pixel and visual checks pass.
 
-If native alpha is absent or invalid, use one perfectly flat neutral background: gray `#808080`, black `#000000`, or white `#FFFFFF`. New sprite component runs use black as the no-reference fallback for the Lucida lane. `prepare_sprite_run.py` chooses the neutral color with the greatest contrast when an accepted reference exists. Other asset modes keep gray as the no-reference fallback. The fallback prompt forbids gradients, texture, vignettes, floor planes, cast shadows, and background lighting variation. It does not ban black, gray, or white from the subject palette.
+If native alpha is absent or invalid, use one perfectly flat neutral background: gray `#808080`, black `#000000`, or white `#FFFFFF`. New sprite component runs use black as the no-reference Lucida fallback. `prepare_sprite_run.py` chooses the highest-contrast neutral when an accepted reference exists. Other asset modes keep gray as the no-reference fallback. The fallback prompt forbids gradients, texture, vignettes, floor planes, cast shadows, and background lighting variation. It does not ban black, gray, or white from the subject palette.
 
-New sprite component runs use verified provider alpha when available. Otherwise, they use `lucida` plus `grid_segmentation: adaptive`. Read `lucida-adaptive-workflow.md` for the pinned model, alpha policy, variable source boxes, and review gates.
+New sprite component runs use verified provider alpha when available. Otherwise `lucida` plus `grid_segmentation: adaptive`. Read `lucida-adaptive-workflow.md` for the pinned model, alpha policy, variable source boxes, and review gates.
 
 Other asset modes keep `auto`:
 
@@ -17,19 +17,19 @@ Other asset modes keep `auto`:
 
 The matte flood-fill touches only edge-connected palette regions, so neutral clothing, outlines, highlights, inner holes, and props are not erased globally. Ambiguous, dirty, anti-aliased, photographic, or breathing video backgrounds should reach BiRefNet. Model-backed removal is still evidence to review, not an excuse to accept a busy source: if it clips hair, fur, spikes, limbs, outlines, clothing, props, tile edges, or interiors, regenerate a cleaner neutral source or compare a different model.
 
-Chroma is legacy-import compatibility only. A legacy request must declare `background_removal.source_family: legacy-chroma` or select `background_removal.method: chroma` explicitly in the import/unpack path. New preparation rejects chroma generation and never auto-selects the chroma branch for neutral sources. Legacy chroma still uses a border-connected soft matte/despill; keep `check_chroma_key_safety.py`, `rekey_chroma_background.py`, and `check_visible_magenta.py` only for those old sources.
+Chroma is legacy-import only. A legacy request must declare `background_removal.source_family: legacy-chroma` or select `background_removal.method: chroma` explicitly in the import/unpack path. New preparation rejects chroma generation and never auto-selects chroma for neutral sources. Legacy chroma still uses a border-connected soft matte/despill; keep `check_chroma_key_safety.py`, `rekey_chroma_background.py`, and `check_visible_magenta.py` only for those old sources.
 
 Do not run chroma cleanup after `rembg` on neutral sources. `post_rembg_chroma_cleanup` is valid only for declared `legacy-chroma` media; applying it to neutral art can erase legitimate subject pixels.
 
-Recommended local model stack:
+Local model stack:
 
-- `lucida` + `egeorcun/lucida` at the pinned revision: preferred for new character and creature grids, illustration, line art, glow, and soft effects. Pixel art uses hard alpha threshold `64`. Illustrated art keeps soft alpha.
+- `lucida` + `egeorcun/lucida` at the pinned revision: preferred for new character and creature grids, illustration, line art, glow, and soft effects. Pixel art: hard alpha threshold `64`. Illustrated art keeps soft alpha.
 - `rembg` + `birefnet-general`: quality default.
 - `rembg` + `birefnet-general-lite`: explicit speed option for iteration.
 - `rembg` + `birefnet-dis` or `birefnet-hrsod`: hard silhouettes, high-resolution objects, or irregular source sheets where general-lite leaves background.
 - `rembg` + `isnet-anime`: anime/cel character rows when BiRefNet clips linework.
-- `ben2` + `PramaLLC/BEN2`: optional higher-quality local matting/refinement path for hair, fur, spikes, painterly edges, 4K-ish inputs, dirty generated backgrounds, and imported irregular sheets. It is heavier than rembg and needs PyTorch.
-- `bria-rmbg` / BRIA RMBG 2.0: strong quality candidate, but the publicly available weights are non-commercial and production/commercial use needs a BRIA agreement/API. Do not make it a silent default.
+- `ben2` + `PramaLLC/BEN2`: optional higher-quality local matting for hair, fur, spikes, painterly edges, 4K-ish inputs, dirty generated backgrounds, and imported irregular sheets. Heavier than rembg; needs PyTorch.
+- `bria-rmbg` / BRIA RMBG 2.0: strong quality candidate, but publicly available weights are non-commercial and production/commercial use needs a BRIA agreement/API. Do not make it a silent default.
 
 Install only when needed:
 
@@ -55,25 +55,17 @@ python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id hero --re
 python scripts/extract_sprite_row_frames.py --run-dir /abs/run --background-device auto
 ```
 
-`extract_sprite_row_frames.py` reads the request. New sprite component requests preserve verified provider alpha. If alpha is absent or invalid, they use the pinned Lucida model and adaptive grid segmentation. Other requests keep `auto`: existing alpha first, edge-connected matte for simple flat neutral borders, and `rembg` for ambiguous backgrounds. The chroma branch runs only for `source_family: legacy-chroma`. Missing model dependencies fail clearly instead of silently using bad alpha. Review `frames/frames-manifest.json.background_removal`, `rows[*].segmentation.spans`, and `qa/<state>-adaptive-segmentation.png`.
+`extract_sprite_row_frames.py` reads the request. Missing model dependencies fail clearly instead of silently using bad alpha. Review `frames/frames-manifest.json.background_removal`, `rows[*].segmentation.spans`, and `qa/<state>-adaptive-segmentation.png`.
 
 `ben2` is never selected silently by `auto`; choose it explicitly for final/high-risk cutouts after a BiRefNet pass fails visual QA. It writes `background_method: ben2` into manifests and uses `background_removal.device` (`auto`, `cpu`, `cuda`, `cuda:0`, etc.) so slow CPU cutouts are not mistaken for a broken pipeline.
 
 Every extraction writes `qa/background-matte-review.png`. Review raw source, checker, black, gray, white, and alpha-mask panels before judging atlas quality. The six surfaces should preserve outline pixels, interior holes, props, hair/fur/spikes, and tiny limbs without background residue.
 
-For imported whole sheets, `unpack_atlas_run.py` defaults to background-removal
-`auto` when using alpha auto-detect. It writes `qa/preprocessed-atlas-alpha.png`,
-`qa/segmentation-overlay.png`, and `qa/segmentation-report.json` so cuts can be
-reviewed before registration/composition. Auto-detect boxes are diagnostic: they
-are not a production layout source for irregular imagegen sheets unless a human
-reviews and converts them into a trusted manifest, explicit grid, or authored
-boxes. Use `--background-removal none` only for trusted alpha, manifest, or
-exact-grid sheets.
+For imported whole sheets, `unpack_atlas_run.py` defaults to background-removal `auto` when using alpha auto-detect. It writes `qa/preprocessed-atlas-alpha.png`, `qa/segmentation-overlay.png`, and `qa/segmentation-report.json` so cuts can be reviewed before registration/composition. Auto-detect boxes are diagnostic: not a production layout source for irregular imagegen sheets unless a human reviews and converts them into a trusted manifest, explicit grid, or authored boxes. Use `--background-removal none` only for trusted alpha, manifest, or exact-grid sheets.
 
 ## Generation Provenance
 
-Generated production art must be backed by `$imagegen` or an explicitly selected
-`$grok-imagine` invocation. Procedural/PIL drawing is only a fixture path.
+Generated production art must be backed by `$imagegen` or an explicitly selected `$grok-imagine` invocation. Procedural/PIL drawing is fixture-only.
 
 Record accepted source art before extraction:
 
@@ -126,7 +118,7 @@ Do not invent hashes or reuse this example literally. The executable source-inta
 
 ## Style Presets
 
-Default style is `pixel-art`. Pixel art is optional: choose a different style when the user asks for realistic, illustrated, painterly, anime, vector-like, custom sprites, or custom asset art.
+Default style is `pixel-art`. Choose a different style when the user asks for realistic, illustrated, painterly, anime, vector-like, custom sprites, or custom asset art.
 
 Built-ins:
 
@@ -142,26 +134,15 @@ Keep atlas constraints stable: one row per state or asset group, native transpar
 
 Sprites use `asset_kind: sprite` and component extraction. Tiles, textures, icons, props, VFX, and full-cell assets use `asset_kind` plus `extraction_mode: slots` so full-cell art does not depend on connected-component detection.
 
-Raw generation shape is not the same as final delivery shape. Animated body
-rows default to compact raw grids recorded in `states.<state>.raw_layout`
-because long `1xN` imagegen strips drift, touch, and crop more often. The final
-runtime atlas remains `manifest.json.frame_layout` rows after deterministic
-composition. Use legacy raw strips only for explicit compatibility or low-risk
-fixture work.
+Raw generation shape is not final delivery shape. Animated body rows default to compact raw grids in `states.<state>.raw_layout` because long `1xN` imagegen strips drift, touch, and crop more often. The final runtime atlas remains `manifest.json.frame_layout` rows after deterministic composition. Use legacy raw strips only for explicit compatibility or low-risk fixture work.
 
 ## Pixel-Art Direction Profiles And Workflows
 
-Pixel-art presets default to `art_direction.mode: pixel-art`. The profile and
-workflow system is a production rubric distilled from the local pixel-art
-workflow corpus supplied by the user; it is not a request to copy a specific
-artist or name a style after one source.
+Pixel-art presets default to `art_direction.mode: pixel-art`. Profile/workflow is a production rubric from the user's local pixel-art corpus — not a request to copy a specific artist or name a style after one source.
 
 Use `references/pixel-art-direction.md` for profile definitions, QA, and repair order.
-Use `references/pixel-animation-workflows.md` for row phase contracts such as
-locomotion, combat, jump, top-down attacks, VFX, water, wind, pickups, and tiny
-motion.
-Use `references/isometric-tilesets.md` for 2:1 isometric terrain, decor, props,
-buildings, pivots, edge/corner roles, and runtime map/depth proof.
+Use `references/pixel-animation-workflows.md` for row phase contracts: locomotion, combat, jump, top-down attacks, VFX, water, wind, pickups, tiny motion.
+Use `references/isometric-tilesets.md` for 2:1 isometric terrain, decor, props, buildings, pivots, edge/corner roles, and runtime map/depth proof.
 
 Request shape:
 
@@ -175,23 +156,20 @@ Request shape:
 }
 ```
 
-`auto` infers profiles per row. Explicit profiles are useful when a custom row needs stronger direction:
+`auto` infers profiles per row. Explicit profiles when a custom row needs stronger direction:
 
 ```bash
 python scripts/preset_to_request.py custom-atlas --art-profile pixel-combat --out /abs/run/request.json --states-file /abs/run/states.json
 python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id hero --request /abs/run/request.json --force
 ```
 
-Preparation writes `references/art-direction.json`, which records active
-profiles, animation workflows, and source article groups per row. Review it
-before generation. Disable only for conflicting non-pixel styles:
+Preparation writes `references/art-direction.json` (active profiles, animation workflows, and source article groups per row). Review before generation. Disable only for conflicting non-pixel styles:
 
 ```bash
 python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id hero --request /abs/run/request.json --art-direction none --force
 ```
 
-When auto inference is wrong for a custom row, add explicit workflows in the
-request:
+When auto inference is wrong for a custom row, add explicit workflows in the request:
 
 ```json
 {
@@ -206,19 +184,19 @@ request:
 - `scripts/prepare_motion_template_library.py`: regenerate the five canonical view prompts from the template catalog; it does not draw or approve bitmap art.
 - `scripts/check_motion_references.py`: fail closed before locomotion row generation unless every required neutral mannequin is a valid 512px-or-larger image with adjacent `art_engine=imagegen` provenance.
 - `scripts/promote_identity_anchor.py`: turn the first accepted generated idle/neutral frame into `references/identity-anchor.png`.
-- `scripts/extract_sprite_row_frames.py`: remove Lucida/chroma/rembg/BEN2 background, extract compact raw grids with fixed or adaptive bounds, normalize sprite pose scale/baseline, and write transparent cell frames.
+- `scripts/extract_sprite_row_frames.py`: Lucida/chroma/rembg/BEN2 removal; extract compact raw grids (fixed or adaptive bounds); normalize pose scale/baseline; write transparent cell frames.
 - `scripts/register_sprite_frames.py`: align extracted/imported frames to a stable runtime pivot before atlas composition; use after unpacking whole-sheet candidates whose sprites drift inside cells.
 - `scripts/compose_sprite_atlas.py`: bake atlas and runtime `manifest.json.frame_layout`.
-- `scripts/preview_animation.py`: write contact sheets and GIF previews under `qa/`.
-- `scripts/build_preview_workbench.py`: write the self-contained, hash-bound interactive review surface under `qa/preview-workbench/`.
+- `scripts/preview_animation.py`: contact sheets and GIF previews under `qa/`.
+- `scripts/build_preview_workbench.py`: self-contained, hash-bound interactive review under `qa/preview-workbench/`.
 - `scripts/prepare_grok_video_animation.py`: bind one exact first frame to a dry-run-first `$grok-imagine video-from-image` job.
 - `scripts/ingest_grok_video_animation.py`: validate completed Grok media, decode/sample video deterministically, preserve frame 1, write the normal raw grid and provider provenance.
-- `scripts/ingest_video_animation.py`: ingest an existing animation video, rank candidate sequences, copy source media, and write imported provenance.
-- `scripts/build_video_frame_selector.py`: build the required minimal editor from all decoded frames and write hash-bound selector evidence.
+- `scripts/ingest_video_animation.py`: ingest an existing animation video, rank candidate sequences, copy source media, write imported provenance.
+- `scripts/build_video_frame_selector.py`: required minimal editor from all decoded frames; write hash-bound selector evidence.
 - `scripts/check_frame_alignment.py`: real-frame onion-skin QA for baseline/root alignment, jump takeoff/landing closure, fall/knockdown settlement, bboxes, and alpha centers.
 - `scripts/check_identity_consistency.py`: head/upper-body/area proxy QA so identity scale drift cannot pass as animation.
 - `scripts/serve_curation.py`: local curation webview; selection + move/scale/rotate/shear saved in `curation.json`.
-- `scripts/unpack_atlas_run.py`: rebuild curator-ready run from existing atlas, manifest, grid, projection-grid repair, authored boxes, or loose PNG folder; for visual auto-detect/projection it can matte the sheet first and writes segmentation QA.
+- `scripts/unpack_atlas_run.py`: rebuild curator-ready run from existing atlas, manifest, grid, projection-grid repair, authored boxes, or loose PNG folder; visual auto-detect/projection can matte first and writes segmentation QA.
 - `scripts/export_curated_pngs.py`: export curated still PNGs from imported/candidate sets.
 - `scripts/compose_selected_cycle.py`: record human-picked frame order for partial locomotion wins.
 - `scripts/compose_sprite_gif.py`: export clean transparent GIFs.
@@ -228,7 +206,7 @@ request:
 - `scripts/rekey_chroma_background.py`: replace or normalize a border-connected generated key background before extraction.
 - `scripts/check_animation_contracts.py`: generic animation workflow QA for locomotion, combat, jumps, reactions, VFX, water, wind, pickups, idles, and tiny sprites.
 - `scripts/check_motion_variation.py`: heuristic locomotion QA for frozen legs/body-part positions.
-- `scripts/check_asset_slots.py`: still/tileset/texture slot QA for labels, catalog metadata, pivots, clipping, per-item `repeat_mode`, numeric self-repeat edge coverage/error, labeled per-item 3x3 previews, and role-aware adjacency assembly. Overlay mode remains an explicit isolation-review obligation.
+- `scripts/check_asset_slots.py`: still/tileset/texture slot QA: labels, catalog metadata, pivots, clipping, per-item `repeat_mode`, numeric self-repeat edge coverage/error, labeled per-item 3x3 previews, role-aware adjacency assembly. Overlay mode is an explicit isolation-review obligation.
 - `scripts/check_isometric_tiles.py`: isometric tileset QA for 2:1 footprint, runtime cell, pivots, edge/corner roles, map composition, depth-sort previews, calibrated runtime metadata, and candidate catalog fixes.
 - `scripts/smoke_pipeline.py`: tiny local smoke check.
 - `scripts/smoke_presets_from_reference.py`: run every preset through deterministic pipeline using a reference sheet.
@@ -267,15 +245,15 @@ Preset defaults are contracts. Override only when user explicitly asks, then rep
 
 Use `references/professional-sprite-animation.md` as the quality bar when generating, repairing, curating, or reviewing atlas work.
 
-For animated characters, every row must be judged on:
+Animated character rows:
 
 - key-pose clarity: setup/anticipation, action/contact/extreme, recovery/settle when the state needs it;
 - silhouette and line of action: pose readable at runtime size without labels, motion marks, or detached effects;
-- anatomy/body mechanics: grounded weight, center of mass, plausible joints, arcs, overlap/follow-through, and no accidental stiffness;
+- anatomy/body mechanics: grounded weight, center of mass, plausible joints, arcs, overlap/follow-through, no accidental stiffness;
 - identity and volume: face, head, upper body, hands, feet, outline weight, costume scale, and asymmetric details remain locked to the accepted anchor;
 - pivot/origin behavior: feet/baseline for grounded side-view sprites, airborne arc for jumps/falls, grid for tiles, emitter/contact point for VFX.
 
-For fighting-game or combat rows, require readable gameplay phases:
+Fighting-game or combat rows need readable gameplay phases:
 
 - idle/block: guard, balance, breathing/weight shift, stable combat stance;
 - walk/run: alternating contacts, passing poses, shoulder/hip counter-motion, loop seam;
@@ -283,12 +261,12 @@ For fighting-game or combat rows, require readable gameplay phases:
 - punch/kick/special: startup, active/contact, recovery, with the active frame as the strongest silhouette;
 - hitstun/knockdown/death: force direction, balance loss, overshoot/drag, and recovery/fall staging.
 
-For non-sprite asset modes:
+Non-sprite asset modes:
 
-- tilesets need exact grid fit, edge compatibility, readable collision surfaces, consistent projection, and no scene/collage output;
-- textures need seamless/tileable intent, flat material samples, consistent texel density, and no perspective hero objects;
-- props/icons need centered isolation, readable silhouette, scale hierarchy, and coherent set language;
-- VFX needs buildup/peak/decay frames, stable emitter anchor, alpha-friendly opacity, and no source-background residue.
+- tilesets: exact grid fit, edge compatibility, readable collision surfaces, consistent projection, no scene/collage output;
+- textures: seamless/tileable intent, flat material samples, consistent texel density, no perspective hero objects;
+- props/icons: centered isolation, readable silhouette, scale hierarchy, coherent set language;
+- VFX: buildup/peak/decay frames, stable emitter anchor, alpha-friendly opacity, no source-background residue.
 
 ## Frame Budget
 
