@@ -1,11 +1,11 @@
 ---
 name: produce-2d-assets
-description: "Coordinate and validate coherent multi-family 2D game asset packs. Use when one delivery spans two or more of sprites, static props, backgrounds, UI, and mockups and must reconcile Imagegen/Grok/imported provenance, representative proof, style, variants, owners, and release manifests."
+description: "Multi-family 2D asset packs: coordinate and validate when one delivery spans two or more of sprites, static props, backgrounds, UI, and mockups; reconcile Imagegen/Grok/imported provenance, representative proof, style, variants, owners, release manifests."
 ---
 
 # Produce 2D Assets
 
-Coordinate multiple asset families through their owning skills, then validate one portable delivery pack. For a single family, use its leaf skill directly.
+Coordinate asset families through owning skills, then validate one portable delivery pack. Single family: use its leaf skill.
 
 ## Route By Asset Family
 
@@ -15,25 +15,25 @@ Coordinate multiple asset families through their owning skills, then validate on
 - Raster controls, HUD components, states, densities, and nine-slice assets: `$build-game-ui-kits`.
 - Contact sheets, store art, review boards, and reconstructed gameplay presentations: `$compose-asset-mockups`.
 
-Do not delegate merely because multiple skills exist. Execute directly when the work is small and local; use separate workers only when parallel asset ownership adds value. Keep one owner for every file and one final coordinator for style and delivery reconciliation.
+Delegate only when parallel ownership adds value, not because multiple skills exist. Small local work: execute directly. One owner per file; one coordinator for style and delivery.
 
 ## Workflow
 
 1. Freeze the cross-family contract.
-   - Define pack id, owners, style bible, inventory, variant matrix, delivery targets, dependencies, and acceptance proof.
-   - Reuse one style fingerprint across participating families. Make allowed differences explicit instead of letting families drift.
-   - Record the selected semantic provider per generated family: `$imagegen` is the still default; `$grok-imagine` is explicit and paid runs require reviewed dry-run plus current-task acknowledgement. Grok video-to-frames belongs to `$spritesheet-expert`.
+   - Pack id, owners, style bible, inventory, variant matrix, delivery targets, dependencies, acceptance proof.
+   - One style fingerprint across families. State allowed differences; do not let families drift.
+   - Semantic provider per generated family: `$imagegen` still default; `$grok-imagine` explicit; paid runs need reviewed dry-run plus current-task acknowledgement. Grok video-to-frames → `$spritesheet-expert`.
 
 2. Produce each family through its owner.
-   - Require real source provenance, licenses, portable paths, current hashes, and the leaf skill's deterministic report/proof.
-   - Require `evidence.production_media` from every production leaf with `representative: true`, `provenance_verified: true`, and explicit `source_types`. Imagegen/Grok/imported sources remain distinct; fixtures, placeholders, deterministic drawings, and legacy-unverified media cannot satisfy a production family.
-   - For isolated sprites, props, and UI use neutral gray/black/white source backgrounds and reviewed model-backed removal when matte removal is ambiguous. Full-bleed backgrounds retain authored scene pixels.
-   - Keep a dependency blocked until its upstream report passes. Do not create placeholder deliverables to make the aggregate green.
-   - When a provider result fails identity, anatomy, semantics, repeat behavior, or edge quality, retry that provider route. Deterministic code may extract, align, compose, preview, and validate; it may not replace the failed semantic art.
+   - Real source provenance, licenses, portable paths, current hashes, leaf skill deterministic report/proof.
+   - `evidence.production_media` on every production leaf: `representative: true`, `provenance_verified: true`, explicit `source_types`. Imagegen/Grok/imported stay distinct. Fixtures, placeholders, deterministic drawings, legacy-unverified media cannot satisfy a production family.
+   - Isolated sprites, props, UI: gray/black/white source backgrounds; reviewed model-backed removal when matte removal is ambiguous. Full-bleed backgrounds keep authored scene pixels.
+   - Block a dependency until its upstream report passes. No placeholder deliverables to green the aggregate.
+   - Provider fails identity, anatomy, semantics, repeat behavior, or edge quality: retry that route. Deterministic code may extract, align, compose, preview, validate — not replace failed semantic art.
 
 3. Write `asset-pack.json` against the schemas under `references/schemas/`.
    - Require `schema_version`, `pack_id`, `owners`, `style_bible`, `inventory`, `variant_matrix`, and `delivery_manifest`.
-   - Pin every deliverable and leaf validation report. Declare required variants and presentation status explicitly.
+   - Pin every deliverable and leaf validation report. Declare required variants and presentation status.
 
 4. Validate the whole delivery.
 
@@ -41,16 +41,16 @@ Do not delegate merely because multiple skills exist. Execute directly when the 
 python scripts/validate_asset_pack.py --pack <pack-root>/asset-pack.json --pack-root <pack-root>
 ```
 
-The command writes `validation/asset-pack-validation-report.json`. Exit `0` passes, `1` means contract failure, `2` means a real dependency remains blocked, and `3` means an operational failure. From the installed skill directory run `python -m pip install -r requirements-runtime.txt` when needed.
+Writes `validation/asset-pack-validation-report.json`. Exit `0` pass, `1` contract failure, `2` real dependency still blocked, `3` operational failure. Installed skill directory: `python -m pip install -r requirements-runtime.txt` when needed.
 
 5. Reconcile the real pack.
-   - Inspect the family proof artifacts together for scale, palette, camera, density, naming, variants, ownership, licensing, and presentation truth.
-   - Inspect the right proof for each claim: animation playback/onion/contact evidence, background composite plus scroll, UI state plus stretch boards, static contact/alpha proof, and truth-labelled mockups. A single contact sheet cannot certify all families.
-   - Run the aggregate validator again after any leaf changes; stale leaf reports must fail.
+   - Inspect family proof together: scale, palette, camera, density, naming, variants, ownership, licensing, presentation truth.
+   - Right proof per claim: animation playback/onion/contact, background composite plus scroll, UI state plus stretch boards, static contact/alpha, truth-labelled mockups. One contact sheet cannot certify all families.
+   - Re-run aggregate validator after leaf changes; stale leaf reports must fail.
 
 ## Completion Contract
 
-Finish only when every required leaf report is current and passing, every required variant and deliverable exists with matching hashes, the presentation is passed or deliberately absent, paths are portable, and the aggregate report exits zero.
+Done when every required leaf report is current and passing, every required variant and deliverable exists with matching hashes, presentation is passed or deliberately absent, paths are portable, and aggregate report exits zero.
 
 ## Resources
 

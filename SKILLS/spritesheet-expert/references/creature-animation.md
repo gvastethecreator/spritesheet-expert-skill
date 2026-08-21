@@ -1,6 +1,6 @@
 # Creature Animation Contract
 
-Use this reference for non-human creatures, frontal retro-FPS enemies, compact `2x2` cycles, and anatomy-specific registration.
+For non-human creatures, frontal retro-FPS enemies, compact `2x2` cycles, and anatomy-specific registration.
 
 ## Request Contract
 
@@ -29,8 +29,8 @@ Use `screen_side_labels: true` for frontal work. Name the advancing screen-side 
 
 | Anatomy | Movement source | Stable anchor | Reject |
 | --- | --- | --- | --- |
-| Biped | Complete alternating steps and opposite arm swing | `body-bottom` or `footprint` | Knee-only motion, repeated lead foot, torso flattening |
-| Quadruped | Declared support groups and weight transfer | `footprint` or `body-bottom` | Side sway, mirrored two-leg pose |
+| Biped | Full alternating steps + opposite arm swing | `body-bottom` or `footprint` | Knee-only motion, repeated lead foot, torso flattening |
+| Quadruped | Declared support groups + weight transfer | `footprint` or `body-bottom` | Side sway, mirrored two-leg pose |
 | Multi-legged | Declared diagonal or alternating leg groups | `body-bottom` | One moving leg, one moving side, alignment from a leg tip |
 | Winged | Coordinated bilateral wing phases | `center` | One-wing alternation, static wings, body shrink |
 | Hovering | Shroud, tendrils, vapor, or lower-body pulse | `center` | Terrestrial steps, whole-body side sway |
@@ -40,21 +40,19 @@ Use `screen_side_labels: true` for frontal work. Name the advancing screen-side 
 
 ## Compact Four-Frame Cycles
 
-Use one coherent `2x2` Imagegen sheet for each state.
+One coherent `2x2` Imagegen sheet per state.
 
 - Movement: exact idle, phase A, exact idle, phase B.
 - Attack: exact idle, anticipation, active contact, exact idle.
-- Make phases A and B mechanically different. Do not mirror one static pose.
-- Copy the accepted idle pixels into each neutral slot before final registration.
+- Phases A and B must be mechanically different. Do not mirror one static pose.
+- Copy accepted idle pixels into each neutral slot before final registration.
 - Keep the body at one camera scale. Perspective can enlarge only the part that approaches the viewer.
 
-Generate complete active sprites separately only after a whole-sheet attempt repeatedly changes identity.
-
-Record the reason. Never paste a local limb or body-part patch that creates a visible seam.
+Generate complete active sprites separately only after a whole-sheet attempt repeatedly changes identity. Record the reason. Never paste a local limb or body-part patch that creates a visible seam.
 
 ## Video Prompt Contract
 
-For first-frame-to-video work, the provider prompt must say all of these before inference:
+First-frame-to-video: provider prompt must include all of these before inference:
 
 - exact creature anatomy and locomotion family;
 - the only allowed movement or attack driver from `creature_motion`;
@@ -68,15 +66,13 @@ Reject missing `movement_source` for locomotion and missing `attack_source` for 
 
 ## Attack Design
 
-Select the weapon before generation. Use teeth, jaws, horns, head, claws, wings, forelimbs, tendrils, body mass, or held weapons when appropriate.
+Select the weapon before generation: teeth, jaws, horns, head, claws, wings, forelimbs, tendrils, body mass, or held weapons when appropriate.
 
-Do not default every creature to a right-hand strike. A simple animation remains distinct when anticipation and contact use creature-specific anatomy.
+Do not default every creature to a right-hand strike. Anticipation and contact must use creature-specific anatomy.
 
 ## Background And Segmentation
 
-Use black by default for creature grids. Use gray or white when the creature loses contrast against black.
-
-White-eyed or shadow creatures often need neutral gray.
+Black by default for creature grids. Gray or white when the creature loses contrast against black. White-eyed or shadow creatures often need neutral gray.
 
 Run Lucida before adaptive segmentation. Review variable source boxes before registration. A fixed `2x2` layout defines frame order, not one fixed crop size.
 
@@ -84,16 +80,16 @@ Run Lucida before adaptive segmentation. Review variable source boxes before reg
 
 Read the runtime cell and pivot from the game. Do not infer them from the generated sheet.
 
-- Use `bbox-bottom` only for a stable lowest contact.
-- Use `body-bottom` when feet, claws, or appendages change their lowest extent.
-- Use `center` for hovering or winged bodies with a stable core.
-- Use `footprint` when the ground-contact area is the gameplay anchor.
+- `bbox-bottom` only for a stable lowest contact.
+- `body-bottom` when feet, claws, or appendages change their lowest extent.
+- `center` for hovering or winged bodies with a stable core.
+- `footprint` when the ground-contact area is the gameplay anchor.
 
 Inspect `qa/registration-overlay.png` and each onion sheet. Correct body drift. Do not remove intentional attack or step motion.
 
 ## QA Protocol
 
-Review these artifacts before approval:
+Review before approval:
 
 - Matte board and adaptive segmentation.
 - Contact sheet in chronological order.
@@ -103,10 +99,8 @@ Review these artifacts before approval:
 
 Identity proxies can include raised arms, wings, or weapons inside a head or torso band.
 
-Keep the standard failure report. If visual evidence proves stable identity, run a pose-aware comparison and record its thresholds.
-
-Do not widen thresholds to hide visible scale drift.
+Keep the standard failure report. If visual evidence proves stable identity, run a pose-aware comparison and record its thresholds. Do not widen thresholds to hide visible scale drift.
 
 Record every rejection and accepted run in a creature decision ledger. Read that entry before another regeneration.
 
-For video-derived rows, review the whole video first, then all decoded frames, several candidate sequences, and the final selected frames at full source size. Run Lucida only after those semantic checks pass.
+Video-derived rows: review the whole video first, then all decoded frames, several candidate sequences, and the final selected frames at full source size. Run Lucida only after those semantic checks pass.

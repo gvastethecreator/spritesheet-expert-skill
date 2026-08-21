@@ -1,7 +1,6 @@
 # Isometric Tileset Workflow
 
-Use this when the output is an isometric terrain sheet, object/decor sheet,
-building set, or mixed environment atlas.
+For isometric terrain, object/decor, building, or mixed environment atlases.
 
 ## Contract First
 
@@ -22,15 +21,11 @@ Declare the engine grid before generation:
 }
 ```
 
-- `tile.width` and `tile.height` are the logical diamond footprint, normally 2:1.
-- `runtimeCell` is the rectangular atlas slot. It may be taller than the diamond
-  so sides, cliffs, props, and shadows can extend below/above the floor.
-- `runtimeCell` must match `request.cell`. `prepare_sprite_run.py` blocks
-  isometric generation when these disagree.
-- Each slot needs a `pivot` at the floor/contact point. Do not use the image
-  center unless it is also the runtime contact point.
-- Rectangular slicing is allowed; rectangular placement is not. Runtime placement
-  uses the pivot plus the 2:1 footprint.
+- `tile.width` / `tile.height`: logical diamond footprint, normally 2:1.
+- `runtimeCell`: rectangular atlas slot; may be taller than the diamond so sides, cliffs, props, and shadows can extend below/above the floor.
+- `runtimeCell` must match `request.cell`. `prepare_sprite_run.py` blocks isometric generation when these disagree.
+- Each slot needs a `pivot` at the floor/contact point. Do not use the image center unless it is also the runtime contact point.
+- Rectangular slicing is allowed; rectangular placement is not. Runtime placement uses the pivot plus the 2:1 footprint.
 
 ## Required Catalog
 
@@ -55,8 +50,7 @@ Minimum terrain roles:
 - `tile_role=transition/detail/hazard/water/bridge`: optional overlays and gameplay surfaces.
 - `collision`: `walkable`, `blocked`, `ledge`, `slow`, `damage`, or project vocabulary.
 
-For props/decor, use `asset_kind: asset`, `collision`, `category`, and `pivot`.
-Props should be cut as isolated objects, not as scene fragments.
+For props/decor, use `asset_kind: asset`, `collision`, `category`, and `pivot`. Cut props as isolated objects, not scene fragments.
 
 ## Generation Direction
 
@@ -72,22 +66,20 @@ Prompt constraints:
 - transparent or simple matte background;
 - no scene background, labels, shadows crossing slot borders, or overlapping slots;
 - all tiles on the same 2:1 isometric grid;
-- follow the generated layout guide's diamond and floor/contact pivot as
-  placement guides only; never draw the guide marks into final art;
+- follow the generated layout guide's diamond and floor/contact pivot as placement guides only; never draw the guide marks into final art;
 - consistent light direction and scale;
 - diamond floor footprint visible or inferable;
 - enough padding for tall/side geometry inside `runtimeCell`.
 
 ## Slicing Rules
 
-Production slicing must use one of:
+Production slicing — one of:
 
 - exact grid where source width/height divide by rows/columns with no remainder;
 - trusted manifest rectangles;
 - authored boxes from manual review.
 
-Auto-detect is diagnostic only. If generated dimensions do not divide the grid,
-crop/resize/regenerate or author boxes before approval.
+Auto-detect is diagnostic only. If generated dimensions do not divide the grid, crop/resize/regenerate or author boxes before approval.
 
 ## QA Gates
 
@@ -122,12 +114,12 @@ Hard failures:
 - pivots outside the cell or placed away from the floor/contact point;
 - missing base/edge/corner roles for terrain;
 - props touching/crossing slot borders;
-- white/key/matte edge artifacts visible after background removal.
+- white/key/matte edge artifacts visible after background removal;
 - prototype/runtime ignores calibrated metadata and positions cells by rectangular top-lefts, image centers, or stale requested footprint.
 
 ## Runtime Rules
 
-Use an editor-style row/column model:
+Editor-style row/column model:
 
 ```text
 center_x = origin_x + (col - row) * tile_width / 2
@@ -137,10 +129,7 @@ draw_x = center_x - pivot_x
 draw_y = object_anchor_y - pivot_y
 ```
 
-Floor-grid diamonds are centered at `center_x, center_y`. Sprites, props, and
-extruded terrain chunks are anchored at the bottom/contact point, which is the
-bottom point of the diamond (`center_y + tile_height / 2`). This avoids the
-common bug where a rectangular sprite cell is placed by top-left or image center.
+Floor-grid diamonds are centered at `center_x, center_y`. Sprites, props, and extruded terrain chunks are anchored at the diamond's bottom/contact point (`center_y + tile_height / 2`). Do not place a rectangular sprite cell by top-left or image center.
 
 Draw in stable depth order:
 
@@ -149,28 +138,20 @@ depth = row + col + z_offset
 tie_breakers = base row/col depth, then creation/source order
 ```
 
-Tall props and characters share the same ground-contact sorting rule. If the
-prototype places rectangles by top-left cell coordinates, the isometric review
-is invalid.
+Tall props and characters share the same ground-contact sorting rule. Prototype placement by top-left cell coordinates invalidates isometric review.
 
-When importing generated art, first calibrate the real grid from extracted
-frames. The intended catalog may say `128x64`, but if alpha bboxes show a real
-footprint around `206x104`, the renderer and QA must use the calibrated
-footprint and block the stale catalog.
+When importing generated art, calibrate the real grid from extracted frames first. If the catalog says `128x64` but alpha bboxes show ~`206x104`, renderer and QA must use the calibrated footprint and block the stale catalog.
 
 `check_isometric_tiles.py` writes two handoff artifacts:
 
 - `qa/isometric-runtime-metadata.json`: runtime SSoT for prototype placement.
 - `qa/isometric-calibrated-catalog.json`: editable candidate catalog for manual approval.
 
-Use the runtime metadata in preview/prototype code immediately. For final atlas
-packaging, review the calibrated catalog visually, copy approved values into the
-source catalog, rerun unpack/compose/check, and require the isometric gate to
-pass. Do not silently accept inferred values as final authoring metadata.
+Use runtime metadata in preview/prototype code immediately. For final atlas packaging, review the calibrated catalog visually, copy approved values into the source catalog, rerun unpack/compose/check, and require the isometric gate to pass. Do not silently accept inferred values as final authoring metadata.
 
 ## Manual Review
 
-Manual review is required for every isometric tileset:
+Required for every isometric tileset:
 
 - check slot label against visual content;
 - check pivot against the floor/contact point;

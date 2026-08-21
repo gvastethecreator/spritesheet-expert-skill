@@ -1,11 +1,6 @@
 # Motion reference templates
 
-This catalog reserves five slots for approved Image Gen mannequin masters.
-The bundled manifest currently marks a slot `needs-imagegen` until a reviewed
-PNG, exact hash, and approval sidecar are promoted. An approved master is an
-8-frame `4x2` walk cycle. `prepare_sprite_run.py` derives 4- and 6-frame
-references by selecting protected phases, and mirrors right-facing masters for
-left-facing rows. It never redraws anatomy procedurally.
+Five slots for approved Image Gen mannequin masters. Manifest marks a slot `needs-imagegen` until reviewed PNG, exact hash, and approval sidecar are promoted. Approved master: 8-frame `4x2` walk cycle. `prepare_sprite_run.py` derives 4- and 6-frame refs from protected phases; mirrors right-facing masters for left-facing rows. Never redraws anatomy procedurally.
 
 Required master views:
 
@@ -15,23 +10,16 @@ Required master views:
 - three-quarter front right (left is mirrored);
 - three-quarter back right (left is mirrored).
 
-A template is reusable only when visual QA has passed and its manifest entry
-has `status: "approved"` plus the exact PNG `sha256`. Candidate or missing
-assets are ignored, causing the run to emit a generate-once prompt instead.
+Reusable after visual QA and manifest `status: "approved"` plus exact PNG `sha256`. Candidate or missing assets are ignored; run emits a generate-once prompt.
 
-Generated attempts belong in an explicit run or maintainer workspace outside
-the installed skill. The canonical repository keeps historical attempts under
-`maintenance/motion-reference-candidates/`; Skills CLI packages do not copy
-that corpus. Use monotonically numbered filenames and never point a manifest
-asset at a candidate. The resolver consumes only approved, hash-matching
-assets named by this manifest.
+Generated attempts stay in a run/maintainer workspace outside the installed skill. Repo keeps historical attempts under `maintenance/motion-reference-candidates/`; Skills CLI packages omit that corpus. Monotonic filenames; never point a manifest asset at a candidate. Resolver consumes only approved hash-matching assets this manifest names.
 
 Approval checks:
 
 - exactly eight poses in a divisible `4x2` grid;
 - contact/down/passing/up followed by the opposite four phases;
 - opposite contact legs and cross-lateral arm swing;
-- stable head, torso, pelvis, limb thickness, baseline, and camera;
+- stable head, torso, pelvis, limb thickness, baseline, camera;
 - anatomical colors stay attached to the same limb through every overlap;
-- no labels, grid marks, scenery, shadows, clothing, style cues, or cropping;
+- no labels, grid marks, scenery, shadows, clothing, style cues, cropping;
 - frame 8 flows back to frame 1 without a pose or root-position pop.
