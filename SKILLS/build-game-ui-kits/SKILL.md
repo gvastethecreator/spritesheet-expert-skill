@@ -14,11 +14,11 @@ Portable raster UI kit: explicit tokens, densities, component states, hashes, pr
    - This skill: raster UI families. Animated character art → `$spritesheet-expert`; cross-family delivery → `$produce-2d-assets`.
 
 2. Generate or import component art.
-   - `$imagegen` default for new user-facing bitmap art. Load `$grok-imagine` only when Grok stills are selected explicitly. Provider creates semantic pixels; deterministic code may cut out, resize, assemble states, stretch nine-slices, and render proof — not draw replacement production UI.
+   - `$imagegen` default for new user-facing bitmap art. Load `$grok-imagine` only when Grok stills are selected explicitly. Provider creates semantic pixels; deterministic code may cut out, resize, assemble states, stretch nine-slices, and render proof, but must not draw replacement production UI.
    - Isolated controls and icons on flat gray, black, or white. Never request new green, blue, cyan, or magenta chroma. Preserve neutral fills and outlines; use BiRefNet/BEN2 or another reviewed model-backed cutout when connected-matte removal is ambiguous.
    - Grok: review `--dry-run` first; `--ack-run` only with explicit current-task consent. Animated UI/VFX sequences → `$spritesheet-expert`.
    - Every density and state below one kit root. Portable relative paths.
-   - Provenance on every state/density variant: Imagegen, Grok still, imported, or fixture. Fixture may validate state geometry; not representative production media.
+   - Declare provenance on every state/density variant: Imagegen, Grok still, imported, or fixture. Fixture may validate state geometry; not representative production media.
    - Include every required state (default, hover, pressed, disabled, selected, focus, or checked) the component can enter. Do not rename an identical file as a state.
    - State loses identity, text/icon geometry, edge quality, or semantics: regenerate via provider from the accepted base state. Do not procedurally repaint the failed state and label it generated.
 
@@ -36,7 +36,7 @@ Writes `qa/ui-kit-report.json`, `qa/ui-state-board.png`, and `qa/ui-nine-slice.p
 
 5. Inspect boards at intended scale.
    - State distinction, legibility, alignment, pixel snapping, focus visibility, density parity, nine-slice corners/edges.
-   - State board proves state/density comparison. Stretch board proves nine-slice behavior. Inspect alpha edges against checker/black/gray/white when transparent.
+   - The state board proves state/density comparison. Stretch board proves nine-slice behavior. Inspect alpha edges against checker/black/gray/white when transparent.
    - Report is a gate, not a visual substitute.
 
 ## Completion Contract
