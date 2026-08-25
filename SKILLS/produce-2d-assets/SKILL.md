@@ -27,9 +27,9 @@ Delegate only when parallel ownership adds value, not because multiple skills ex
 2. Produce each family through its owner.
    - Real source provenance, licenses, portable paths, current hashes, leaf skill deterministic report/proof.
    - `evidence.production_media` on every production leaf: `representative: true`, `provenance_verified: true`, explicit `source_types`. Imagegen/Grok/imported stay distinct. Fixtures, placeholders, deterministic drawings, legacy-unverified media cannot satisfy a production family.
-   - Isolated sprites, props, UI: gray/black/white source backgrounds; reviewed model-backed removal when matte removal is ambiguous. Full-bleed backgrounds keep authored scene pixels.
+   - Isolated sprites, props, UI: neutral gray/black/white source backgrounds; reviewed model-backed removal when matte removal is ambiguous. Full-bleed backgrounds keep authored scene pixels.
    - Block a dependency until its upstream report passes. No placeholder deliverables to green the aggregate.
-   - Provider fails identity, anatomy, semantics, repeat behavior, or edge quality: retry that route. Deterministic code may extract, align, compose, preview, validate — not replace failed semantic art.
+   - Provider fails identity, anatomy, semantics, repeat behavior, or edge quality: retry that route. Deterministic code may extract, align, compose, preview, and validate; it may not replace the failed semantic art.
 
 3. Write `asset-pack.json` against the schemas under `references/schemas/`.
    - Require `schema_version`, `pack_id`, `owners`, `style_bible`, `inventory`, `variant_matrix`, and `delivery_manifest`.
@@ -45,7 +45,7 @@ Writes `validation/asset-pack-validation-report.json`. Exit `0` pass, `1` contra
 
 5. Reconcile the real pack.
    - Inspect family proof together: scale, palette, camera, density, naming, variants, ownership, licensing, presentation truth.
-   - Right proof per claim: animation playback/onion/contact, background composite plus scroll, UI state plus stretch boards, static contact/alpha, truth-labelled mockups. One contact sheet cannot certify all families.
+   - Right proof per claim: animation playback/onion/contact, background composite plus scroll, UI state plus stretch boards, static contact/alpha, truth-labelled mockups. A single contact sheet cannot certify all families.
    - Re-run aggregate validator after leaf changes; stale leaf reports must fail.
 
 ## Completion Contract
