@@ -27,7 +27,7 @@ Default stills: `$imagegen`. `$grok-imagine` only as the explicit optional image
 - If Imagegen lacks valid native alpha, generate on flat gray, black, or white and use the documented background-removal path. No chroma colors for new production art.
 - Local PIL/procedural drawing: deterministic fixtures and geometry debugging only. Never production art.
 - Generated-art validation needs provider-produced source media, not local inference.
-- Production art prefers provider-native alpha. Gray/black/white fallback when native alpha is absent or fails review; green/blue/cyan/magenta = legacy-import chroma only. Alpha validation or model-backed removal plus a contact sheet proves the production-art boundary.
+- Production art prefers provider-native alpha. Gray/black/white fallback when native alpha is absent or fails review; green, blue, cyan, or magenta are legacy-import chroma only. Alpha validation or model-backed removal plus a contact sheet proves the production-art boundary.
 - Before final QA, run `scripts/check_generation_provenance.py --run-dir /abs/run`. `--allow-imported-source` only for explicit imported art; `--allow-fixture` only for tests.
 - Move selected provider output into the project run folder before extraction; do not leave sources only in a client cache.
 - Core setup: Pillow and jsonschema via `scripts/requirements-core.txt`. Install Lucida, background-removal, or video extras only for the selected lane.
