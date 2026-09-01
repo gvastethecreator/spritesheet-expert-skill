@@ -98,7 +98,7 @@ Validated multi-skill pack.
 - Optional Lucida, rembg, and BEN2 background-removal dependencies are intentionally not bundled.
 - Optional video decoding uses the pinned `scripts/requirements-video.txt`; provider inference is never part of tests.
 - Generated sample art is not included by default; bring your own licensed source images.
-- Rejected motion-reference candidates remain in repository-only `maintenance/` evidence and are never copied into an installed skill.
+- Rejected motion-reference candidates stay in a maintainer workspace and are never copied into an installed skill.
 
 ## Support
 
@@ -107,3 +107,4 @@ If this toolkit helps your production pipeline, you can [sponsor its continued m
 ## License
 
 MIT. Some bundled sprite pipeline files also preserve their original Apache-2.0 notice files inside the skill package.
+

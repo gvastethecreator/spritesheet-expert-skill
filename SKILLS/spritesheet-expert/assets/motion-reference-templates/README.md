@@ -12,7 +12,7 @@ Required master views:
 
 Reusable after visual QA and manifest `status: "approved"` plus exact PNG `sha256`. Candidate or missing assets are ignored; run emits a generate-once prompt.
 
-Generated attempts stay in a run/maintainer workspace outside the installed skill. Repo keeps historical attempts under `maintenance/motion-reference-candidates/`; Skills CLI packages omit that corpus. Monotonic filenames; never point a manifest asset at a candidate. Resolver consumes only approved hash-matching assets this manifest names.
+Generated attempts stay in a run/maintainer workspace outside the installed skill. Do not commit candidate dumps into the skill package. Monotonic filenames; never point a manifest asset at a candidate. Resolver consumes only approved hash-matching assets this manifest names.
 
 Approval checks:
 
@@ -23,3 +23,4 @@ Approval checks:
 - anatomical colors stay attached to the same limb through every overlap;
 - no labels, grid marks, scenery, shadows, clothing, style cues, cropping;
 - frame 8 flows back to frame 1 without a pose or root-position pop.
+

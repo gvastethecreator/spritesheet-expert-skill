@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for helping improve Spritesheet Expert. Keep changes focused, preserve the distinction between generated media and deterministic processing, and never promote a fixture as representative production evidence.
+Thank you for helping improve Spritesheet Expert. Keep public documentation in American English. Keep changes focused, preserve the distinction between generated media and deterministic processing, and never promote a fixture as representative production evidence.
 
 ## Development setup
 
@@ -30,3 +30,4 @@ Optional generation, background-removal, and video dependencies are capability-s
 - Do not commit secrets, generated caches, or unlicensed source media.
 
 By contributing, you agree that your work is provided under the repository license.
+

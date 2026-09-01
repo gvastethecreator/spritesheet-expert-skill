@@ -13,8 +13,9 @@ One leaf skill per family. `produce-2d-assets` only when a delivery needs two+ f
 
 ## Production Media Contract
 
-- `$imagegen` default still provider. `$grok-imagine` explicit, dry-run-first; paid run needs current-task acknowledgement. Video-to-frames → `spritesheet-expert`.
+- `$imagegen` default still provider. `$grok-imagine` explicit, dry-run-first; paid run needs current-task acknowledgment. Video-to-frames → `spritesheet-expert`.
 - Deterministic code may prepare, extract, register, cut out, compose, preview, validate — not create replacement production art.
 - Isolated sprites, props, UI: gray/black/white source backgrounds; never new green/blue/cyan/magenta chroma. Full-bleed backgrounds keep authored scene pixels.
 - Every produced source declares verified provider/import provenance. Fixtures and placeholders stay non-representative even if validation passes.
 - Inspect matching proof: playback/contact/onion for animation; composite plus scroll for backgrounds; state plus stretch boards for UI; multi-background alpha contact for static art; hash-backed truth labels for mockups.
+
