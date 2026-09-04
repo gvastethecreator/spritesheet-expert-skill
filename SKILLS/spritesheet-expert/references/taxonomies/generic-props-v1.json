@@ -1,0 +1,103 @@
+{
+  "schemaVersion": "item-taxonomy-v1",
+  "id": "generic-props-v1",
+  "title": "Generic game prop taxonomy",
+  "description": "Closed starter taxonomy for workshop, maintenance, container, cleaning, abrasive, and hand-tool item sheets. Unknown is always valid and requires review.",
+  "families": {
+    "lubrication_tool": [
+      "oil_can",
+      "pump_oiler",
+      "grease_gun",
+      "lubricant_dispenser"
+    ],
+    "container": [
+      "bottle",
+      "jar",
+      "jug",
+      "cup",
+      "bowl",
+      "tray",
+      "pan",
+      "funnel",
+      "tin",
+      "bucket"
+    ],
+    "cleaning_tool": [
+      "brush",
+      "rag",
+      "scrubber",
+      "cleaning_pad"
+    ],
+    "abrasive_tool": [
+      "sharpening_stone",
+      "sanding_block",
+      "abrasive_pad",
+      "file"
+    ],
+    "hand_tool": [
+      "screwdriver",
+      "awl",
+      "pick",
+      "scraper",
+      "spatula",
+      "probe",
+      "handle_tool"
+    ],
+    "workshop_part": [
+      "nozzle",
+      "hose",
+      "pump",
+      "cap",
+      "filter",
+      "metal_part"
+    ],
+    "unknown": [
+      "unknown"
+    ]
+  },
+  "materials": [
+    "metal",
+    "wood",
+    "glass",
+    "ceramic",
+    "fabric",
+    "paper",
+    "rubber",
+    "plastic",
+    "leather",
+    "mixed"
+  ],
+  "conditions": [
+    "new",
+    "clean",
+    "worn",
+    "rusted",
+    "dirty",
+    "stained",
+    "damaged",
+    "burned",
+    "wet",
+    "unknown"
+  ],
+  "orientations": [
+    "horizontal",
+    "vertical",
+    "square",
+    "diagonal",
+    "unknown"
+  ],
+  "sizeClasses": [
+    "XS",
+    "S",
+    "M",
+    "L",
+    "XL",
+    "XXL",
+    "unknown"
+  ],
+  "fallback": {
+    "family": "unknown",
+    "canonicalType": "unknown",
+    "requiresReview": true
+  }
+}
