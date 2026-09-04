@@ -1,0 +1,215 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spritesheet.expert/schemas/studio-session-v1.schema.json",
+  "title": "Spritesheet Expert Studio Session and Handoff v1",
+  "oneOf": [
+    {"$ref": "#/$defs/handoff"},
+    {"$ref": "#/$defs/session"}
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "handoff": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "schemaVersion",
+        "jobId",
+        "workflowId",
+        "workflowVersion",
+        "ownerSkill",
+        "mode",
+        "inputs",
+        "prompt",
+        "command",
+        "expectedArtifacts",
+        "providerBoundary",
+        "status",
+        "createdAt"
+      ],
+      "properties": {
+        "schemaVersion": {"const": "studio-handoff-v1"},
+        "jobId": {"type": "string", "minLength": 1},
+        "workflowId": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "workflowVersion": {"type": "integer", "minimum": 1},
+        "ownerSkill": {"type": "string", "minLength": 1},
+        "mode": {
+          "enum": [
+            "deterministic",
+            "handoff",
+            "review",
+            "provider-handoff",
+            "skill-handoff"
+          ]
+        },
+        "inputs": {"type": "object"},
+        "prompt": {"type": "string", "minLength": 1},
+        "command": {"type": "string"},
+        "expectedArtifacts": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "providerBoundary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requiresProvider",
+            "requiresExplicitExecution",
+            "executedByStudio"
+          ],
+          "properties": {
+            "requiresProvider": {"type": "boolean"},
+            "requiresExplicitExecution": {"type": "boolean"},
+            "executedByStudio": {"const": false}
+          }
+        },
+        "batchPolicy": {
+          "type": ["object", "null"],
+          "additionalProperties": true,
+          "properties": {
+            "requestedCount": {"type": "integer", "minimum": 1},
+            "advanceOnlyAfterSemanticValidation": {"type": "boolean"},
+            "retryOnlyPendingItem": {"type": "boolean"}
+          }
+        },
+        "sourceManifest": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "runId": {"type": "string"},
+            "sha256": {
+              "oneOf": [
+                {"$ref": "#/$defs/sha256"},
+                {"type": "null"}
+              ]
+            }
+          }
+        },
+        "targetItem": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "id": {"type": "string"},
+            "sourceBbox": {
+              "type": ["array", "null"],
+              "items": {"type": "integer"},
+              "minItems": 4,
+              "maxItems": 4
+            },
+            "nativeSize": {
+              "type": ["array", "null"],
+              "items": {"type": "integer"},
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "classification": {"type": "object"}
+          }
+        },
+        "status": {
+          "enum": [
+            "prepared",
+            "approved-for-execution",
+            "running",
+            "blocked",
+            "returned",
+            "accepted",
+            "rejected",
+            "cancelled"
+          ]
+        },
+        "createdAt": {"type": "string", "format": "date-time"},
+        "updatedAt": {"type": "string", "format": "date-time"}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "providerBoundary": {
+                "properties": {"requiresProvider": {"const": true}},
+                "required": ["requiresProvider"]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "providerBoundary": {
+                "properties": {
+                  "requiresExplicitExecution": {"const": true}
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"workflowId": {"const": "regenerate-single-item"}},
+            "required": ["workflowId"]
+          },
+          "then": {
+            "properties": {
+              "batchPolicy": {
+                "type": "object",
+                "properties": {
+                  "requestedCount": {"const": 1},
+                  "advanceOnlyAfterSemanticValidation": {"const": true},
+                  "retryOnlyPendingItem": {"const": true}
+                },
+                "required": [
+                  "requestedCount",
+                  "advanceOnlyAfterSemanticValidation",
+                  "retryOnlyPendingItem"
+                ]
+              }
+            },
+            "required": ["batchPolicy", "targetItem"]
+          }
+        }
+      ]
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "schemaVersion",
+        "sessionId",
+        "createdAt",
+        "updatedAt",
+        "activeView",
+        "queue"
+      ],
+      "properties": {
+        "schemaVersion": {"const": "studio-session-v1"},
+        "sessionId": {"type": "string", "minLength": 1},
+        "workspaceId": {"type": ["string", "null"]},
+        "createdAt": {"type": "string", "format": "date-time"},
+        "updatedAt": {"type": "string", "format": "date-time"},
+        "activeView": {
+          "enum": ["launcher", "atlas", "queue", "about"]
+        },
+        "activeWorkflowId": {"type": ["string", "null"]},
+        "activeRun": {
+          "oneOf": [
+            {"type": "null"},
+            {
+              "type": "object",
+              "required": ["runId", "manifestSha256"],
+              "properties": {
+                "runId": {"type": "string"},
+                "manifestSha256": {"$ref": "#/$defs/sha256"}
+              }
+            }
+          ]
+        },
+        "queue": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/handoff"}
+        }
+      }
+    }
+  }
+}

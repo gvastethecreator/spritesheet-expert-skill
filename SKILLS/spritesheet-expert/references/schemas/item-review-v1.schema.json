@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spritesheet.expert/schemas/item-review-v1.schema.json",
+  "title": "Deterministic Item Review v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "reviewId",
+    "runId",
+    "sourceManifest",
+    "createdAt",
+    "items",
+    "summary"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "item-review-v1"},
+    "kind": {"const": "deterministic-item-review"},
+    "reviewId": {"type": "string", "minLength": 1},
+    "runId": {"type": "string", "minLength": 1},
+    "sourceManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["filename", "sha256"],
+      "properties": {
+        "filename": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "createdAt": {"type": "string", "format": "date-time"},
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "id": {"type": "string"},
+        "kind": {"enum": ["human", "agent", "mixed"]},
+        "name": {"type": "string"}
+      }
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/reviewItem"}
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pending": {"type": "integer", "minimum": 0},
+        "approved": {"type": "integer", "minimum": 0},
+        "rejected": {"type": "integer", "minimum": 0},
+        "replace": {"type": "integer", "minimum": 0},
+        "regenerate": {"type": "integer", "minimum": 0}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "portablePath": {
+      "type": "string",
+      "minLength": 1,
+      "allOf": [
+        {"not": {"pattern": "^/"}},
+        {"not": {"pattern": "\\\\"}},
+        {"not": {"pattern": "(^|/)\\.\\.(/|$)"}}
+      ]
+    },
+    "classificationOverride": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "family": {"type": "string", "minLength": 1},
+        "canonicalType": {"type": "string", "minLength": 1},
+        "subtype": {"type": ["string", "null"]},
+        "materials": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string"}
+        },
+        "condition": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string"}
+        },
+        "orientation": {"type": "string"},
+        "sizeClass": {"type": "string"},
+        "tags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string"}
+        }
+      }
+    },
+    "replacement": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["path", "sha256", "provenance"],
+      "properties": {
+        "path": {"$ref": "#/$defs/portablePath"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "mediaType": {"type": "string"},
+        "sizeBytes": {"type": "integer", "minimum": 1},
+        "provenance": {
+          "enum": [
+            "imagegen",
+            "grok-imagine-image",
+            "imported",
+            "fixture"
+          ]
+        },
+        "jobId": {"type": ["string", "null"]}
+      }
+    },
+    "reviewItem": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["itemId", "status", "notes", "classification", "replacement"],
+      "properties": {
+        "itemId": {
+          "type": "string",
+          "pattern": "^item_[0-9a-f]{12}(?:_[0-9]{2})?$"
+        },
+        "status": {
+          "enum": ["pending", "approved", "rejected", "replace", "regenerate"]
+        },
+        "notes": {"type": "string"},
+        "classification": {"$ref": "#/$defs/classificationOverride"},
+        "geometryOverride": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "pivot": {
+              "type": "array",
+              "prefixItems": [
+                {"type": "number"},
+                {"type": "number"}
+              ],
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "baseline": {"type": ["number", "null"]}
+          }
+        },
+        "replacement": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/replacement"}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"status": {"const": "replace"}},
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "replacement": {"$ref": "#/$defs/replacement"}
+            }
+          }
+        }
+      ]
+    }
+  }
+}

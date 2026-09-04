@@ -1,0 +1,191 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from PIL import Image, ImageDraw
+
+from spritecore.item_sheet import (
+    ExtractedItem,
+    PackingConfig,
+    SegmentationConfig,
+    build_item_atlas,
+    pack_items,
+    segment_items,
+    validate_manifest_geometry,
+)
+
+
+def _sheet() -> Image.Image:
+    image = Image.new("RGBA", (128, 96), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((8, 10, 34, 42), fill=(190, 55, 40, 255))
+    draw.rectangle((82, 8, 118, 28), fill=(70, 135, 200, 255))
+    draw.rectangle((50, 58, 72, 86), fill=(205, 170, 70, 255))
+    # Low-alpha antialias-like pixels close to the first object.
+    draw.line((35, 17, 38, 17), fill=(190, 55, 40, 14), width=1)
+    draw.point((7, 18), fill=(190, 55, 40, 8))
+    return image
+
+
+def _intersects(left: tuple[int, int, int, int], right: tuple[int, int, int, int]) -> bool:
+    lx, ly, lw, lh = left
+    rx, ry, rw, rh = right
+    return not (
+        lx + lw <= rx
+        or rx + rw <= lx
+        or ly + lh <= ry
+        or ry + rh <= ly
+    )
+
+
+def test_alpha_hysteresis_extracts_independent_native_size_items() -> None:
+    items = segment_items(
+        _sheet(),
+        SegmentationConfig(
+            alpha_high=64,
+            alpha_low=2,
+            halo_radius=6,
+            min_strong_pixels=8,
+        ),
+    )
+
+    assert len(items) == 3
+    assert all(item.image.mode == "RGBA" for item in items)
+    assert all(item.image.getbbox() is not None for item in items)
+    assert max(item.width for item in items) < _sheet().width
+    assert any(item.weak_pixels > 0 for item in items)
+
+
+def test_faint_bridge_beyond_halo_does_not_merge_two_objects() -> None:
+    image = Image.new("RGBA", (96, 40), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((5, 8, 20, 30), fill=(255, 100, 50, 255))
+    draw.rectangle((75, 8, 90, 30), fill=(50, 120, 255, 255))
+    draw.line((21, 19, 74, 19), fill=(255, 255, 255, 3), width=1)
+
+    items = segment_items(
+        image,
+        SegmentationConfig(alpha_high=64, alpha_low=2, halo_radius=5, min_strong_pixels=8),
+    )
+
+    assert len(items) == 2
+    assert all(item.width < 32 for item in items)
+
+
+def test_item_ids_are_stable_for_identical_source_bytes() -> None:
+    first = segment_items(_sheet())
+    second = segment_items(_sheet())
+
+    assert [item.item_id for item in first] == [item.item_id for item in second]
+    assert [item.content_sha256 for item in first] == [item.content_sha256 for item in second]
+
+
+def test_duplicate_content_gets_a_deterministic_occurrence_suffix() -> None:
+    image = Image.new("RGBA", (70, 30), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((5, 5, 19, 19), fill=(210, 80, 40, 255))
+    draw.rectangle((45, 5, 59, 19), fill=(210, 80, 40, 255))
+
+    items = segment_items(image, SegmentationConfig(min_strong_pixels=4))
+
+    assert len(items) == 2
+    assert items[0].content_sha256 == items[1].content_sha256
+    assert items[1].item_id == f"{items[0].item_id}_02"
+
+
+def test_rectangular_packing_is_quantized_non_overlapping_and_repeatable() -> None:
+    items = segment_items(_sheet())
+    config = PackingConfig(quantum=16, padding=8, max_width=256)
+
+    first, first_size, footprints = pack_items(items, config)
+    second, second_size, _ = pack_items(items, config)
+
+    assert first == second
+    assert first_size == second_size
+    assert first_size[0] % 16 == 0
+    assert first_size[1] % 16 == 0
+
+    rectangles = []
+    for item in items:
+        rect = first[item.item_id]
+        footprint = footprints[item.item_id]
+        assert rect.w == footprint[0]
+        assert rect.h == footprint[1]
+        assert rect.w % 16 == 0
+        assert rect.h % 16 == 0
+        assert rect.w >= item.width + 16
+        assert rect.h >= item.height + 16
+        rectangles.append((rect.x, rect.y, rect.w, rect.h))
+
+    for index, left in enumerate(rectangles):
+        for right in rectangles[index + 1 :]:
+            assert not _intersects(left, right)
+
+
+def test_build_item_atlas_preserves_native_dimensions_and_writes_evidence(tmp_path: Path) -> None:
+    source = tmp_path / "source.png"
+    output = tmp_path / "run"
+    _sheet().save(source)
+
+    manifest = build_item_atlas(
+        source,
+        output,
+        segmentation=SegmentationConfig(alpha_high=64, alpha_low=2, halo_radius=6),
+        packing=PackingConfig(quantum=16, padding=8, max_width=256),
+    )
+
+    assert manifest["kind"] == "deterministic-item-atlas"
+    assert manifest["segmentation"]["itemCount"] == 3
+    assert manifest["packing"]["rotation"] is False
+    assert manifest["packing"]["rescale"] is False
+    assert validate_manifest_geometry(manifest) == []
+    assert (output / "manifest.json").is_file()
+    assert (output / "atlas.png").is_file()
+    assert (output / "qa/source-components.png").is_file()
+    assert (output / "qa/atlas-grid.png").is_file()
+
+    for record in manifest["items"]:
+        item_path = output / record["artifacts"]["rgba"]
+        assert item_path.is_file()
+        with Image.open(item_path) as item_image:
+            assert list(item_image.size) == record["geometry"]["originalSize"]
+        assert record["geometry"]["scale"] == 1
+        assert record["geometry"]["rotated"] is False
+        cell_x, cell_y, cell_w, cell_h = record["geometry"]["cellRect"]
+        frame_x, frame_y, frame_w, frame_h = record["geometry"]["frame"]
+        assert cell_x <= frame_x
+        assert cell_y <= frame_y
+        assert frame_x + frame_w <= cell_x + cell_w
+        assert frame_y + frame_h <= cell_y + cell_h
+
+
+def test_geometry_validator_rejects_scale_rotation_and_overlap() -> None:
+    manifest = {
+        "atlas": {"width": 64, "height": 64},
+        "items": [
+            {
+                "id": "item_a",
+                "geometry": {
+                    "cellRect": [0, 0, 32, 32],
+                    "frame": [2, 2, 20, 20],
+                    "scale": 2,
+                    "rotated": False,
+                },
+            },
+            {
+                "id": "item_b",
+                "geometry": {
+                    "cellRect": [16, 16, 32, 32],
+                    "frame": [20, 20, 20, 20],
+                    "scale": 1,
+                    "rotated": True,
+                },
+            },
+        ],
+    }
+
+    errors = validate_manifest_geometry(manifest)
+
+    assert any("scale must remain 1" in error for error in errors)
+    assert any("rotation must remain disabled" in error for error in errors)
+    assert any("overlaps" in error for error in errors)
