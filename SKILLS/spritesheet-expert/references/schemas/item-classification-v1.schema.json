@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spritesheet.expert/schemas/item-classification-v1.schema.json",
+  "title": "Item Classification Job and Result v1",
+  "oneOf": [
+    {"$ref": "#/$defs/job"},
+    {"$ref": "#/$defs/result"},
+    {
+      "type": "array",
+      "items": {"$ref": "#/$defs/result"}
+    },
+    {
+      "type": "object",
+      "required": ["schemaVersion", "results"],
+      "properties": {
+        "schemaVersion": {"const": "item-classification-result-set-v1"},
+        "results": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/result"}
+        }
+      },
+      "additionalProperties": true
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "portablePath": {
+      "type": "string",
+      "minLength": 1,
+      "allOf": [
+        {"not": {"pattern": "^/"}},
+        {"not": {"pattern": "\\\\"}},
+        {"not": {"pattern": "(^|/)\\.\\.(/|$)"}}
+      ]
+    },
+    "inputArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/portablePath"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "classification": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "family",
+        "canonicalType",
+        "materials",
+        "condition",
+        "orientation",
+        "sizeClass",
+        "tags",
+        "confidence"
+      ],
+      "properties": {
+        "family": {"type": "string", "minLength": 1},
+        "canonicalType": {"type": "string", "minLength": 1},
+        "subtype": {"type": ["string", "null"]},
+        "materials": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "condition": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "orientation": {"type": "string", "minLength": 1},
+        "sizeClass": {"type": "string", "minLength": 1},
+        "tags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "source": {"type": "string"},
+        "notes": {"type": "string"}
+      }
+    },
+    "job": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "schemaVersion",
+        "jobId",
+        "runId",
+        "itemId",
+        "inputs",
+        "taxonomyId",
+        "prompt",
+        "expected",
+        "status"
+      ],
+      "properties": {
+        "schemaVersion": {"const": "item-classification-job-v1"},
+        "jobId": {"type": "string", "minLength": 1},
+        "runId": {"type": "string", "minLength": 1},
+        "itemId": {
+          "type": "string",
+          "pattern": "^item_[0-9a-f]{12}(?:_[0-9]{2})?$"
+        },
+        "inputs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rgba", "lightComposite", "darkComposite"],
+          "properties": {
+            "rgba": {"$ref": "#/$defs/inputArtifact"},
+            "lightComposite": {"$ref": "#/$defs/inputArtifact"},
+            "darkComposite": {"$ref": "#/$defs/inputArtifact"}
+          }
+        },
+        "taxonomyId": {"type": "string", "minLength": 1},
+        "prompt": {"type": "string", "minLength": 20},
+        "expected": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["count", "format", "closedTaxonomy", "unknownAllowed"],
+          "properties": {
+            "count": {"const": 1},
+            "format": {"const": "item-classification-result-v1"},
+            "closedTaxonomy": {"const": true},
+            "unknownAllowed": {"const": true}
+          }
+        },
+        "status": {"const": "prepared"}
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["schemaVersion", "itemId", "classification"],
+      "properties": {
+        "schemaVersion": {"const": "item-classification-result-v1"},
+        "jobId": {"type": "string"},
+        "runId": {"type": "string"},
+        "itemId": {
+          "type": "string",
+          "pattern": "^item_[0-9a-f]{12}(?:_[0-9]{2})?$"
+        },
+        "model": {"type": "string"},
+        "classification": {"$ref": "#/$defs/classification"},
+        "inputHashes": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/sha256"}
+        }
+      }
+    }
+  }
+}
