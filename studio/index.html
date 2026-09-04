@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Portable, agent-first workflow and review Studio for Spritesheet Expert.">
+  <title>Spritesheet Expert Studio</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#launcher" aria-label="Spritesheet Expert Studio home">
+        <span class="brand-mark" aria-hidden="true">SE</span>
+        <span>
+          <strong>Spritesheet Expert</strong>
+          <small>Portable agent studio</small>
+        </span>
+      </a>
+      <div class="topbar-status">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span>Local-first · no provider execution</span>
+      </div>
+    </header>
+
+    <aside class="sidebar" aria-label="Studio navigation">
+      <nav>
+        <button class="nav-item is-active" type="button" data-view="launcher">
+          <span>01</span> Workflow Launcher
+        </button>
+        <button class="nav-item" type="button" data-view="atlas">
+          <span>02</span> Atlas Lab
+        </button>
+        <button class="nav-item" type="button" data-view="queue">
+          <span>03</span> Agent Queue
+        </button>
+        <button class="nav-item" type="button" data-view="about">
+          <span>04</span> Contracts
+        </button>
+      </nav>
+      <div class="sidebar-foot">
+        <p>Provider output is accepted only through source intake, provenance, hashing, and review.</p>
+        <a href="../SKILLS/spritesheet-expert/SKILL.md">Open skill contract</a>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <section class="view is-active" id="launcher" data-view-panel="launcher" aria-labelledby="launcher-title">
+        <div class="view-heading">
+          <div>
+            <p class="eyebrow">Workflow registry</p>
+            <h1 id="launcher-title">Compose the job before an agent runs it.</h1>
+          </div>
+          <p class="view-intro">Select a production workflow, fill its explicit contract, then copy a prompt, CLI command, or portable JSON handoff.</p>
+        </div>
+
+        <div class="launcher-layout">
+          <section class="panel workflow-picker" aria-labelledby="workflow-picker-title">
+            <div class="panel-heading">
+              <div>
+                <p class="section-number">01 / Select</p>
+                <h2 id="workflow-picker-title">Workflow</h2>
+              </div>
+              <span id="workflow-mode" class="pill">loading</span>
+            </div>
+            <label class="field">
+              <span>Registered workflow</span>
+              <select id="workflow-select" aria-describedby="workflow-description"></select>
+            </label>
+            <p id="workflow-description" class="muted"></p>
+            <dl class="workflow-meta">
+              <div><dt>Owner</dt><dd id="workflow-owner">—</dd></div>
+              <div><dt>Version</dt><dd id="workflow-version">—</dd></div>
+              <div><dt>Provider</dt><dd id="workflow-provider">—</dd></div>
+            </dl>
+          </section>
+
+          <section class="panel workflow-form-panel" aria-labelledby="workflow-form-title">
+            <div class="panel-heading">
+              <div>
+                <p class="section-number">02 / Configure</p>
+                <h2 id="workflow-form-title">Inputs</h2>
+              </div>
+              <button class="quiet-button" id="reset-workflow" type="button">Reset</button>
+            </div>
+            <form id="workflow-form" class="dynamic-form"></form>
+          </section>
+
+          <section class="panel output-panel" aria-labelledby="workflow-output-title">
+            <div class="panel-heading output-heading">
+              <div>
+                <p class="section-number">03 / Handoff</p>
+                <h2 id="workflow-output-title">Portable output</h2>
+              </div>
+              <div class="segmented-control" role="tablist" aria-label="Output format">
+                <button type="button" role="tab" aria-selected="true" data-output-mode="prompt">Prompt</button>
+                <button type="button" role="tab" aria-selected="false" data-output-mode="command">CLI</button>
+                <button type="button" role="tab" aria-selected="false" data-output-mode="json">JSON</button>
+              </div>
+            </div>
+            <textarea id="workflow-output" spellcheck="false" aria-label="Rendered workflow output"></textarea>
+            <div class="button-row">
+              <button class="primary-button" id="copy-output" type="button">Copy output</button>
+              <button class="secondary-button" id="download-output" type="button">Download</button>
+              <button class="secondary-button" id="queue-output" type="button">Add to queue</button>
+            </div>
+            <p id="output-feedback" class="feedback" role="status"></p>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="atlas" data-view-panel="atlas" aria-labelledby="atlas-title">
+        <div class="view-heading">
+          <div>
+            <p class="eyebrow">Deterministic Item Atlas</p>
+            <h1 id="atlas-title">Inspect every extracted item before delivery.</h1>
+          </div>
+          <p class="view-intro">Load a manifest and its local run folder. Review source geometry, alpha, classification, status, and exact replacements without changing the parent run.</p>
+        </div>
+
+        <section class="panel import-panel" aria-labelledby="import-title">
+          <div class="panel-heading">
+            <div>
+              <p class="section-number">01 / Load</p>
+              <h2 id="import-title">Run artifacts</h2>
+            </div>
+            <button id="clear-atlas" class="quiet-button" type="button">Clear</button>
+          </div>
+          <div class="import-grid">
+            <label class="file-drop">
+              <span>Manifest JSON</span>
+              <strong>Select manifest</strong>
+              <small id="manifest-file-name">No file selected</small>
+              <input id="manifest-input" type="file" accept="application/json,.json">
+            </label>
+            <label class="file-drop">
+              <span>Run folder</span>
+              <strong>Select folder</strong>
+              <small id="run-folder-name">Needed to resolve local images</small>
+              <input id="run-folder-input" type="file" webkitdirectory multiple>
+            </label>
+            <div class="run-summary" id="run-summary">
+              <span>Waiting for a manifest</span>
+            </div>
+          </div>
+        </section>
+
+        <div class="atlas-layout">
+          <section class="panel asset-browser" aria-labelledby="asset-browser-title">
+            <div class="panel-heading browser-heading">
+              <div>
+                <p class="section-number">02 / Inventory</p>
+                <h2 id="asset-browser-title">Items</h2>
+              </div>
+              <span class="pill" id="visible-count">0 visible</span>
+            </div>
+            <div class="browser-tools">
+              <label class="field compact-field">
+                <span>Search</span>
+                <input id="item-search" type="search" placeholder="ID, type, family, tag">
+              </label>
+              <label class="field compact-field">
+                <span>Status</span>
+                <select id="status-filter">
+                  <option value="all">All</option>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="replace">Replace</option>
+                  <option value="regenerate">Regenerate</option>
+                </select>
+              </label>
+              <label class="field compact-field">
+                <span>Sort</span>
+                <select id="item-sort">
+                  <option value="source">Source order</option>
+                  <option value="area-desc">Largest first</option>
+                  <option value="area-asc">Smallest first</option>
+                  <option value="type">Canonical type</option>
+                  <option value="status">Review status</option>
+                </select>
+              </label>
+            </div>
+            <div class="bulk-row">
+              <button type="button" data-bulk-status="approved">Approve visible</button>
+              <button type="button" data-bulk-status="pending">Reset visible</button>
+            </div>
+            <div id="item-grid" class="item-grid" aria-live="polite"></div>
+          </section>
+
+          <section class="panel inspector" aria-labelledby="inspector-title">
+            <div class="panel-heading">
+              <div>
+                <p class="section-number">03 / Decision</p>
+                <h2 id="inspector-title">Inspector</h2>
+              </div>
+              <span id="selected-item-status" class="pill">none</span>
+            </div>
+            <div id="empty-inspector" class="empty-state">
+              <strong>Select an extracted item</strong>
+              <p>Its native crop, source bounds, atlas cell, flags, classification, and replacement controls will appear here.</p>
+            </div>
+            <div id="item-inspector" class="inspector-content" hidden>
+              <div class="preview-toolbar">
+                <span>Preview</span>
+                <div class="segmented-control small" role="group" aria-label="Preview background">
+                  <button type="button" aria-pressed="true" data-preview-background="checker">Checker</button>
+                  <button type="button" aria-pressed="false" data-preview-background="black">Black</button>
+                  <button type="button" aria-pressed="false" data-preview-background="gray">Gray</button>
+                  <button type="button" aria-pressed="false" data-preview-background="white">White</button>
+                </div>
+              </div>
+              <div id="item-preview" class="item-preview" data-background="checker">
+                <img id="item-preview-image" alt="Selected item preview">
+              </div>
+              <div class="identity-line">
+                <code id="inspector-item-id"></code>
+                <button id="copy-item-id" class="quiet-button" type="button">Copy ID</button>
+              </div>
+              <dl id="geometry-data" class="geometry-data"></dl>
+              <div id="qa-flags" class="flag-list"></div>
+
+              <div class="decision-grid" role="group" aria-label="Review decision">
+                <button type="button" data-item-status="approved">Approve</button>
+                <button type="button" data-item-status="rejected">Reject</button>
+                <button type="button" data-item-status="replace">Replace</button>
+                <button type="button" data-item-status="regenerate">Regenerate</button>
+                <button type="button" data-item-status="pending">Reset</button>
+              </div>
+
+              <div class="metadata-form">
+                <label class="field">
+                  <span>Family</span>
+                  <input id="classification-family" type="text" placeholder="unknown">
+                </label>
+                <label class="field">
+                  <span>Canonical type</span>
+                  <input id="classification-type" type="text" placeholder="unknown">
+                </label>
+                <label class="field full-field">
+                  <span>Tags · comma separated</span>
+                  <input id="classification-tags" type="text" placeholder="metal, worn, workshop">
+                </label>
+                <label class="field full-field">
+                  <span>Review notes</span>
+                  <textarea id="review-notes" rows="3" placeholder="Record the visual decision, defect, or replacement target."></textarea>
+                </label>
+              </div>
+
+              <div class="replacement-box">
+                <div>
+                  <strong>Replacement candidate</strong>
+                  <p>Loaded locally and referenced in the exported review. The parent atlas remains unchanged.</p>
+                </div>
+                <label class="secondary-button file-button">
+                  Select image
+                  <input id="replacement-input" type="file" accept="image/png,image/webp,image/jpeg">
+                </label>
+                <div id="replacement-preview" class="replacement-preview" hidden>
+                  <img id="replacement-preview-image" alt="Replacement candidate preview">
+                  <div>
+                    <span id="replacement-file-name"></span>
+                    <button id="remove-replacement" class="quiet-button" type="button">Remove</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="button-row inspector-actions">
+                <button id="save-item" class="primary-button" type="button">Save item decision</button>
+                <button id="queue-regeneration" class="secondary-button" type="button">Prepare regeneration job</button>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <section class="panel export-panel" aria-labelledby="export-title">
+          <div class="panel-heading">
+            <div>
+              <p class="section-number">04 / Export</p>
+              <h2 id="export-title">Portable review</h2>
+            </div>
+            <span id="review-progress" class="pill">0 / 0 decided</span>
+          </div>
+          <div class="export-copy">
+            <p>Exported review files contain decisions and replacement metadata. Image bytes stay in the selected workspace and are hash-checked when the review is applied.</p>
+            <div class="button-row">
+              <button id="export-review" class="primary-button" type="button">Download review JSON</button>
+              <button id="copy-review" class="secondary-button" type="button">Copy review JSON</button>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="queue" data-view-panel="queue" aria-labelledby="queue-title">
+        <div class="view-heading">
+          <div>
+            <p class="eyebrow">Explicit execution boundary</p>
+            <h1 id="queue-title">Prepared jobs, not hidden side effects.</h1>
+          </div>
+          <p class="view-intro">The queue records what another agent or provider should do. Export it, inspect it, and execute it through the selected external route.</p>
+        </div>
+        <section class="panel queue-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="section-number">Queue</p>
+              <h2>Agent handoffs</h2>
+            </div>
+            <span id="queue-count" class="pill">0 jobs</span>
+          </div>
+          <div id="queue-list" class="queue-list"></div>
+          <div class="queue-empty" id="queue-empty">
+            <strong>No jobs prepared</strong>
+            <p>Add a workflow output or prepare a regeneration job from Atlas Lab.</p>
+          </div>
+          <div class="button-row queue-actions">
+            <button id="download-queue" class="primary-button" type="button">Download JSONL</button>
+            <button id="copy-queue" class="secondary-button" type="button">Copy JSONL</button>
+            <button id="clear-queue" class="quiet-button" type="button">Clear queue</button>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="about" data-view-panel="about" aria-labelledby="about-title">
+        <div class="view-heading">
+          <div>
+            <p class="eyebrow">Portable contracts</p>
+            <h1 id="about-title">The interface is replaceable. The evidence is not.</h1>
+          </div>
+          <p class="view-intro">Studio state can be reconstructed from manifests, review records, classification results, and handoff jobs. No production decision should exist only in this browser.</p>
+        </div>
+        <div class="contract-grid">
+          <article class="panel contract-card">
+            <p class="section-number">Manifest</p>
+            <h2>Geometry truth</h2>
+            <p>Source bounds, native dimensions, cellRect, frame, pivot, scale, rotation, hashes, and QA flags.</p>
+            <code>deterministic-item-sheet-v1</code>
+          </article>
+          <article class="panel contract-card">
+            <p class="section-number">Review</p>
+            <h2>Human decisions</h2>
+            <p>Approval, rejection, replacement, regeneration, metadata overrides, notes, and replacement provenance.</p>
+            <code>item-review-v1</code>
+          </article>
+          <article class="panel contract-card">
+            <p class="section-number">Classification</p>
+            <h2>Model-neutral semantics</h2>
+            <p>Closed taxonomy, confidence, unknown fallback, candidate source, and item-level inference evidence.</p>
+            <code>item-classification-result-v1</code>
+          </article>
+          <article class="panel contract-card">
+            <p class="section-number">Handoff</p>
+            <h2>Explicit agent work</h2>
+            <p>Exact inputs, prompt, expected artifact count, forbidden outputs, provider boundary, and execution state.</p>
+            <code>studio-handoff-v1</code>
+          </article>
+        </div>
+        <section class="panel invariant-panel">
+          <p class="section-number">Non-negotiable invariants</p>
+          <ol>
+            <li><span>01</span><strong>Generation is semantic; extraction and packing are deterministic.</strong></li>
+            <li><span>02</span><strong>One pending replacement produces one isolated generation job.</strong></li>
+            <li><span>03</span><strong>Sprites are never silently rescaled or rotated by the item compiler.</strong></li>
+            <li><span>04</span><strong>Review evidence becomes stale after relevant source or geometry changes.</strong></li>
+            <li><span>05</span><strong>A successor manifest retains the parent manifest hash.</strong></li>
+          </ol>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <template id="item-card-template">
+    <button class="item-card" type="button">
+      <span class="item-card-preview"><img alt=""></span>
+      <span class="item-card-copy">
+        <code></code>
+        <strong></strong>
+        <small></small>
+      </span>
+      <span class="item-card-status"></span>
+    </button>
+  </template>
+
+  <template id="queue-item-template">
+    <article class="queue-item">
+      <div>
+        <span class="queue-kind"></span>
+        <strong class="queue-title"></strong>
+        <code class="queue-id"></code>
+      </div>
+      <p class="queue-summary"></p>
+      <button class="quiet-button queue-remove" type="button">Remove</button>
+    </article>
+  </template>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
