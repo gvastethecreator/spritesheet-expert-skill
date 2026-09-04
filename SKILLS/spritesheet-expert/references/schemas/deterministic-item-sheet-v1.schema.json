@@ -1,0 +1,348 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spritesheet.expert/schemas/deterministic-item-sheet-v1.schema.json",
+  "title": "Deterministic Item Sheet Manifest v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "runId",
+    "inputFingerprint",
+    "source",
+    "segmentation",
+    "packing",
+    "atlas",
+    "items",
+    "evidence",
+    "completion"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "deterministic-item-sheet-v1"
+    },
+    "kind": {
+      "const": "deterministic-item-atlas"
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "inputFingerprint": {
+      "$ref": "#/$defs/sha256"
+    },
+    "parentManifestSha256": {
+      "oneOf": [
+        {"$ref": "#/$defs/sha256"},
+        {"type": "null"}
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["path", "sha256", "width", "height", "mode", "provenance"],
+      "properties": {
+        "path": {"$ref": "#/$defs/portablePath"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1},
+        "mode": {"const": "RGBA"},
+        "provenance": {
+          "enum": [
+            "imagegen",
+            "grok-imagine-image",
+            "imported",
+            "fixture",
+            "mixed"
+          ]
+        }
+      }
+    },
+    "segmentation": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "method",
+        "alpha_high",
+        "alpha_low",
+        "halo_radius",
+        "min_strong_pixels",
+        "connectivity",
+        "itemCount"
+      ],
+      "properties": {
+        "method": {
+          "enum": [
+            "alpha-hysteresis-connected-components",
+            "reviewed-mask-import",
+            "model-mask-import",
+            "manual"
+          ]
+        },
+        "alpha_high": {"type": "integer", "minimum": 1, "maximum": 255},
+        "alpha_low": {"type": "integer", "minimum": 0, "maximum": 255},
+        "halo_radius": {"type": "integer", "minimum": 0, "maximum": 64},
+        "min_strong_pixels": {"type": "integer", "minimum": 1},
+        "connectivity": {"enum": [4, 8]},
+        "itemCount": {"type": "integer", "minimum": 1}
+      }
+    },
+    "packing": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "algorithm",
+        "quantum",
+        "padding",
+        "max_width",
+        "outer_padding",
+        "extrude",
+        "sort",
+        "rotation",
+        "rescale"
+      ],
+      "properties": {
+        "algorithm": {
+          "enum": [
+            "maxrects-best-short-side-fit",
+            "shelf",
+            "manual-reviewed"
+          ]
+        },
+        "quantum": {"type": "integer", "minimum": 1},
+        "padding": {"type": "integer", "minimum": 0},
+        "max_width": {"type": "integer", "minimum": 1},
+        "outer_padding": {"type": "integer", "minimum": 0},
+        "extrude": {"type": "integer", "minimum": 0},
+        "sort": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string"}
+        },
+        "rotation": {"const": false},
+        "rescale": {"const": false}
+      }
+    },
+    "atlas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "width", "height", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/portablePath"},
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/item"}
+    },
+    "classification": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "taxonomyId": {"type": "string", "minLength": 1},
+        "taxonomySha256": {"$ref": "#/$defs/sha256"},
+        "resultsSha256": {"$ref": "#/$defs/sha256"},
+        "minimumConfidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "appliedCount": {"type": "integer", "minimum": 0},
+        "missingCount": {"type": "integer", "minimum": 0}
+      }
+    },
+    "reviewApplication": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "reviewPath": {"$ref": "#/$defs/portablePath"},
+        "reviewSha256": {"$ref": "#/$defs/sha256"},
+        "approvedCount": {"type": "integer", "minimum": 0},
+        "rejectedCount": {"type": "integer", "minimum": 0},
+        "replacementCount": {"type": "integer", "minimum": 0}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["sourceComponents", "atlasGrid"],
+      "properties": {
+        "sourceComponents": {"$ref": "#/$defs/portablePath"},
+        "atlasGrid": {"$ref": "#/$defs/portablePath"}
+      }
+    },
+    "completion": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["geometryBuilt", "classificationComplete", "reviewComplete"],
+      "properties": {
+        "geometryBuilt": {"type": "boolean"},
+        "classificationComplete": {"type": "boolean"},
+        "reviewComplete": {"type": "boolean"}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "portablePath": {
+      "type": "string",
+      "minLength": 1,
+      "allOf": [
+        {"not": {"pattern": "^/"}},
+        {"not": {"pattern": "\\\\"}},
+        {"not": {"pattern": "(^|/)\\.\\.(/|$)"}}
+      ]
+    },
+    "rect": {
+      "type": "array",
+      "prefixItems": [
+        {"type": "integer", "minimum": 0},
+        {"type": "integer", "minimum": 0},
+        {"type": "integer", "minimum": 1},
+        {"type": "integer", "minimum": 1}
+      ],
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "size": {
+      "type": "array",
+      "prefixItems": [
+        {"type": "integer", "minimum": 1},
+        {"type": "integer", "minimum": 1}
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "pivot": {
+      "type": "array",
+      "prefixItems": [
+        {"type": "number"},
+        {"type": "number"}
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "classification": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "family",
+        "canonicalType",
+        "materials",
+        "condition",
+        "orientation",
+        "sizeClass",
+        "tags",
+        "confidence",
+        "source"
+      ],
+      "properties": {
+        "family": {"type": "string", "minLength": 1},
+        "canonicalType": {"type": "string", "minLength": 1},
+        "subtype": {"type": ["string", "null"]},
+        "materials": {"type": "array", "items": {"type": "string"}},
+        "condition": {"type": "array", "items": {"type": "string"}},
+        "orientation": {"type": "string"},
+        "sizeClass": {"type": "string"},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "source": {"type": "string"},
+        "notes": {"type": "string"}
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status", "notes", "replacement"],
+      "properties": {
+        "status": {
+          "enum": ["pending", "approved", "rejected", "replace", "regenerate"]
+        },
+        "notes": {"type": "string"},
+        "replacement": {
+          "oneOf": [
+            {"type": "null"},
+            {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["sha256", "provenance"],
+              "properties": {
+                "sourcePath": {"type": "string"},
+                "path": {"type": "string"},
+                "sha256": {"$ref": "#/$defs/sha256"},
+                "provenance": {"type": "string"},
+                "jobId": {"type": ["string", "null"]}
+              }
+            }
+          ]
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "contentSha256",
+        "source",
+        "artifacts",
+        "geometry",
+        "classification",
+        "review",
+        "qaFlags"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^item_[0-9a-f]{12}(?:_[0-9]{2})?$"
+        },
+        "contentSha256": {"$ref": "#/$defs/sha256"},
+        "source": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["bbox", "strongPixels", "assignedPixels", "weakPixels"],
+          "properties": {
+            "bbox": {"$ref": "#/$defs/rect"},
+            "strongPixels": {"type": "integer", "minimum": 0},
+            "assignedPixels": {"type": "integer", "minimum": 0},
+            "weakPixels": {"type": "integer", "minimum": 0}
+          }
+        },
+        "artifacts": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["rgba", "sha256"],
+          "properties": {
+            "rgba": {"$ref": "#/$defs/portablePath"},
+            "lightComposite": {"$ref": "#/$defs/portablePath"},
+            "darkComposite": {"$ref": "#/$defs/portablePath"},
+            "sha256": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        "geometry": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["originalSize", "cellRect", "frame", "pivot", "scale", "rotated"],
+          "properties": {
+            "originalSize": {"$ref": "#/$defs/size"},
+            "cellRect": {"$ref": "#/$defs/rect"},
+            "frame": {"$ref": "#/$defs/rect"},
+            "pivot": {"$ref": "#/$defs/pivot"},
+            "scale": {"const": 1},
+            "rotated": {"const": false}
+          }
+        },
+        "classification": {"$ref": "#/$defs/classification"},
+        "review": {"$ref": "#/$defs/review"},
+        "qaFlags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string"}
+        }
+      }
+    }
+  }
+}
