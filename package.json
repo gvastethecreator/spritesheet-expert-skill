@@ -12,9 +12,11 @@
     "check": "pnpm run doctor:test && pnpm run validate && pnpm test && pnpm run smoke",
     "pretest": "node -e \"require('node:fs').mkdirSync('.scratch', { recursive: true })\"",
     "test": "python -m pytest -p no:cacheprovider --basetemp .scratch/pytest",
-    "validate": "node scripts/validate-skill-pack.mjs && pnpm run validate:evals && pnpm run validate:motion-templates",
+    "validate": "node scripts/validate-skill-pack.mjs && pnpm run validate:evals && pnpm run validate:motion-templates && pnpm run validate:studio",
     "validate:evals": "node scripts/validate-routing-evals.mjs",
     "validate:motion-templates": "python SKILLS/spritesheet-expert/scripts/check_motion_template_library.py --template-root SKILLS/spritesheet-expert/assets/motion-reference-templates --allow-pending",
+    "validate:studio": "node scripts/validate-studio.mjs",
+    "studio": "python -m http.server 4173 --directory studio",
     "smoke": "python ./SKILLS/spritesheet-expert/scripts/smoke_pipeline.py"
   }
 }
