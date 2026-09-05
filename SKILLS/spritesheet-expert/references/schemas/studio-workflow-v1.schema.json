@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spritesheet.expert/schemas/studio-workflow-v1.schema.json",
+  "title": "Spritesheet Expert Studio Workflow Registry v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "title", "workflows"],
+  "properties": {
+    "schemaVersion": {"const": "studio-workflow-registry-v1"},
+    "title": {"type": "string", "minLength": 1},
+    "workflows": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/workflow"}
+    }
+  },
+  "$defs": {
+    "field": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "label", "type"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$"
+        },
+        "label": {"type": "string", "minLength": 1},
+        "type": {
+          "enum": ["text", "textarea", "number", "select", "checkbox"]
+        },
+        "required": {"type": "boolean"},
+        "default": {},
+        "min": {"type": "number"},
+        "max": {"type": "number"},
+        "step": {"type": "number", "exclusiveMinimum": 0},
+        "options": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string"}
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"type": {"const": "select"}},
+            "required": ["type"]
+          },
+          "then": {"required": ["options"]}
+        }
+      ]
+    },
+    "batchPolicy": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "requestedCount",
+        "advanceOnlyAfterSemanticValidation",
+        "retryOnlyPendingItem"
+      ],
+      "properties": {
+        "requestedCount": {"type": "integer", "minimum": 1},
+        "advanceOnlyAfterSemanticValidation": {"type": "boolean"},
+        "retryOnlyPendingItem": {"type": "boolean"}
+      }
+    },
+    "workflow": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "version",
+        "title",
+        "description",
+        "ownerSkill",
+        "mode",
+        "fields",
+        "promptTemplate",
+        "commandTemplate",
+        "expectedArtifacts",
+        "requiresProvider"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "version": {"type": "integer", "minimum": 1},
+        "title": {"type": "string", "minLength": 1},
+        "description": {"type": "string", "minLength": 1},
+        "ownerSkill": {
+          "enum": [
+            "spritesheet-expert",
+            "build-static-game-assets",
+            "build-game-backgrounds",
+            "build-game-ui-kits",
+            "compose-asset-mockups",
+            "produce-2d-assets"
+          ]
+        },
+        "mode": {
+          "enum": [
+            "deterministic",
+            "local-worker",
+            "handoff",
+            "review",
+            "provider-handoff",
+            "skill-handoff"
+          ]
+        },
+        "fields": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/field"}
+        },
+        "promptTemplate": {"type": "string", "minLength": 20},
+        "commandTemplate": {"type": "string", "minLength": 1},
+        "expectedArtifacts": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "requiresProvider": {"type": "boolean"},
+        "requiresExplicitExecution": {"type": "boolean"},
+        "batchPolicy": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/batchPolicy"}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"requiresProvider": {"const": true}},
+            "required": ["requiresProvider"]
+          },
+          "then": {
+            "properties": {
+              "requiresExplicitExecution": {"const": true}
+            },
+            "required": ["requiresExplicitExecution"]
+          }
+        }
+      ]
+    }
+  }
+}

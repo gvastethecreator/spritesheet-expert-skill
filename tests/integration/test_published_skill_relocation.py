@@ -51,7 +51,7 @@ def test_published_skill_cli_runs_after_isolated_copy(
     tmp_path: Path, skill: str
 ) -> None:
     destination = tmp_path / skill
-    shutil.copytree(SKILLS_ROOT / skill, destination)
+    shutil.copytree(SKILLS_ROOT / skill, destination, ignore=shutil.ignore_patterns(".local", "__pycache__"))
     relative_cli, argument = PUBLIC_CLIS[skill]
 
     result = subprocess.run(
@@ -66,12 +66,35 @@ def test_published_skill_cli_runs_after_isolated_copy(
     assert "usage:" in result.stdout.lower()
 
 
+def test_relocated_item_workflow_and_locked_runtime_paths(tmp_path: Path) -> None:
+    from PIL import Image, ImageDraw
+    destination = tmp_path / "moved skill"
+    shutil.copytree(SKILLS_ROOT / "spritesheet-expert", destination, ignore=shutil.ignore_patterns(".local", "__pycache__"))
+    source = tmp_path / "input.png"
+    image = Image.new("RGBA", (24, 24))
+    ImageDraw.Draw(image).rectangle((4, 4, 19, 19), fill=(20, 60, 100, 192))
+    image.save(source)
+    built = subprocess.run([sys.executable, str(destination / "scripts/run_item_atlas_workflow.py"), str(source),
+                            "--models", "none", "--output-dir", str(tmp_path / "result")],
+                           cwd=destination, text=True, capture_output=True)
+    assert built.returncode == 0, built.stdout + built.stderr
+    assert (destination / "studio/local-workflow.js").is_file()
+    assert (destination / "model-runtime/uv.lock").is_file()
+    if shutil.which("uv"):
+        probe = subprocess.run([sys.executable, str(destination / "scripts/setup_item_model_runtime.py"), "--dry-run"],
+                               cwd=destination, text=True, capture_output=True)
+        assert probe.returncode == 0, probe.stdout + probe.stderr
+        payload = json.loads(probe.stdout)
+        assert Path(payload["runtimeDir"]).is_relative_to(destination)
+        assert "--locked" in payload["command"] and not payload["downloadsModelWeights"]
+
+
 @pytest.mark.parametrize("skill", sorted(REQUIREMENTS))
 def test_published_skill_ships_an_installable_runtime_recovery(
     tmp_path: Path, skill: str
 ) -> None:
     destination = tmp_path / skill
-    shutil.copytree(SKILLS_ROOT / skill, destination)
+    shutil.copytree(SKILLS_ROOT / skill, destination, ignore=shutil.ignore_patterns(".local", "__pycache__"))
     requirements = destination / REQUIREMENTS[skill]
 
     assert requirements.is_file()
@@ -100,7 +123,7 @@ def test_relocated_leaf_executes_a_real_contract_request(
     tmp_path: Path, skill: str
 ) -> None:
     destination = tmp_path / skill
-    shutil.copytree(SKILLS_ROOT / skill, destination)
+    shutil.copytree(SKILLS_ROOT / skill, destination, ignore=shutil.ignore_patterns(".local", "__pycache__"))
     artifact = tmp_path / "artifact"
     artifact.mkdir()
     document = artifact / "request.json"
@@ -131,7 +154,7 @@ def test_relocated_leaf_missing_dependency_points_to_its_own_requirements(
     tmp_path: Path, skill: str
 ) -> None:
     destination = tmp_path / skill
-    shutil.copytree(SKILLS_ROOT / skill, destination)
+    shutil.copytree(SKILLS_ROOT / skill, destination, ignore=shutil.ignore_patterns(".local", "__pycache__"))
     artifact = tmp_path / "artifact"
     artifact.mkdir()
     document = artifact / "request.json"
@@ -163,7 +186,7 @@ def test_relocated_leaf_missing_dependency_points_to_its_own_requirements(
 
 def test_relocated_main_skill_doctor_uses_bundled_requirements(tmp_path: Path) -> None:
     destination = tmp_path / "spritesheet-expert"
-    shutil.copytree(SKILLS_ROOT / "spritesheet-expert", destination)
+    shutil.copytree(SKILLS_ROOT / "spritesheet-expert", destination, ignore=shutil.ignore_patterns(".local", "__pycache__"))
     doctor = destination / "scripts" / "check_python_env.py"
     requirements = destination / REQUIREMENTS["spritesheet-expert"]
 
@@ -183,7 +206,7 @@ def test_relocated_main_skill_doctor_uses_bundled_requirements(tmp_path: Path) -
 
 def test_relocated_main_skill_runs_deterministic_smoke(tmp_path: Path) -> None:
     destination = tmp_path / "spritesheet-expert"
-    shutil.copytree(SKILLS_ROOT / "spritesheet-expert", destination)
+    shutil.copytree(SKILLS_ROOT / "spritesheet-expert", destination, ignore=shutil.ignore_patterns(".local", "__pycache__"))
 
     result = subprocess.run(
         [sys.executable, str(destination / "scripts" / "smoke_pipeline.py")],

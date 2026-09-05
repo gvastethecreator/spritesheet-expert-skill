@@ -1,0 +1,34 @@
+[project]
+name = "spritesheet-expert-local-model-runtime"
+version = "0.1.0"
+description = "Optional local Qwen3-VL and SAM2 runtime for spritesheet-expert"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "accelerate==1.14.0",
+  "jsonschema==4.26.0",
+  "lm-format-enforcer==0.11.3",
+  "Pillow==12.3.0",
+  "transformers==4.57.6",
+]
+
+[project.optional-dependencies]
+cpu = ["torch==2.10.0", "torchvision==0.25.0"]
+nvidia = ["torch==2.10.0", "torchvision==0.25.0"]
+
+[tool.uv]
+package = false
+conflicts = [[{extra = "cpu"}, {extra = "nvidia"}]]
+
+[tool.uv.sources]
+torch = [{index = "pytorch-cpu", extra = "cpu"}, {index = "pytorch-cuda", extra = "nvidia"}]
+torchvision = [{index = "pytorch-cpu", extra = "cpu"}, {index = "pytorch-cuda", extra = "nvidia"}]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cuda"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

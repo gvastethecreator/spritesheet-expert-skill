@@ -7,6 +7,26 @@ description: "Spritesheets: compact grids, anatomy-driven animation rows, tilese
 
 ## Overview
 
+Read [references/production-workflow.md](references/production-workflow.md) before a production batch or end-to-end delivery. Choose the static-item, true-grid, animation or tileset lane explicitly; freeze the project style/camera/scale lock and exact accepted references before generation. Black Flag and other project-specific batch rules are profiles, not global restrictions on every asset kind.
+
+For imported transparent item sheets, read [references/local-model-item-workflow.md](references/local-model-item-workflow.md).
+It covers the portable Studio, local Qwen/SAM2 inference, visual-group segmentation,
+source-pixel ownership, classification, ordered rectangular cells, and review.
+Run `scripts/serve_item_studio.py` for the interface or
+`scripts/run_item_atlas_workflow.py` for the same workflow from the CLI.
+Local models analyze existing art; source provenance remains imported or provider-derived.
+
+## Production Acceptance Gates
+
+- Distinguish generated, processed, visually reviewed, technically verified and engine-tested. Never infer production readiness from a cached completion boolean, successful model job or attractive atlas preview.
+- Expand the accepted camera, apparent scale, palette, silhouette/detail rules and reference hashes into each handoff. “Match the previous sheet” is not a portable style contract. Review consistency across the cohort at native size.
+- For independently requested category sheets, prepare separate jobs and separate image outputs. Do not count duplicates, wrong-camera results or multicategory collages as accepted jobs. Preserve lane-appropriate compact animation grids and internal QA contact sheets; they are not substitutes for separate requested deliverables.
+- Keep original sources and explicit pending/discarded pixel accounting. Regenerate semantic, camera or clipped-source failures through the selected provider; do not redraw production replacements procedurally or hide missing pixels with repacking.
+- For deterministic static-item delivery, run `scripts/validate_item_delivery.py --manifest <active-manifest>` against current disk artifacts. Final export requires every emitted item approved, no pending pixels, no source-edge hard failures and exact source/crop/atlas geometry and hashes. Draft only relaxes review, never integrity; fixture art is not a production delivery.
+- Use `studio/delivery-lab.html` for hash-verified atlas, source, native-pivot placement and delivery-evidence inspection. This read-only viewer is not a replacement editor, automatic approval or target-engine smoke test. Read the legacy-viewer limitations in the production workflow before accepting portable review handoffs.
+- `scripts/export_item_atlas.py` exports validated static items as JSON Hash using actual frames, never reserved packing cells. It does not infer animation timelines, collision shapes or world footprints. Verify the real engine loader, pivots, filtering and target texture limits before claiming engine-ready delivery.
+- Any changed source, crop, classification, style lock, pivot, atlas or active manifest requires the affected review/proof to be renewed. Preserve reviewed successors; do not replay a completed reviewed CLI run into its original directory.
+
 Component-row pipeline:
 
 ```text
@@ -27,7 +47,7 @@ Default stills: `$imagegen`. `$grok-imagine` only as the explicit optional image
 - If Imagegen lacks valid native alpha, generate on flat gray, black, or white and use the documented background-removal path. No chroma colors for new production art.
 - Local PIL/procedural drawing: deterministic fixtures and geometry debugging only. Never production art.
 - Generated-art validation needs provider-produced source media, not local inference.
-- Production art prefers provider-native alpha. Gray/black/white fallback when native alpha is absent or fails review; green/blue/cyan/magenta = legacy-import chroma only. Alpha validation or model-backed removal plus a contact sheet proves the production-art boundary.
+- Production art prefers provider-native alpha. Gray/black/white fallback when native alpha is absent or fails review; green, blue, cyan, or magenta are legacy-import chroma only. Alpha validation or model-backed removal plus a contact sheet proves the production-art boundary.
 - Before final QA, run `scripts/check_generation_provenance.py --run-dir /abs/run`. `--allow-imported-source` only for explicit imported art; `--allow-fixture` only for tests.
 - Move selected provider output into the project run folder before extraction; do not leave sources only in a client cache.
 - Core setup: Pillow and jsonschema via `scripts/requirements-core.txt`. Install Lucida, background-removal, or video extras only for the selected lane.

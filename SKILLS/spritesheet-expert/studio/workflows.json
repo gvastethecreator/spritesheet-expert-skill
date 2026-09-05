@@ -1,0 +1,411 @@
+{
+  "schemaVersion": "studio-workflow-registry-v1",
+  "title": "Spritesheet Expert Studio workflows",
+  "workflows": [
+    {
+      "id": "run-local-item-workflow",
+      "version": 1,
+      "title": "Process a sheet with local models",
+      "description": "Segment visual groups, classify sprites, and build a size-ordered atlas with a review queue.",
+      "ownerSkill": "spritesheet-expert",
+      "mode": "local-worker",
+      "fields": [
+        {
+          "id": "source",
+          "label": "Source PNG",
+          "type": "text",
+          "required": true,
+          "default": "source.png"
+        },
+        {
+          "id": "output",
+          "label": "Output folder",
+          "type": "text",
+          "required": true,
+          "default": "build/item-workflow"
+        },
+        {
+          "id": "profile",
+          "label": "Model profile",
+          "type": "select",
+          "options": [
+            "standard",
+            "light",
+            "none"
+          ],
+          "default": "standard"
+        }
+      ],
+      "promptTemplate": "Use $spritesheet-expert to process {{source}} with the {{profile}} local model profile. Write {{output}}. Preserve original RGBA, keep visual groups together, report ambiguous ownership, and review pending pixels before delivery.",
+      "commandTemplate": "python scripts/run_item_atlas_workflow.py \"{{source}}\" --output-dir \"{{output}}\" --models {{profile}}",
+      "expectedArtifacts": [
+        "workflow.json",
+        "atlas.png",
+        "manifest.json",
+        "qa/pixel-ownership-report.json"
+      ],
+      "requiresProvider": false,
+      "requiresExplicitExecution": true
+    },
+    {
+      "id": "build-deterministic-item-atlas",
+      "version": 1,
+      "title": "Build deterministic item atlas",
+      "description": "Segment an irregular transparent item sheet and repack native-size sprites into rectangular multi-size cells.",
+      "ownerSkill": "spritesheet-expert",
+      "mode": "deterministic",
+      "fields": [
+        {
+          "id": "source",
+          "label": "Source image",
+          "type": "text",
+          "required": true,
+          "default": "source/items.png"
+        },
+        {
+          "id": "provenance",
+          "label": "Source provenance",
+          "type": "select",
+          "options": [
+            "imported",
+            "imagegen",
+            "grok-imagine-image",
+            "fixture",
+            "mixed"
+          ],
+          "default": "imported"
+        },
+        {
+          "id": "outputDir",
+          "label": "Output directory",
+          "type": "text",
+          "required": true,
+          "default": "build/item-atlas"
+        },
+        {
+          "id": "alphaHigh",
+          "label": "Strong alpha",
+          "type": "number",
+          "default": 64,
+          "min": 1,
+          "max": 255
+        },
+        {
+          "id": "alphaLow",
+          "label": "Weak alpha",
+          "type": "number",
+          "default": 2,
+          "min": 1,
+          "max": 255
+        },
+        {
+          "id": "haloRadius",
+          "label": "Weak-alpha halo",
+          "type": "number",
+          "default": 6,
+          "min": 0,
+          "max": 64
+        },
+        {
+          "id": "quantum",
+          "label": "Grid quantum",
+          "type": "number",
+          "default": 32,
+          "min": 1
+        },
+        {
+          "id": "padding",
+          "label": "Negative-space padding",
+          "type": "number",
+          "default": 16,
+          "min": 0
+        },
+        {
+          "id": "maxWidth",
+          "label": "Maximum atlas width",
+          "type": "number",
+          "default": 4096,
+          "min": 32
+        }
+      ],
+      "promptTemplate": "Use $spritesheet-expert to compile the existing RGBA item sheet at {{source}} into a deterministic item atlas under {{outputDir}}. Record {{provenance}} as the source provenance. Detect strong components at alpha {{alphaHigh}}, recover weak alpha from {{alphaLow}} only within a {{haloRadius}} px halo, preserve every sprite at exact scale 1, disable rotation, reserve {{padding}} px of transparent negative space, quantize rectangular cells to {{quantum}} px, and keep the atlas width at or below {{maxWidth}} px. Produce item crops, source/component evidence, a clean runtime atlas, a grid preview, and a manifest with separate cellRect and frame geometry. Do not generate replacement art during this workflow.",
+      "commandTemplate": "python scripts/build_deterministic_item_atlas.py \"{{source}}\" --output-dir \"{{outputDir}}\" --provenance {{provenance}} --alpha-high {{alphaHigh}} --alpha-low {{alphaLow}} --halo-radius {{haloRadius}} --grid-quantum {{quantum}} --padding {{padding}} --max-width {{maxWidth}}",
+      "expectedArtifacts": [
+        "manifest.json",
+        "atlas.png",
+        "items/",
+        "inference/",
+        "qa/source-components.png",
+        "qa/atlas-grid.png"
+      ],
+      "requiresProvider": false
+    },
+    {
+      "id": "prepare-item-classification",
+      "version": 1,
+      "title": "Prepare item classification",
+      "description": "Create one closed-taxonomy classification handoff per extracted sprite.",
+      "ownerSkill": "spritesheet-expert",
+      "mode": "handoff",
+      "fields": [
+        {
+          "id": "manifest",
+          "label": "Item manifest",
+          "type": "text",
+          "required": true,
+          "default": "build/item-atlas/manifest.json"
+        },
+        {
+          "id": "taxonomy",
+          "label": "Taxonomy",
+          "type": "text",
+          "required": true,
+          "default": "references/taxonomies/generic-props-v1.json"
+        },
+        {
+          "id": "output",
+          "label": "Jobs JSONL",
+          "type": "text",
+          "required": true,
+          "default": "build/item-atlas/inference/jobs.jsonl"
+        }
+      ],
+      "promptTemplate": "Use $spritesheet-expert to prepare model-neutral classification jobs from {{manifest}} using the closed taxonomy {{taxonomy}}. Create exactly one job per extracted item and write the queue to {{output}}. Each job must reference the original RGBA crop plus light and dark composites. Do not classify the complete source sheet as one image, do not invent taxonomy values, and preserve unknown as an explicit review state.",
+      "commandTemplate": "python scripts/prepare_item_classification.py --manifest \"{{manifest}}\" --taxonomy \"{{taxonomy}}\" --out \"{{output}}\"",
+      "expectedArtifacts": [
+        "jobs.jsonl"
+      ],
+      "requiresProvider": false
+    },
+    {
+      "id": "apply-item-classification",
+      "version": 1,
+      "title": "Apply classification results",
+      "description": "Validate model or human results and create an immutable classified manifest.",
+      "ownerSkill": "spritesheet-expert",
+      "mode": "deterministic",
+      "fields": [
+        {
+          "id": "manifest",
+          "label": "Source manifest",
+          "type": "text",
+          "required": true,
+          "default": "build/item-atlas/manifest.json"
+        },
+        {
+          "id": "results",
+          "label": "Results JSON/JSONL",
+          "type": "text",
+          "required": true,
+          "default": "build/item-atlas/inference/results.jsonl"
+        },
+        {
+          "id": "taxonomy",
+          "label": "Taxonomy",
+          "type": "text",
+          "required": true,
+          "default": "references/taxonomies/generic-props-v1.json"
+        },
+        {
+          "id": "minimumConfidence",
+          "label": "Minimum confidence",
+          "type": "number",
+          "default": 0.6,
+          "min": 0,
+          "max": 1,
+          "step": 0.05
+        },
+        {
+          "id": "output",
+          "label": "Successor manifest",
+          "type": "text",
+          "required": true,
+          "default": "build/item-atlas/manifest.classified.json"
+        }
+      ],
+      "promptTemplate": "Validate and apply the item classification results at {{results}} to {{manifest}} using {{taxonomy}} and a minimum confidence of {{minimumConfidence}}. Reject values outside the closed taxonomy, route lower-confidence results to unknown, preserve source geometry, and write an immutable successor manifest to {{output}} with the parent manifest hash.",
+      "commandTemplate": "python scripts/apply_item_classification.py --manifest \"{{manifest}}\" --results \"{{results}}\" --taxonomy \"{{taxonomy}}\" --minimum-confidence {{minimumConfidence}} --out \"{{output}}\"",
+      "expectedArtifacts": [
+        "manifest.classified.json"
+      ],
+      "requiresProvider": false
+    },
+    {
+      "id": "review-item-sheet",
+      "version": 1,
+      "title": "Review item sheet",
+      "description": "Open a manifest in the Atlas Lab, edit metadata, and export portable decisions.",
+      "ownerSkill": "spritesheet-expert",
+      "mode": "review",
+      "fields": [
+        {
+          "id": "manifest",
+          "label": "Manifest",
+          "type": "text",
+          "required": true,
+          "default": "build/item-atlas/manifest.json"
+        },
+        {
+          "id": "reviewOutput",
+          "label": "Review output",
+          "type": "text",
+          "required": true,
+          "default": "build/item-atlas/review/item-review.json"
+        }
+      ],
+      "promptTemplate": "Review every item in {{manifest}} through the Spritesheet Expert Atlas Lab. Inspect alpha edges, source bounds, negative space, classification, and cell/frame geometry. Mark each item approved, rejected, replace, or regenerate; preserve notes and metadata overrides; export the portable review contract to {{reviewOutput}}. Do not treat an uninspected numeric report as visual approval.",
+      "commandTemplate": "python scripts/serve_item_studio.py",
+      "expectedArtifacts": [
+        "item-review.json"
+      ],
+      "requiresProvider": false
+    },
+    {
+      "id": "regenerate-single-item",
+      "version": 1,
+      "title": "Regenerate exactly one item",
+      "description": "Produce an isolated provider handoff for one pending replacement only.",
+      "ownerSkill": "spritesheet-expert",
+      "mode": "provider-handoff",
+      "fields": [
+        {
+          "id": "itemId",
+          "label": "Target item ID",
+          "type": "text",
+          "required": true,
+          "default": "item_..."
+        },
+        {
+          "id": "description",
+          "label": "Exact item description",
+          "type": "textarea",
+          "required": true,
+          "default": "one isolated worn metal oil can with a long narrow spout"
+        },
+        {
+          "id": "style",
+          "label": "Style and camera locks",
+          "type": "textarea",
+          "required": true,
+          "default": "match the accepted Black Flag prop style; preserve the requested camera and native visual scale"
+        },
+        {
+          "id": "background",
+          "label": "Background",
+          "type": "select",
+          "options": [
+            "transparent",
+            "flat neutral gray",
+            "flat black",
+            "flat white"
+          ],
+          "default": "transparent"
+        },
+        {
+          "id": "output",
+          "label": "Expected returned file",
+          "type": "text",
+          "required": true,
+          "default": "handoffs/returned/item-replacement.png"
+        }
+      ],
+      "promptTemplate": "Generate exactly one image containing only {{description}}. {{style}}. Use a {{background}} background with clean isolation and sufficient empty margin around the complete silhouette. Return one candidate for item {{itemId}} at {{output}}. Do not include another object category, alternate variants, labels, a grid, a collage, a contact sheet, a concept sheet, or multiple panels. Do not reuse a failed multi-object image as an image-to-image reference.",
+      "commandTemplate": "# Provider execution is intentionally external. Export this workflow as a JSON handoff before running inference.",
+      "expectedArtifacts": [
+        "one isolated replacement image"
+      ],
+      "requiresProvider": true,
+      "requiresExplicitExecution": true,
+      "batchPolicy": {
+        "requestedCount": 1,
+        "advanceOnlyAfterSemanticValidation": true,
+        "retryOnlyPendingItem": true
+      }
+    },
+    {
+      "id": "apply-item-review",
+      "version": 1,
+      "title": "Apply review and rebuild atlas",
+      "description": "Apply approvals, exclusions, and exact replacements to a new immutable atlas run.",
+      "ownerSkill": "spritesheet-expert",
+      "mode": "deterministic",
+      "fields": [
+        {
+          "id": "manifest",
+          "label": "Parent manifest",
+          "type": "text",
+          "required": true,
+          "default": "build/item-atlas/manifest.json"
+        },
+        {
+          "id": "review",
+          "label": "Review contract",
+          "type": "text",
+          "required": true,
+          "default": "build/item-atlas/review/item-review.json"
+        },
+        {
+          "id": "outputDir",
+          "label": "Successor run directory",
+          "type": "text",
+          "required": true,
+          "default": "build/item-atlas-reviewed"
+        }
+      ],
+      "promptTemplate": "Apply {{review}} to {{manifest}} and rebuild the approved item atlas under {{outputDir}}. Reject unresolved regeneration requests, verify replacement hashes, preserve exact native sprite sizes, keep rotation disabled, repack deterministically, record parent-manifest lineage, and regenerate all affected QA evidence.",
+      "commandTemplate": "python scripts/apply_item_review.py --manifest \"{{manifest}}\" --review \"{{review}}\" --output-dir \"{{outputDir}}\"",
+      "expectedArtifacts": [
+        "manifest.json",
+        "atlas.png",
+        "items/",
+        "review/",
+        "qa/atlas-grid.png"
+      ],
+      "requiresProvider": false
+    },
+    {
+      "id": "prepare-sprite-production-run",
+      "version": 1,
+      "title": "Prepare sprite production run",
+      "description": "Use the existing skill contracts to prepare prompts, layouts, provenance, and QA routing.",
+      "ownerSkill": "spritesheet-expert",
+      "mode": "skill-handoff",
+      "fields": [
+        {
+          "id": "request",
+          "label": "Sprite request JSON",
+          "type": "text",
+          "required": true,
+          "default": "sprite-request.json"
+        },
+        {
+          "id": "runDir",
+          "label": "Run directory",
+          "type": "text",
+          "required": true,
+          "default": "build/sprite-run"
+        },
+        {
+          "id": "provider",
+          "label": "Generation route",
+          "type": "select",
+          "options": [
+            "imagegen",
+            "grok-imagine",
+            "imported media"
+          ],
+          "default": "imagegen"
+        }
+      ],
+      "promptTemplate": "Use $spritesheet-expert to prepare {{request}} under {{runDir}} with {{provider}} as the declared media route. Resolve the narrowest workflow, produce prompts and layout evidence, enforce provenance and transparency policy, keep provider execution separate from deterministic extraction, and do not claim completion until current atlas, manifest, playback/contact evidence, and QA reports have been inspected.",
+      "commandTemplate": "python scripts/prepare_sprite_run.py --request \"{{request}}\" --run-dir \"{{runDir}}\"",
+      "expectedArtifacts": [
+        "prepared request",
+        "prompts",
+        "layout guides",
+        "QA routing"
+      ],
+      "requiresProvider": false
+    }
+  ]
+}
