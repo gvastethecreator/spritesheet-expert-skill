@@ -15,7 +15,7 @@ Portable static-asset pack: explicit roles, dimensions, pivots, crop policy, lic
 
 2. Generate or import real source art.
    - `$imagegen` default for new user-facing bitmap art. Load `$grok-imagine` only for explicit Grok stills. Provider creates semantic pixels; local scripts may crop, remove backgrounds, resize, compose proof, validate, but must not draw replacement production art.
-   - Prefer native alpha for isolated sources when the provider supports it. Preserve valid transparency. If a matte is necessary, use flat gray, black, or white, never green, blue, cyan, or magenta chroma. Preserve subject neutrals with a reviewed model-backed cutout when matte removal is ambiguous.
+   - Prefer native alpha for isolated sources when the provider supports it. Preserve valid transparency. If a matte is necessary, use flat gray, black, or white, never green, blue, cyan, or magenta chroma. Preserve subject neutrals with a reviewed model-backed cutout when matte removal is ambiguous. BiRefNet/BEN2 are explicit comparison options, not permission to replace valid native alpha or accept an unreviewed matte.
    - Grok: review `--dry-run` first; `--ack-run` only with explicit current-task consent. Never call paid inference from tests.
    - Sources below one pack root with portable relative paths and SHA-256 pins.
    - Declare `source.provenance` per asset. Generated sources identify Imagegen or Grok; imported art and fixtures stay explicit. Fixture can test the pipeline; never representative production media.
