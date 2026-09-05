@@ -59,9 +59,12 @@ def main():
                 receipt.write_text(json.dumps(stale), encoding="utf-8")
                 page.locator("#receipt").set_input_files(receipt)
                 page.wait_for_function("document.getElementById('check-output').textContent.includes('REJECTED')")
-                (root / "atlas.png").write_bytes(b"not the pinned atlas")
-                page.locator("#folder").set_input_files([])
-                page.locator("#folder").set_input_files(root)
+                # Directory inputs require a directory, not the empty file-list API.
+                # Switch roots to exercise stale-view clearing as well as hash rejection.
+                corrupted = Path(temporary) / "corrupted"
+                shutil.copytree(root, corrupted)
+                (corrupted / "atlas.png").write_bytes(b"not the pinned atlas")
+                page.locator("#folder").set_input_files(corrupted)
                 page.wait_for_function("document.getElementById('status').textContent.includes('BLOCKED')")
                 assert not page.locator("#canvas").is_visible()
                 assert not errors, errors
