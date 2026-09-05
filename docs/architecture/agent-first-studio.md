@@ -44,7 +44,7 @@ A visual label is never baked into the runtime atlas. Human-readable labels are 
 
 ### Deterministic before generative
 
-Transparent item sheets are segmented from alpha whenever possible. Local or remote segmentation models are fallback workers for opaque backgrounds, touching objects, ambiguous fragments, or manual prompts. Classification is an optional semantic step after deterministic extraction.
+Transparent item sheets begin with alpha components as candidate regions. The local workflow asks Qwen about one region at a time with sheet context, then applies SAM2 masks to original source pixels. Components are not reference object counts. Conflicts and unassigned pixels require review. Classification follows extraction. Studio and CLI use one staged Python runner; see the skill's local item-sheet workflow reference.
 
 ## Main workspaces
 
