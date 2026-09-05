@@ -15,7 +15,7 @@ Portable raster UI kit: explicit tokens, densities, component states, hashes, pr
 
 2. Generate or import component art.
    - `$imagegen` default for new user-facing bitmap art. Load `$grok-imagine` only when Grok stills are selected explicitly. Provider creates semantic pixels; deterministic code may cut out, resize, assemble states, stretch nine-slices, and render proof, but must not draw replacement production UI.
-   - Isolated controls and icons on flat gray, black, or white. Never request new green, blue, cyan, or magenta chroma. Preserve neutral fills and outlines; use BiRefNet/BEN2 or another reviewed model-backed cutout when connected-matte removal is ambiguous.
+   - Request native alpha for isolated controls and icons when supported. Preserve valid transparency. If a matte is necessary, use flat gray, black, or white; never request new green, blue, cyan, or magenta chroma. Preserve neutral fills and outlines with a reviewed model-backed cutout when matte removal is ambiguous.
    - Grok: review `--dry-run` first; `--ack-run` only with explicit current-task consent. Animated UI/VFX sequences → `$spritesheet-expert`.
    - Every density and state below one kit root. Portable relative paths.
    - Declare provenance on every state/density variant: Imagegen, Grok still, imported, or fixture. Fixture may validate state geometry; not representative production media.

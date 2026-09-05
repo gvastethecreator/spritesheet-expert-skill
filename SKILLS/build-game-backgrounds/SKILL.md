@@ -15,7 +15,7 @@ Portable layered-background pack: sources, camera contract, hashes, composite, a
 
 2. Generate or import the layers.
    - `$imagegen` default for new user-facing bitmap art. Load `$grok-imagine` only when Grok stills are selected explicitly. Provider creates semantic pixels; deterministic code may assemble, scroll, measure seams, and render proof, but must not paint replacement production scenery.
-   - Full-bleed scene layers keep authored scene pixels; no forced neutral matte. Isolated transparent overlay: generate on flat gray, black, or white; model-backed removal when connected-matte removal threatens subject colors. Never request new green, blue, cyan, or magenta chroma.
+   - Full-bleed scene layers keep authored pixels. For isolated overlays, prefer native alpha and preserve valid transparency. If a matte is necessary, use flat gray, black, or white and a reviewed cutout when removal threatens subject colors. Never request new green, blue, cyan, or magenta chroma.
    - Grok: review `--dry-run` first; `--ack-run` only with explicit current-task consent. Video animation → `$spritesheet-expert`; this skill accepts still layers.
    - Every source below one pack root. Portable relative paths; SHA-256 per layer.
    - Declare provenance for every layer as Imagegen, Grok still, imported, or fixture. Fixtures may exercise composition and seam gates but are not representative art.
