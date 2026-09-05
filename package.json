@@ -16,7 +16,7 @@
     "validate:evals": "node scripts/validate-routing-evals.mjs",
     "validate:motion-templates": "python SKILLS/spritesheet-expert/scripts/check_motion_template_library.py --template-root SKILLS/spritesheet-expert/assets/motion-reference-templates --allow-pending",
     "validate:studio": "node scripts/validate-studio.mjs",
-    "studio": "python -m http.server 4173 --directory studio",
+    "studio": "python SKILLS/spritesheet-expert/scripts/serve_item_studio.py --workspace .local/studio-workspace",
     "smoke": "python ./SKILLS/spritesheet-expert/scripts/smoke_pipeline.py"
   }
 }

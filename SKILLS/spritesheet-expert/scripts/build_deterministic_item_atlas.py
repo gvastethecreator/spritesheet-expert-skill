@@ -28,8 +28,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--grid-quantum", type=int, default=32)
     parser.add_argument("--padding", type=int, default=16)
     parser.add_argument("--outer-padding", type=int, default=0)
-    parser.add_argument("--max-width", type=int, default=4096)
-    parser.add_argument("--extrude", type=int, default=0)
+    parser.add_argument("--max-width", type=int, default=0)
+    parser.add_argument(
+        "--provenance",
+        choices=("imagegen", "grok-imagine-image", "imported", "fixture", "mixed"),
+        required=True,
+    )
     parser.add_argument("--force", action="store_true")
     return parser
 
@@ -52,8 +56,8 @@ def main() -> int:
                 padding=args.padding,
                 outer_padding=args.outer_padding,
                 max_width=args.max_width,
-                extrude=args.extrude,
             ),
+            provenance=args.provenance,
             force=args.force,
         )
         errors = validate_manifest_geometry(manifest)

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "item-taxonomy-v1",
+  "id": "game-assets-v1",
+  "families": {
+    "character": ["villager", "merchant", "craftsperson", "guard", "priest", "noble", "child", "traveler", "beggar", "character"],
+    "building": ["house", "castle", "church", "windmill", "workshop", "stable", "market", "tower", "gate", "well", "dock", "observatory", "hospital", "building"],
+    "animal": ["bird", "horse", "animal"],
+    "heraldry": ["banner", "flag", "shield", "medallion", "seal", "emblem", "frame", "pendant"],
+    "object": ["weapon", "tool", "container", "furniture", "torch", "lantern", "cart", "stall", "grave", "object"],
+    "effect": ["smoke", "fire", "magic", "effect"],
+    "unknown": ["unknown"]
+  },
+  "materials": ["metal", "wood", "stone", "glass", "fabric", "leather", "bone", "wax", "organic", "mixed", "unknown"],
+  "conditions": ["clean", "worn", "damaged", "burning", "unknown"],
+  "orientations": ["horizontal", "vertical", "square", "diagonal", "unknown"],
+  "sizeClasses": ["XS", "S", "M", "L", "XL", "XXL", "unknown"]
+}

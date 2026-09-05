@@ -42,6 +42,15 @@ def _taxonomy(path: Path | None) -> dict[str, Any]:
     value = _load_json(path)
     if not isinstance(value, dict) or not isinstance(value.get("families"), dict):
         raise ClassificationPreparationError("taxonomy must contain a families object")
+    for family, canonical_types in value["families"].items():
+        if not isinstance(family, str) or not family or not isinstance(canonical_types, list):
+            raise ClassificationPreparationError("taxonomy families must map strings to arrays")
+        if not canonical_types or not all(isinstance(entry, str) and entry for entry in canonical_types):
+            raise ClassificationPreparationError("taxonomy canonical types must be non-empty strings")
+    for field in ("materials", "conditions", "orientations", "sizeClasses"):
+        entries = value.get(field, [])
+        if not isinstance(entries, list) or not all(isinstance(entry, str) and entry for entry in entries):
+            raise ClassificationPreparationError(f"taxonomy {field} must be an array of non-empty strings")
     return value
 
 
@@ -75,25 +84,44 @@ def _job(
     item_id = str(item.get("id", ""))
     if not item_id:
         raise ClassificationPreparationError("item id missing")
+    rgba_sha = _digest(rgba)
+    if artifacts.get("sha256") != rgba_sha:
+        raise ClassificationPreparationError(f"{item_id}: RGBA artifact sha256 mismatch")
 
-    families = taxonomy.get("families", {})
+    allowed_taxonomy = {
+        "families": taxonomy.get("families", {}),
+        "materials": taxonomy.get("materials", []),
+        "conditions": taxonomy.get("conditions", []),
+        "orientations": taxonomy.get("orientations", []),
+        "sizeClasses": taxonomy.get("sizeClasses", []),
+    }
     prompt = (
         "Classify exactly one isolated game-art item. Use only the supplied closed taxonomy. "
         "Do not infer another item from the source sheet and do not invent a category. "
         "Return unknown when evidence is insufficient. Return JSON only with family, "
         "canonicalType, subtype, materials, condition, orientation, sizeClass, tags, "
-        "confidence, and notes. Allowed families and canonical types: "
-        + json.dumps(families, ensure_ascii=False, separators=(",", ":"))
+        "confidence, and notes. materials, condition and tags MUST be arrays of strings, "
+        "including for one value. Use [] when none apply. subtype is a string or null. "
+        "confidence is a number from 0 to 1. Example shape: "
+        '{"family":"unknown","canonicalType":"unknown","subtype":null,'
+        '"materials":[],"condition":[],"orientation":"unknown","sizeClass":"unknown",'
+        '"tags":[],"confidence":0.1,"notes":"insufficient evidence"}. Allowed taxonomy: '
+        + json.dumps(allowed_taxonomy, ensure_ascii=False, separators=(",", ":"))
     )
     return {
         "schemaVersion": "item-classification-job-v1",
         "jobId": f"classify-{item_id}",
         "runId": manifest.get("runId"),
         "itemId": item_id,
+        "pathBase": "manifest-directory",
+        "sourceManifest": {
+            "path": manifest_path.name,
+            "sha256": _digest(manifest_path),
+        },
         "inputs": {
             "rgba": {
                 "path": rgba.relative_to(run_root).as_posix(),
-                "sha256": _digest(rgba),
+                "sha256": rgba_sha,
             },
             "lightComposite": {
                 "path": light.relative_to(run_root).as_posix(),
@@ -105,6 +133,7 @@ def _job(
             },
         },
         "taxonomyId": taxonomy.get("id", "unnamed-taxonomy"),
+        "taxonomy": allowed_taxonomy,
         "prompt": prompt,
         "expected": {
             "count": 1,
@@ -130,13 +159,25 @@ def main() -> int:
     try:
         manifest_path = args.manifest.expanduser().resolve()
         manifest = _load_json(manifest_path)
-        taxonomy = _taxonomy(args.taxonomy.expanduser().resolve() if args.taxonomy else None)
+        taxonomy_path = args.taxonomy.expanduser().resolve() if args.taxonomy else None
+        taxonomy = _taxonomy(taxonomy_path)
         if not isinstance(manifest, dict) or manifest.get("kind") != "deterministic-item-atlas":
             raise ClassificationPreparationError("manifest is not a deterministic item atlas")
         items = manifest.get("items")
         if not isinstance(items, list) or not items:
             raise ClassificationPreparationError("manifest contains no items")
+        seen_ids: set[str] = set()
+        for item in items:
+            if not isinstance(item, Mapping) or not isinstance(item.get("id"), str):
+                raise ClassificationPreparationError("every manifest item requires an id")
+            if item["id"] in seen_ids:
+                raise ClassificationPreparationError(f"duplicate manifest item: {item['id']}")
+            seen_ids.add(item["id"])
         output = args.out.expanduser().resolve()
+        if output.suffix.lower() != ".jsonl":
+            raise ClassificationPreparationError("classification jobs output must use a .jsonl filename")
+        if output == manifest_path or (taxonomy_path is not None and output == taxonomy_path):
+            raise ClassificationPreparationError("classification jobs cannot replace an input file")
         if output.exists() and not args.force:
             raise ClassificationPreparationError("output exists; pass --force to replace it")
         jobs = [
@@ -147,7 +188,6 @@ def main() -> int:
                 taxonomy=taxonomy,
             )
             for item in items
-            if isinstance(item, Mapping)
         ]
         output.parent.mkdir(parents=True, exist_ok=True)
         temporary = output.with_suffix(output.suffix + ".tmp")
@@ -156,7 +196,7 @@ def main() -> int:
             encoding="utf-8",
         )
         temporary.replace(output)
-    except ClassificationPreparationError as exc:
+    except (ClassificationPreparationError, OSError) as exc:
         print(json.dumps({"status": "operational-error", "errors": [str(exc)]}, ensure_ascii=False))
         return 3
 

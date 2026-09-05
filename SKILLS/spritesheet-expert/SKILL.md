@@ -7,6 +7,13 @@ description: "Spritesheets: compact grids, anatomy-driven animation rows, tilese
 
 ## Overview
 
+For imported transparent item sheets, read [references/local-model-item-workflow.md](references/local-model-item-workflow.md).
+It covers the portable Studio, local Qwen/SAM2 inference, visual-group segmentation,
+source-pixel ownership, classification, ordered rectangular cells, and review.
+Run `scripts/serve_item_studio.py` for the interface or
+`scripts/run_item_atlas_workflow.py` for the same workflow from the CLI.
+Local models analyze existing art; source provenance remains imported or provider-derived.
+
 Component-row pipeline:
 
 ```text

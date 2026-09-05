@@ -5,11 +5,15 @@ const root = process.cwd();
 const errors = [];
 
 const requiredFiles = [
-  "studio/index.html",
-  "studio/styles.css",
-  "studio/app.js",
-  "studio/workflows.json",
-  "studio/README.md",
+  "SKILLS/spritesheet-expert/scripts/run_item_atlas_workflow.py",
+  "SKILLS/spritesheet-expert/scripts/serve_item_studio.py",
+  "SKILLS/spritesheet-expert/studio/local-workflow.js",
+  "SKILLS/spritesheet-expert/model-runtime/uv.lock",
+  "SKILLS/spritesheet-expert/studio/index.html",
+  "SKILLS/spritesheet-expert/studio/styles.css",
+  "SKILLS/spritesheet-expert/studio/app.js",
+  "SKILLS/spritesheet-expert/studio/workflows.json",
+  "SKILLS/spritesheet-expert/studio/README.md",
   "docs/architecture/agent-first-studio.md",
   "SKILLS/spritesheet-expert/references/agent-first-studio.md",
   "SKILLS/spritesheet-expert/references/deterministic-item-atlas.md",
@@ -31,7 +35,7 @@ for (const relative of requiredFiles) {
   if (!stat?.isFile()) errors.push(`missing Studio file: ${relative}`);
 }
 
-const registryPath = path.join(root, "studio/workflows.json");
+const registryPath = path.join(root, "SKILLS/spritesheet-expert/studio/workflows.json");
 let registry;
 try {
   registry = JSON.parse(await fs.readFile(registryPath, "utf8"));
@@ -67,14 +71,25 @@ if (registry) {
       if (!Array.isArray(workflow.fields)) {
         errors.push(`${workflow.id ?? "<unknown>"}: fields must be an array`);
       }
-      const placeholders = new Set(
-        [...String(workflow.promptTemplate ?? "").matchAll(/\{\{([a-zA-Z0-9_-]+)\}\}/g)]
-          .map((match) => match[1]),
-      );
-      const fieldIds = new Set((workflow.fields ?? []).map((field) => field.id));
-      for (const placeholder of placeholders) {
-        if (!fieldIds.has(placeholder)) {
-          errors.push(`${workflow.id}: prompt placeholder has no field: ${placeholder}`);
+      const fieldIds = new Set();
+      for (const field of workflow.fields ?? []) {
+        if (!field || typeof field !== "object" || typeof field.id !== "string" || !field.id) {
+          errors.push(`${workflow.id ?? "<unknown>"}: every field needs an id`);
+        } else if (fieldIds.has(field.id)) {
+          errors.push(`${workflow.id}: duplicate field id: ${field.id}`);
+        } else {
+          fieldIds.add(field.id);
+        }
+      }
+      for (const templateName of ["promptTemplate", "commandTemplate"]) {
+        const placeholders = new Set(
+          [...String(workflow[templateName] ?? "").matchAll(/\{\{([a-zA-Z0-9_-]+)\}\}/g)]
+            .map((match) => match[1]),
+        );
+        for (const placeholder of placeholders) {
+          if (!fieldIds.has(placeholder)) {
+            errors.push(`${workflow.id}: ${templateName} placeholder has no field: ${placeholder}`);
+          }
         }
       }
     }
@@ -106,11 +121,12 @@ if (registry) {
   }
 }
 
-const html = await fs.readFile(path.join(root, "studio/index.html"), "utf8").catch(() => "");
-const css = await fs.readFile(path.join(root, "studio/styles.css"), "utf8").catch(() => "");
-const app = await fs.readFile(path.join(root, "studio/app.js"), "utf8").catch(() => "");
+const html = await fs.readFile(path.join(root, "SKILLS/spritesheet-expert/studio/index.html"), "utf8").catch(() => "");
+const css = await fs.readFile(path.join(root, "SKILLS/spritesheet-expert/studio/styles.css"), "utf8").catch(() => "");
+const app = await fs.readFile(path.join(root, "SKILLS/spritesheet-expert/studio/app.js"), "utf8").catch(() => "");
+const localWorkflow = await fs.readFile(path.join(root, "SKILLS/spritesheet-expert/studio/local-workflow.js"), "utf8").catch(() => "");
 
-for (const [name, content] of [["index.html", html], ["styles.css", css], ["app.js", app]]) {
+for (const [name, content] of [["index.html", html], ["styles.css", css], ["app.js", app], ["local-workflow.js", localWorkflow]]) {
   if (/https?:\/\//i.test(content)) {
     errors.push(`studio/${name} must not require remote runtime resources`);
   }

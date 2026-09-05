@@ -7,6 +7,7 @@ import argparse
 from copy import deepcopy
 from hashlib import sha256
 import json
+import math
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -35,11 +36,15 @@ def _read_results(path: Path) -> list[dict[str, Any]]:
     except json.JSONDecodeError:
         decoded = None
     if isinstance(decoded, list):
-        return [entry for entry in decoded if isinstance(entry, dict)]
+        if not all(isinstance(entry, dict) for entry in decoded):
+            raise ClassificationApplicationError("every result must be an object")
+        return decoded
     if isinstance(decoded, dict):
         values = decoded.get("results")
         if isinstance(values, list):
-            return [entry for entry in values if isinstance(entry, dict)]
+            if not all(isinstance(entry, dict) for entry in values):
+                raise ClassificationApplicationError("every result must be an object")
+            return values
         return [decoded]
 
     results: list[dict[str, Any]] = []
@@ -70,10 +75,16 @@ def _allowed_taxonomy(taxonomy: Mapping[str, Any]) -> tuple[dict[str, set[str]],
         raise ClassificationApplicationError("taxonomy requires a families object")
     families: dict[str, set[str]] = {}
     for family, values in families_raw.items():
-        if not isinstance(family, str) or not isinstance(values, list):
+        if not isinstance(family, str) or not family or not isinstance(values, list):
             raise ClassificationApplicationError("taxonomy families must map strings to arrays")
+        if not values or not all(isinstance(value, str) and value for value in values):
+            raise ClassificationApplicationError("taxonomy canonical types must be non-empty strings")
         families[family] = {str(value) for value in values}
     families.setdefault("unknown", set()).add("unknown")
+    for field in ("materials", "conditions", "orientations", "sizeClasses"):
+        value = taxonomy.get(field, [])
+        if not isinstance(value, list) or not all(isinstance(entry, str) and entry for entry in value):
+            raise ClassificationApplicationError(f"taxonomy {field} must be an array of non-empty strings")
     return (
         families,
         {str(value) for value in taxonomy.get("materials", [])},
@@ -84,8 +95,8 @@ def _allowed_taxonomy(taxonomy: Mapping[str, Any]) -> tuple[dict[str, set[str]],
 
 
 def _string_list(value: Any, field: str) -> list[str]:
-    if not isinstance(value, list) or not all(isinstance(entry, str) for entry in value):
-        raise ClassificationApplicationError(f"{field} must be an array of strings")
+    if not isinstance(value, list) or not all(isinstance(entry, str) and entry for entry in value):
+        raise ClassificationApplicationError(f"{field} must be an array of non-empty strings")
     return list(dict.fromkeys(value))
 
 
@@ -95,6 +106,8 @@ def _normalize_result(
     *,
     minimum_confidence: float,
 ) -> tuple[str, dict[str, Any], list[str]]:
+    if result.get("schemaVersion") != "item-classification-result-v1":
+        raise ClassificationApplicationError("every result must use item-classification-result-v1")
     item_id = result.get("itemId") or result.get("item_id")
     if not isinstance(item_id, str) or not item_id:
         raise ClassificationApplicationError("every result requires itemId")
@@ -103,13 +116,19 @@ def _normalize_result(
         raise ClassificationApplicationError(f"{item_id}: classification must be an object")
 
     families, materials_allowed, conditions_allowed, orientations_allowed, sizes_allowed = _allowed_taxonomy(taxonomy)
-    family = str(payload.get("family", "unknown"))
-    canonical = str(payload.get("canonicalType", payload.get("canonical_type", "unknown")))
+    family = payload.get("family", "unknown")
+    canonical = payload.get("canonicalType", payload.get("canonical_type", "unknown"))
+    if not isinstance(family, str) or not isinstance(canonical, str):
+        raise ClassificationApplicationError(f"{item_id}: family and canonicalType must be strings")
     confidence = payload.get("confidence", 0.0)
     if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):
         raise ClassificationApplicationError(f"{item_id}: confidence must be numeric")
-    confidence = max(0.0, min(1.0, float(confidence)))
+    confidence = float(confidence)
+    if not math.isfinite(confidence) or not 0 <= confidence <= 1:
+        raise ClassificationApplicationError(f"{item_id}: confidence must be between 0 and 1")
     flags: list[str] = []
+    if family == "unknown" or canonical == "unknown":
+        flags.append("unknown_classification")
 
     if confidence < minimum_confidence:
         family = "unknown"
@@ -136,25 +155,34 @@ def _normalize_result(
                 f"{item_id}: conditions outside taxonomy: {unknown_conditions}"
             )
 
-    orientation = str(payload.get("orientation", "unknown"))
-    size_class = str(payload.get("sizeClass", payload.get("size_class", "unknown")))
+    orientation = payload.get("orientation", "unknown")
+    size_class = payload.get("sizeClass", payload.get("size_class", "unknown"))
+    if not isinstance(orientation, str) or not isinstance(size_class, str):
+        raise ClassificationApplicationError(f"{item_id}: orientation and sizeClass must be strings")
     if orientation not in orientations_allowed:
         raise ClassificationApplicationError(f"{item_id}: invalid orientation {orientation}")
     if size_class not in sizes_allowed:
         raise ClassificationApplicationError(f"{item_id}: invalid sizeClass {size_class}")
 
+    subtype = payload.get("subtype")
+    if subtype is not None and not isinstance(subtype, str):
+        raise ClassificationApplicationError(f"{item_id}: subtype must be a string or null")
+    source = payload.get("source", result.get("model", "classification-result"))
+    notes = payload.get("notes", "")
+    if not isinstance(source, str) or not isinstance(notes, str):
+        raise ClassificationApplicationError(f"{item_id}: source and notes must be strings")
     normalized = {
         "family": family,
         "canonicalType": canonical,
-        "subtype": payload.get("subtype") if isinstance(payload.get("subtype"), str) else None,
+        "subtype": subtype,
         "materials": materials,
         "condition": conditions,
         "orientation": orientation,
         "sizeClass": size_class,
         "tags": tags,
         "confidence": confidence,
-        "source": str(payload.get("source", result.get("model", "classification-result"))),
-        "notes": str(payload.get("notes", "")),
+        "source": source,
+        "notes": notes,
     }
     return item_id, normalized, flags
 
@@ -178,6 +206,14 @@ def main() -> int:
         results_path = args.results.expanduser().resolve()
         taxonomy_path = args.taxonomy.expanduser().resolve()
         output = args.out.expanduser().resolve()
+        if not 0 <= args.minimum_confidence <= 1:
+            raise ClassificationApplicationError("minimum confidence must be between 0 and 1")
+        if output.suffix.lower() != ".json":
+            raise ClassificationApplicationError("successor manifest output must use a .json filename")
+        if output.parent != manifest_path.parent:
+            raise ClassificationApplicationError("successor manifest must stay beside its parent manifest")
+        if output in {manifest_path, results_path, taxonomy_path}:
+            raise ClassificationApplicationError("successor manifest cannot replace an input file")
         if output.exists() and not args.force:
             raise ClassificationApplicationError("output exists; pass --force to replace it")
         manifest = _read_json(manifest_path)
@@ -189,11 +225,14 @@ def main() -> int:
         items = manifest.get("items")
         if not isinstance(items, list):
             raise ClassificationApplicationError("manifest items missing")
-        by_id = {
-            str(item.get("id")): item
-            for item in items
-            if isinstance(item, Mapping) and isinstance(item.get("id"), str)
-        }
+        by_id: dict[str, Mapping[str, Any]] = {}
+        for item in items:
+            if not isinstance(item, Mapping) or not isinstance(item.get("id"), str):
+                raise ClassificationApplicationError("every manifest item requires an id")
+            item_id = str(item["id"])
+            if item_id in by_id:
+                raise ClassificationApplicationError(f"duplicate manifest item: {item_id}")
+            by_id[item_id] = item
         normalized: dict[str, tuple[dict[str, Any], list[str]]] = {}
         for result in _read_results(results_path):
             item_id, payload, flags = _normalize_result(
@@ -203,6 +242,12 @@ def main() -> int:
             )
             if item_id not in by_id:
                 raise ClassificationApplicationError(f"result references unknown item: {item_id}")
+            result_run = result.get("runId")
+            if result_run is not None and result_run != manifest.get("runId"):
+                raise ClassificationApplicationError(f"{item_id}: result runId does not match the manifest")
+            input_hashes = result.get("inputHashes")
+            if input_hashes is not None and input_hashes.get("rgba") != by_id[item_id]["artifacts"]["sha256"]:
+                raise ClassificationApplicationError(f"{item_id}: result RGBA hash does not match the manifest")
             if item_id in normalized:
                 raise ClassificationApplicationError(f"duplicate result for item: {item_id}")
             normalized[item_id] = (payload, flags)
@@ -235,6 +280,8 @@ def main() -> int:
         completion = successor.setdefault("completion", {})
         completion["classificationComplete"] = not missing
         completion["reviewComplete"] = False
+        completion["reviewGatePassed"] = completion.get("pendingPixels",0) == 0 and not any(
+            item["qaFlags"] and item["review"]["status"] != "approved" for item in successor["items"])
 
         output.parent.mkdir(parents=True, exist_ok=True)
         temporary = output.with_suffix(output.suffix + ".tmp")
@@ -243,7 +290,7 @@ def main() -> int:
             encoding="utf-8",
         )
         temporary.replace(output)
-    except ClassificationApplicationError as exc:
+    except (ClassificationApplicationError, OSError) as exc:
         print(json.dumps({"status": "contract-failure", "errors": [str(exc)]}, ensure_ascii=False))
         return 1
 

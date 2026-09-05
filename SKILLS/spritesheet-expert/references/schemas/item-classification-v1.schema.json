@@ -92,8 +92,11 @@
         "jobId",
         "runId",
         "itemId",
+        "pathBase",
+        "sourceManifest",
         "inputs",
         "taxonomyId",
+        "taxonomy",
         "prompt",
         "expected",
         "status"
@@ -106,6 +109,16 @@
           "type": "string",
           "pattern": "^item_[0-9a-f]{12}(?:_[0-9]{2})?$"
         },
+        "pathBase": {"const": "manifest-directory"},
+        "sourceManifest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256"],
+          "properties": {
+            "path": {"$ref": "#/$defs/portablePath"},
+            "sha256": {"$ref": "#/$defs/sha256"}
+          }
+        },
         "inputs": {
           "type": "object",
           "additionalProperties": false,
@@ -117,6 +130,27 @@
           }
         },
         "taxonomyId": {"type": "string", "minLength": 1},
+        "taxonomy": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["families", "materials", "conditions", "orientations", "sizeClasses"],
+          "properties": {
+            "families": {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {"type": "string", "minLength": 1}
+              }
+            },
+            "materials": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+            "conditions": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+            "orientations": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+            "sizeClasses": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+          }
+        },
         "prompt": {"type": "string", "minLength": 20},
         "expected": {
           "type": "object",

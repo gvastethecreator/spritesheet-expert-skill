@@ -24,6 +24,36 @@
   scrollbar-color: var(--line-strong) var(--page);
 }
 
+.local-controls { display: grid; grid-template-columns: 2fr 1.5fr 1fr 1fr; gap: 16px; padding: 22px; }
+.local-controls > p { grid-column: 2 / -1; }
+.local-toolbar { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; margin: 18px 0; }
+.local-toolbar .field { min-width: 100px; margin: 0; }
+.local-review-layout { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(400px, 2fr); gap: 18px; }
+.local-item-list { max-height: 850px; overflow: auto; display: grid; gap: 8px; align-content: start; padding: 2px; }
+.local-card { display: grid; grid-template-columns: 20px 82px 1fr; gap: 8px; align-items: center; border: 1px solid var(--line); padding: 9px; border-radius: 6px; cursor: pointer; background: var(--panel); }
+.local-card.selected { border-color: var(--accent); }
+.local-card img { width: 82px; height: 94px; object-fit: contain; image-rendering: pixelated; background: #272a24; }
+.local-card span { display: grid; gap: 4px; overflow-wrap: anywhere; }
+.local-card small { color: var(--muted); font-size: 11px; }
+.local-inspector { padding: 20px; min-width: 0; }
+.local-crop-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 18px 0; }
+.local-crop-pair[hidden] { display: none; }
+.local-crop-pair figure { margin: 0; min-width: 0; }
+.local-crop-pair figcaption { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.local-crop-pair figure > div { overflow: auto; max-height: 480px; padding: 12px; }
+.local-crop-pair img { display: block; max-width: none; image-rendering: pixelated; }
+.local-crop-light { background: #eeeee8; }
+.local-crop-dark { background: #141614; }
+#local-canvas-scroll { max-height: 580px; overflow: auto; border: 1px solid var(--line); }
+#local-canvas { display: block; max-width: none; image-rendering: pixelated; touch-action: none; cursor: crosshair; }
+#local-log { white-space: pre-wrap; max-height: 240px; overflow: auto; font-size: 11px; }
+.local-atlas-scroll { overflow: auto; max-height: 900px; background: #30342c; padding: 16px; }
+#local-atlas { max-width: 100%; image-rendering: pixelated; }
+
+[hidden] {
+  display: none !important;
+}
+
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -63,6 +93,10 @@ select,
 textarea {
   font: inherit;
 }
+
+#process input[type="checkbox"] { width: 18px; height: 18px; min-height: 18px; padding: 0; margin: 0; flex: 0 0 18px; }
+#process .local-toolbar > label:not(.field) { display: flex; align-items: center; gap: 8px; }
+#process button:disabled { opacity: .45; cursor: not-allowed; }
 
 button,
 select {

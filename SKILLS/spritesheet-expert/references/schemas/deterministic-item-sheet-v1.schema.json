@@ -80,7 +80,7 @@
           ]
         },
         "alpha_high": {"type": "integer", "minimum": 1, "maximum": 255},
-        "alpha_low": {"type": "integer", "minimum": 0, "maximum": 255},
+        "alpha_low": {"type": "integer", "minimum": 1, "maximum": 255},
         "halo_radius": {"type": "integer", "minimum": 0, "maximum": 64},
         "min_strong_pixels": {"type": "integer", "minimum": 1},
         "connectivity": {"enum": [4, 8]},
@@ -96,7 +96,6 @@
         "padding",
         "max_width",
         "outer_padding",
-        "extrude",
         "sort",
         "rotation",
         "rescale"
@@ -104,16 +103,15 @@
       "properties": {
         "algorithm": {
           "enum": [
-            "maxrects-best-short-side-fit",
+            "size-ordered-shelves",
             "shelf",
             "manual-reviewed"
           ]
         },
         "quantum": {"type": "integer", "minimum": 1},
         "padding": {"type": "integer", "minimum": 0},
-        "max_width": {"type": "integer", "minimum": 1},
+        "max_width": {"type": "integer", "minimum": 0},
         "outer_padding": {"type": "integer", "minimum": 0},
-        "extrude": {"type": "integer", "minimum": 0},
         "sort": {
           "type": "array",
           "minItems": 1,
@@ -165,10 +163,11 @@
     "evidence": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["sourceComponents", "atlasGrid"],
+      "required": ["sourceComponents", "atlasGrid", "pixelOwnership"],
       "properties": {
         "sourceComponents": {"$ref": "#/$defs/portablePath"},
-        "atlasGrid": {"$ref": "#/$defs/portablePath"}
+        "atlasGrid": {"$ref": "#/$defs/portablePath"},
+        "pixelOwnership": {"$ref": "#/$defs/portablePath"}
       }
     },
     "completion": {
@@ -270,7 +269,7 @@
               "additionalProperties": true,
               "required": ["sha256", "provenance"],
               "properties": {
-                "sourcePath": {"type": "string"},
+                "sourcePath": {"$ref": "#/$defs/portablePath"},
                 "path": {"type": "string"},
                 "sha256": {"$ref": "#/$defs/sha256"},
                 "provenance": {"type": "string"},

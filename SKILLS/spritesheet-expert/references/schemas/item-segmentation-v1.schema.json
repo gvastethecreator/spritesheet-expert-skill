@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spritesheet.expert/schemas/item-segmentation-v1.schema.json",
+  "title": "Item Semantic Segmentation Job and Result v1",
+  "oneOf": [
+    {"$ref": "#/$defs/job"},
+    {"$ref": "#/$defs/result"},
+    {"type": "array", "items": {"$ref": "#/$defs/result"}},
+    {
+      "type": "object",
+      "required": ["schemaVersion", "results"],
+      "properties": {
+        "schemaVersion": {"const": "item-segmentation-result-set-v1"},
+        "results": {"type": "array", "items": {"$ref": "#/$defs/result"}}
+      },
+      "additionalProperties": true
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "portablePath": {
+      "type": "string",
+      "minLength": 1,
+      "allOf": [
+        {"not": {"pattern": "^/"}},
+        {"not": {"pattern": "\\\\"}},
+        {"not": {"pattern": "(^|/)\\.\\.(/|$)"}}
+      ]
+    },
+    "itemId": {
+      "type": "string",
+      "pattern": "^item_[0-9a-f]{12}(?:_[0-9]{2})?$"
+    },
+    "inputArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/portablePath"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "sourceManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/portablePath"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "normalizedBox": {
+      "type": "array",
+      "prefixItems": [
+        {"type": "integer", "minimum": 0, "maximum": 999},
+        {"type": "integer", "minimum": 0, "maximum": 999},
+        {"type": "integer", "minimum": 1, "maximum": 1000},
+        {"type": "integer", "minimum": 1, "maximum": 1000}
+      ],
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "maskArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "width", "height"],
+      "properties": {
+        "path": {"$ref": "#/$defs/portablePath"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1}
+      }
+    },
+    "instance": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["instanceId", "label", "bbox", "confidence"],
+      "properties": {
+        "instanceId": {"type": "string", "minLength": 1},
+        "label": {"type": "string", "minLength": 1},
+        "bbox": {"$ref": "#/$defs/normalizedBox"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "mask": {"$ref": "#/$defs/maskArtifact"}
+      }
+    },
+    "job": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "schemaVersion",
+        "jobId",
+        "runId",
+        "itemId",
+        "pathBase",
+        "sourceManifest",
+        "inputs",
+        "candidate",
+        "prompt",
+        "expected",
+        "status"
+      ],
+      "properties": {
+        "schemaVersion": {"const": "item-segmentation-job-v1"},
+        "jobId": {"type": "string", "minLength": 1},
+        "runId": {"type": "string", "minLength": 1},
+        "itemId": {"$ref": "#/$defs/itemId"},
+        "pathBase": {"const": "manifest-directory"},
+        "sourceManifest": {"$ref": "#/$defs/sourceManifest"},
+        "inputs": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/inputArtifact"},
+          "required": ["rgba", "lightComposite", "darkComposite"],
+          "properties": {
+            "rgba": {"$ref": "#/$defs/inputArtifact"},
+            "lightComposite": {"$ref": "#/$defs/inputArtifact"},
+            "darkComposite": {"$ref": "#/$defs/inputArtifact"}
+          }
+        },
+        "candidate": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["sourceBbox", "qaFlags"],
+          "properties": {
+            "sourceBbox": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "integer"}},
+            "qaFlags": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}
+          }
+        },
+        "prompt": {"type": "string", "minLength": 40},
+        "expected": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["format", "normalizedCoordinates", "minimumInstances", "pixelAuthority"],
+          "properties": {
+            "format": {"const": "item-segmentation-result-v1"},
+            "normalizedCoordinates": {"const": [0, 1000]},
+            "minimumInstances": {"const": 1},
+            "pixelAuthority": {"const": "deterministic-compiler"}
+          }
+        },
+        "status": {"const": "prepared"}
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["schemaVersion", "jobId", "runId", "itemId", "model", "inputHashes", "decision"],
+      "properties": {
+        "schemaVersion": {"const": "item-segmentation-result-v1"},
+        "jobId": {"type": "string", "minLength": 1},
+        "runId": {"type": "string", "minLength": 1},
+        "itemId": {"$ref": "#/$defs/itemId"},
+        "model": {"type": "string", "minLength": 1},
+        "maskModel": {"type": ["string", "null"]},
+        "inputHashes": {
+          "type": "object",
+          "required": ["rgba"],
+          "properties": {"rgba": {"$ref": "#/$defs/sha256"}},
+          "additionalProperties": {"$ref": "#/$defs/sha256"}
+        },
+        "decision": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["instanceCount", "confidence", "instances", "notes"],
+          "properties": {
+            "instanceCount": {"type": "integer", "minimum": 1},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "instances": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/instance"}},
+            "notes": {"type": "string"}
+          }
+        }
+      }
+    }
+  }
+}

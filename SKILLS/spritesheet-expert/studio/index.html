@@ -20,12 +20,13 @@
       </a>
       <div class="topbar-status">
         <span class="status-dot" aria-hidden="true"></span>
-        <span>Local-first · no provider execution</span>
+        <span>Local models · original pixels</span>
       </div>
     </header>
 
     <aside class="sidebar" aria-label="Studio navigation">
       <nav>
+        <button class="nav-item" type="button" data-view="process"><span>00</span> Process a sheet</button>
         <button class="nav-item is-active" type="button" data-view="launcher">
           <span>01</span> Workflow Launcher
         </button>
@@ -41,11 +42,53 @@
       </nav>
       <div class="sidebar-foot">
         <p>Provider output is accepted only through source intake, provenance, hashing, and review.</p>
-        <a href="../SKILLS/spritesheet-expert/SKILL.md">Open skill contract</a>
+        <a href="/skill">Open skill contract</a>
       </div>
     </aside>
 
     <main class="workspace">
+      <section class="view" id="process" data-view-panel="process" aria-labelledby="process-title">
+        <div class="view-heading"><div><p class="eyebrow">Local workflow</p><h1 id="process-title">Give every sprite its space.</h1></div>
+          <p class="view-intro">Import a transparent sheet. Keep visual groups together, review uncertain edges, and export a size-ordered atlas.</p></div>
+        <section class="panel local-controls">
+          <label class="field"><span>Source sheet</span><input id="local-source" type="file" accept="image/png,image/webp"></label>
+          <label class="field"><span>Models</span><select id="local-models"><option value="standard">Qwen 4B + SAM2</option><option value="light">Qwen 2B + SAM2</option><option value="none">Alpha only · no classification</option></select></label>
+          <label class="field"><span>Cell quantum</span><input id="local-quantum" type="number" min="1" max="1024" value="32"></label>
+          <label class="field"><span>Padding per side</span><input id="local-padding" type="number" min="0" max="1024" value="16"></label>
+          <button id="local-start" class="primary-button">Import and process</button>
+          <p id="local-runtime" class="muted"></p>
+        </section>
+        <div class="local-toolbar"><label class="field"><span>Saved work</span><select id="local-runs"><option value="">Select a run</option></select></label>
+          <button id="local-resume" class="secondary-button" disabled>Resume</button><button id="local-cancel" class="secondary-button" disabled>Cancel processing</button>
+          <button id="local-export" class="primary-button" disabled>Export atlas</button><button id="local-draft" class="quiet-button" disabled>Export draft</button></div>
+        <p id="local-status" role="status" aria-live="polite">Connecting to the local service…</p>
+        <details><summary>Processing details</summary><pre id="local-log"></pre></details>
+        <section id="local-review" hidden>
+          <div class="local-toolbar"><label><input id="local-doubts" type="checkbox" checked> Show only items needing review</label>
+            <button id="local-merge" class="secondary-button">Merge selected</button><button id="local-approve" class="secondary-button">Accept selected</button><button id="local-discard" class="quiet-button">Discard selected</button></div>
+          <div class="local-review-layout">
+            <div><div id="local-items" class="local-item-list"></div></div>
+            <section class="panel local-inspector">
+              <h2>Source and pixel ownership</h2>
+              <p class="muted">Select an item to inspect its mask. Paint only when you need to change ownership. Original colors stay intact.</p>
+              <div class="local-toolbar"><label class="field"><span>Background</span><select id="local-bg"><option value="#252824">Dark</option><option value="#eeeeE8">Light</option></select></label>
+                <label class="field"><span>Zoom</span><select id="local-zoom"><option value="fit">Fit</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+                <label><input id="local-overlay" type="checkbox" checked> Mask overlay</label></div>
+              <div id="local-canvas-scroll"><canvas id="local-canvas" aria-label="Source image and editable ownership mask"></canvas></div>
+              <div class="local-toolbar"><label class="field"><span>Brush target</span><select id="local-paint"><option value="off">Inspect only</option><option value="selected">Selected sprite</option><option value="new">New sprite</option><option value="pending">Pending</option><option value="discard">Discard</option></select></label>
+                <label class="field"><span>Brush radius</span><input id="local-radius" type="number" min="1" max="128" value="8"></label></div>
+              <div class="button-row"><button id="local-apply" class="primary-button" disabled>Apply strokes</button><button id="local-undo" class="secondary-button" disabled>Undo stroke</button></div>
+              <div id="local-crop-pair" class="local-crop-pair" hidden>
+                <figure><figcaption>Native crop · light</figcaption><div class="local-crop-light"><img id="local-crop-light" alt="Selected sprite"></div></figure>
+                <figure><figcaption>Native crop · dark</figcaption><div class="local-crop-dark"><img id="local-crop-dark" alt="Selected sprite"></div></figure>
+              </div>
+              <label class="field"><span>Category</span><input id="local-family" placeholder="family"></label><label class="field"><span>Type</span><input id="local-type" placeholder="canonical type"></label>
+              <label class="field"><span>Tags (comma separated)</span><input id="local-tags"></label><button id="local-save-tags" class="secondary-button">Save tags for selected</button>
+            </section>
+          </div>
+          <section class="panel"><h2>Atlas · native sprite sizes</h2><div class="local-atlas-scroll"><img id="local-atlas" alt="Sprites arranged in rectangular cells by descending size"></div></section>
+        </section>
+      </section>
       <section class="view is-active" id="launcher" data-view-panel="launcher" aria-labelledby="launcher-title">
         <div class="view-heading">
           <div>
@@ -288,6 +331,7 @@
               <button id="export-review" class="primary-button" type="button">Download review JSON</button>
               <button id="copy-review" class="secondary-button" type="button">Copy review JSON</button>
             </div>
+            <p id="review-feedback" class="feedback" role="status"></p>
           </div>
         </section>
       </section>
@@ -394,5 +438,6 @@
   </template>
 
   <script type="module" src="app.js"></script>
+  <script type="module" src="local-workflow.js"></script>
 </body>
 </html>

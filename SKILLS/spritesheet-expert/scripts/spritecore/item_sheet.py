@@ -9,11 +9,14 @@ from __future__ import annotations
 
 from array import array
 from collections import defaultdict, deque
-from dataclasses import asdict, dataclass
+from copy import deepcopy
+from dataclasses import asdict, dataclass, field
 from hashlib import sha256
 import json
 import math
 from pathlib import Path
+import shutil
+import tempfile
 from typing import Any, Iterable, Mapping, Sequence
 
 from PIL import Image, ImageDraw
@@ -34,8 +37,8 @@ class SegmentationConfig:
     def validate(self) -> None:
         if not 1 <= self.alpha_high <= 255:
             raise ItemSheetError("alpha_high must be between 1 and 255")
-        if not 0 <= self.alpha_low <= self.alpha_high:
-            raise ItemSheetError("alpha_low must be between 0 and alpha_high")
+        if not 1 <= self.alpha_low <= self.alpha_high:
+            raise ItemSheetError("alpha_low must be between 1 and alpha_high")
         if not 0 <= self.halo_radius <= 64:
             raise ItemSheetError("halo_radius must be between 0 and 64")
         if self.min_strong_pixels < 1:
@@ -48,21 +51,20 @@ class SegmentationConfig:
 class PackingConfig:
     quantum: int = 32
     padding: int = 16
-    max_width: int = 4096
+    max_width: int = 0
     outer_padding: int = 0
-    extrude: int = 0
 
     def validate(self) -> None:
         if self.quantum < 1:
             raise ItemSheetError("quantum must be positive")
         if self.padding < 0:
             raise ItemSheetError("padding cannot be negative")
-        if self.max_width < self.quantum:
+        if self.max_width and self.max_width < self.quantum:
             raise ItemSheetError("max_width must be at least one quantum")
         if self.outer_padding < 0:
             raise ItemSheetError("outer_padding cannot be negative")
-        if self.extrude < 0 or self.extrude > self.padding:
-            raise ItemSheetError("extrude must be between zero and padding")
+        if self.max_width and self.max_width - self.outer_padding * 2 < self.quantum:
+            raise ItemSheetError("max_width cannot contain one quantum after outer padding")
 
 
 @dataclass(frozen=True)
@@ -91,6 +93,7 @@ class ExtractedItem:
     assigned_pixels: int
     weak_pixels: int
     qa_flags: list[str]
+    lineage: dict[str, Any] = field(default_factory=dict)
 
     @property
     def width(self) -> int:
@@ -124,6 +127,32 @@ def _digest_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def item_content_sha256(image: Image.Image) -> str:
+    """Hash native dimensions and RGBA bytes for one isolated item."""
+
+    rgba = image.convert("RGBA")
+    return _digest_bytes(
+        rgba.width.to_bytes(4, "big")
+        + rgba.height.to_bytes(4, "big")
+        + rgba.tobytes()
+    )
+
+
+def unique_item_id(content_sha256: str, used_ids: set[str]) -> str:
+    """Return the first stable content-derived ID not present in ``used_ids``."""
+
+    if len(content_sha256) != 64 or any(character not in "0123456789abcdef" for character in content_sha256):
+        raise ItemSheetError("content_sha256 must be a lowercase SHA-256 digest")
+    base = f"item_{content_sha256[:12]}"
+    if base not in used_ids:
+        return base
+    for occurrence in range(2, 100):
+        candidate = f"{base}_{occurrence:02d}"
+        if candidate not in used_ids:
+            return candidate
+    raise ItemSheetError(f"too many identical items for stable ID prefix {base}")
 
 
 def _atomic_json(path: Path, value: Mapping[str, Any]) -> None:
@@ -351,11 +380,7 @@ def segment_items(
             flags.append("sparse_shape_review")
         if conflicts[component] > 0:
             flags.append("neighbor_alpha_conflict")
-        fingerprint = _digest_bytes(
-            crop.width.to_bytes(4, "big")
-            + crop.height.to_bytes(4, "big")
-            + crop.tobytes()
-        )
+        fingerprint = item_content_sha256(crop)
         provisional.append(
             (
                 fingerprint,
@@ -416,72 +441,6 @@ def _contains(outer: _Rect, inner: _Rect) -> bool:
     )
 
 
-def _split_free(free: _Rect, used: _Rect) -> list[_Rect]:
-    if not _intersects(free, used):
-        return [free]
-    result: list[_Rect] = []
-    if used.x > free.x:
-        result.append(_Rect(free.x, free.y, used.x - free.x, free.h))
-    if used.right < free.right:
-        result.append(_Rect(used.right, free.y, free.right - used.right, free.h))
-    if used.y > free.y:
-        result.append(_Rect(free.x, free.y, free.w, used.y - free.y))
-    if used.bottom < free.bottom:
-        result.append(_Rect(free.x, used.bottom, free.w, free.bottom - used.bottom))
-    return [rect for rect in result if rect.w > 0 and rect.h > 0]
-
-
-def _prune_free(rectangles: list[_Rect]) -> list[_Rect]:
-    unique = list(dict.fromkeys(rectangles))
-    kept: list[_Rect] = []
-    for index, candidate in enumerate(unique):
-        if any(index != other and _contains(container, candidate) for other, container in enumerate(unique)):
-            continue
-        kept.append(candidate)
-    return kept
-
-
-def _pack_width(
-    footprints: Sequence[tuple[str, int, int]],
-    width: int,
-    quantum: int,
-) -> tuple[dict[str, _Rect], int] | None:
-    if any(item_width > width for _, item_width, _ in footprints):
-        return None
-    safe_height = sum(item_height for _, _, item_height in footprints)
-    free = [_Rect(0, 0, width, safe_height)]
-    placements: dict[str, _Rect] = {}
-
-    for item_id, item_width, item_height in footprints:
-        candidates: list[tuple[int, int, int, int, int, _Rect]] = []
-        for rect in free:
-            if item_width <= rect.w and item_height <= rect.h:
-                leftover_horizontal = rect.w - item_width
-                leftover_vertical = rect.h - item_height
-                candidates.append(
-                    (
-                        min(leftover_horizontal, leftover_vertical),
-                        max(leftover_horizontal, leftover_vertical),
-                        rect.y,
-                        rect.x,
-                        rect.w * rect.h,
-                        rect,
-                    )
-                )
-        if not candidates:
-            return None
-        selected = min(candidates)[-1]
-        used = _Rect(selected.x, selected.y, item_width, item_height)
-        placements[item_id] = used
-        next_free: list[_Rect] = []
-        for rectangle in free:
-            next_free.extend(_split_free(rectangle, used))
-        free = _prune_free(next_free)
-
-    height = _snap(max(rect.bottom for rect in placements.values()), quantum)
-    return placements, height
-
-
 def pack_items(
     items: Sequence[ExtractedItem],
     config: PackingConfig | None = None,
@@ -490,6 +449,8 @@ def pack_items(
 
     selected = config or PackingConfig()
     selected.validate()
+    if not items:
+        raise ItemSheetError("at least one item is required for packing")
     footprints_by_id = {
         item.item_id: (
             _snap(item.width + selected.padding * 2, selected.quantum),
@@ -511,39 +472,23 @@ def pack_items(
     ]
     max_cell_width = max(width for _, width, _ in footprints)
     total_area = sum(width * height for _, width, height in footprints)
-    minimum = _snap(max_cell_width, selected.quantum)
-    maximum = _snap(max(minimum, selected.max_width), selected.quantum)
-    ideal = _snap(max(minimum, math.ceil(math.sqrt(total_area))), selected.quantum)
-
-    candidate_widths = set(range(minimum, maximum + 1, selected.quantum))
-    candidate_widths.update(
-        _snap(value, selected.quantum)
-        for value in (
-            ideal,
-            256,
-            512,
-            1024,
-            1536,
-            2048,
-            3072,
-            4096,
-        )
-        if minimum <= value <= maximum
-    )
-
-    best: tuple[tuple[int, int, int], dict[str, _Rect], int, int] | None = None
-    for width in sorted(candidate_widths):
-        packed = _pack_width(footprints, width, selected.quantum)
-        if packed is None:
-            continue
-        placements, height = packed
-        score = (width * height, abs(width - height), width)
-        if best is None or score < best[0]:
-            best = (score, placements, width, height)
-    if best is None:
-        raise ItemSheetError("items cannot fit inside max_width")
-
-    _, raw_placements, width, height = best
+    width = _snap(max(max_cell_width, math.ceil(math.sqrt(total_area))), selected.quantum)
+    if selected.max_width:
+        available = selected.max_width - selected.outer_padding * 2
+        width = min(width, available - available % selected.quantum)
+        if max_cell_width > width:
+            raise ItemSheetError("items cannot fit inside max_width")
+    raw_placements: dict[str, _Rect] = {}
+    x = y = row_height = 0
+    for item_id, item_width, item_height in footprints:
+        if x and x + item_width > width:
+            x = 0
+            y += row_height
+            row_height = 0
+        raw_placements[item_id] = _Rect(x, y, item_width, item_height)
+        x += item_width
+        row_height = max(row_height, item_height)
+    height = y + row_height
     offset = selected.outer_padding
     placements = {
         item_id: _Rect(rect.x + offset, rect.y + offset, rect.w, rect.h)
@@ -583,7 +528,6 @@ def compose_atlas(
     items: Sequence[ExtractedItem],
     placements: Mapping[str, _Rect],
     atlas_size: tuple[int, int],
-    packing: PackingConfig,
 ) -> tuple[Image.Image, Image.Image, dict[str, dict[str, int]]]:
     atlas = Image.new("RGBA", atlas_size, (0, 0, 0, 0))
     debug = _checker(atlas_size)
@@ -594,7 +538,7 @@ def compose_atlas(
         cell = placements[item.item_id]
         frame_x = cell.x + (cell.w - item.width) // 2
         frame_y = cell.y + (cell.h - item.height) // 2
-        atlas.alpha_composite(item.image, (frame_x, frame_y))
+        atlas.paste(item.image, (frame_x, frame_y))
         debug.alpha_composite(item.image, (frame_x, frame_y))
         draw.rectangle(
             (cell.x, cell.y, cell.right - 1, cell.bottom - 1),
@@ -631,76 +575,242 @@ def _classification_stub() -> dict[str, Any]:
     }
 
 
-def build_item_atlas(
-    source_path: Path,
+def reconstruct_source_reference(
+    size: tuple[int, int],
+    items: Sequence[ExtractedItem],
+) -> Image.Image:
+    """Reconstruct the exact accepted source pixels represented by ``items``."""
+
+    reference = Image.new("RGBA", size, (0, 0, 0, 0))
+    for item in items:
+        left, top, right, bottom = item.source_bbox
+        if right - left != item.width or bottom - top != item.height:
+            raise ItemSheetError(f"{item.item_id}: source bbox does not match native item size")
+        if left < 0 or top < 0 or right > size[0] or bottom > size[1]:
+            raise ItemSheetError(f"{item.item_id}: source bbox exceeds the source canvas")
+        reference.alpha_composite(item.image.convert("RGBA"), (left, top))
+    return reference
+
+
+def build_pixel_ownership_report(
+    source_reference: Image.Image,
+    items: Sequence[ExtractedItem],
+) -> dict[str, Any]:
+    """Prove that every emitted non-transparent item pixel has one exact owner."""
+
+    source = source_reference.convert("RGBA")
+    width, height = source.size
+    source_bytes = source.tobytes()
+    owners = bytearray(width * height)
+    duplicates = 0
+    out_of_bounds = 0
+    rgba_mismatches = 0
+    per_item: list[dict[str, Any]] = []
+
+    for item in items:
+        rgba = item.image.convert("RGBA")
+        item_bytes = rgba.tobytes()
+        left, top, _right, _bottom = item.source_bbox
+        assigned = 0
+        for local_y in range(rgba.height):
+            source_y = top + local_y
+            for local_x in range(rgba.width):
+                pixel_offset = (local_y * rgba.width + local_x) * 4
+                if item_bytes[pixel_offset + 3] == 0:
+                    continue
+                assigned += 1
+                source_x = left + local_x
+                if not (0 <= source_x < width and 0 <= source_y < height):
+                    out_of_bounds += 1
+                    continue
+                source_index = source_y * width + source_x
+                if owners[source_index] == 1:
+                    duplicates += 1
+                    owners[source_index] = 2
+                elif owners[source_index] == 0:
+                    owners[source_index] = 1
+                source_offset = source_index * 4
+                if item_bytes[pixel_offset : pixel_offset + 4] != source_bytes[
+                    source_offset : source_offset + 4
+                ]:
+                    rgba_mismatches += 1
+        per_item.append({"itemId": item.item_id, "ownedPixels": assigned})
+
+    source_alpha_pixels = 0
+    unowned_source_alpha_pixels = 0
+    unique_owned_pixels = 0
+    ownership_mask = bytearray(width * height)
+    for index, owner_count in enumerate(owners):
+        if source_bytes[index * 4 + 3] > 0:
+            source_alpha_pixels += 1
+            if owner_count == 0:
+                unowned_source_alpha_pixels += 1
+        if owner_count > 0:
+            unique_owned_pixels += 1
+            ownership_mask[index] = 255
+
+    complete = duplicates == 0 and out_of_bounds == 0 and rgba_mismatches == 0
+    return {
+        "schemaVersion": "item-pixel-ownership-report-v1",
+        "acceptedPixelDefinition": "non-transparent pixels emitted by item artifacts",
+        "sourceSize": [width, height],
+        "sourceAlphaPixels": source_alpha_pixels,
+        "ownedPixels": unique_owned_pixels,
+        "unownedSourceAlphaPixels": unowned_source_alpha_pixels,
+        "duplicateOwnershipPixels": duplicates,
+        "outOfBoundsAssignments": out_of_bounds,
+        "rgbaMismatchPixels": rgba_mismatches,
+        "ownershipMaskSha256": _digest_bytes(bytes(ownership_mask)),
+        "ownershipComplete": complete,
+        "allSourcePixelsAssigned": complete and unowned_source_alpha_pixels == 0,
+        "items": per_item,
+    }
+
+
+def _validate_output_dir(output: Path, force: bool) -> None:
+    if output == Path(output.anchor):
+        raise ItemSheetError("output directory cannot be a filesystem root")
+    try:
+        if output.exists() and not output.is_dir():
+            raise ItemSheetError("output path exists and is not a directory")
+        if output.exists() and any(output.iterdir()) and not force:
+            raise ItemSheetError("output directory is not empty; pass force to replace it")
+    except OSError as exc:
+        raise ItemSheetError(f"cannot inspect output directory: {exc}") from exc
+
+
+def write_item_atlas_run(
+    items: Sequence[ExtractedItem],
     output_dir: Path,
     *,
-    segmentation: SegmentationConfig | None = None,
+    source: Mapping[str, Any],
+    source_reference: Image.Image,
+    segmentation: Mapping[str, Any],
     packing: PackingConfig | None = None,
+    parent_manifest_sha256: str | None = None,
+    item_overrides: Mapping[str, Mapping[str, Any]] | None = None,
+    manifest_extra: Mapping[str, Any] | None = None,
+    completion: Mapping[str, bool] | None = None,
+    discarded_mask: Image.Image | None = None,
     force: bool = False,
 ) -> dict[str, Any]:
-    """Compile one RGBA item sheet and return its manifest."""
+    """Write a complete, atomically replaceable atlas run from exact item pixels."""
 
-    source = Path(source_path).expanduser().resolve()
+    if not items:
+        raise ItemSheetError("at least one item is required")
     output = Path(output_dir).expanduser().resolve()
-    if not source.is_file():
-        raise ItemSheetError(f"source image does not exist: {source}")
-    manifest_path = output / "manifest.json"
-    if manifest_path.exists() and not force:
-        raise ItemSheetError("output already contains a manifest; pass force to replace known outputs")
-
-    selected_segmentation = segmentation or SegmentationConfig()
+    _validate_output_dir(output, force)
     selected_packing = packing or PackingConfig()
-    selected_segmentation.validate()
     selected_packing.validate()
+    source_record = deepcopy(dict(source))
+    required_source = {"path", "sha256", "width", "height", "mode", "provenance"}
+    if not required_source.issubset(source_record):
+        raise ItemSheetError("source record is incomplete")
+    if source_record.get("mode") != "RGBA":
+        raise ItemSheetError("source mode must be RGBA")
+    if source_reference.size != (source_record.get("width"), source_record.get("height")):
+        raise ItemSheetError("source reference dimensions do not match the source record")
+    if source_record.get("provenance") not in {
+        "imagegen",
+        "grok-imagine-image",
+        "imported",
+        "fixture",
+        "mixed",
+    }:
+        raise ItemSheetError(f"unsupported source provenance: {source_record.get('provenance')}")
+    if not isinstance(source_record.get("sha256"), str) or len(source_record["sha256"]) != 64:
+        raise ItemSheetError("source sha256 is invalid")
+    if parent_manifest_sha256 is not None and len(parent_manifest_sha256) != 64:
+        raise ItemSheetError("parent manifest sha256 is invalid")
 
-    try:
-        with Image.open(source) as opened:
-            opened.load()
-            source_image = opened.convert("RGBA")
-    except OSError as exc:
-        raise ItemSheetError(f"source is not a decodable image: {source}") from exc
-
-    items = segment_items(source_image, selected_segmentation)
-    placements, atlas_size, footprints = pack_items(items, selected_packing)
-    atlas, debug_atlas, frames = compose_atlas(items, placements, atlas_size, selected_packing)
-
-    output.mkdir(parents=True, exist_ok=True)
-    item_dir = output / "items"
-    inference_dir = output / "inference"
-    qa_dir = output / "qa"
-    item_dir.mkdir(parents=True, exist_ok=True)
-    inference_dir.mkdir(parents=True, exist_ok=True)
-    qa_dir.mkdir(parents=True, exist_ok=True)
-
-    item_records: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
     for item in items:
-        relative_item = f"items/{item.item_id}.png"
-        item_path = output / relative_item
-        _atomic_image(item_path, item.image)
+        if item.item_id in seen_ids:
+            raise ItemSheetError(f"duplicate item id: {item.item_id}")
+        seen_ids.add(item.item_id)
+        if item.image.mode != "RGBA":
+            item.image = item.image.convert("RGBA")
+        if item.content_sha256 != item_content_sha256(item.image):
+            raise ItemSheetError(f"{item.item_id}: content SHA-256 does not match native RGBA bytes")
 
-        light = Image.new("RGB", item.image.size, (238, 238, 232))
-        dark = Image.new("RGB", item.image.size, (28, 28, 27))
-        light.paste(item.image.convert("RGB"), mask=item.image.getchannel("A"))
-        dark.paste(item.image.convert("RGB"), mask=item.image.getchannel("A"))
-        light_path = output / f"inference/{item.item_id}-light.png"
-        dark_path = output / f"inference/{item.item_id}-dark.png"
-        _atomic_image(light_path, light)
-        _atomic_image(dark_path, dark)
+    ownership = build_pixel_ownership_report(source_reference, items)
+    if not ownership["ownershipComplete"]:
+        raise ItemSheetError(
+            "pixel ownership failed: "
+            f"duplicates={ownership['duplicateOwnershipPixels']}, "
+            f"out_of_bounds={ownership['outOfBoundsAssignments']}, "
+            f"rgba_mismatches={ownership['rgbaMismatchPixels']}"
+        )
 
-        cell = placements[item.item_id]
-        frame = frames[item.item_id]
-        cell_width, cell_height = footprints[item.item_id]
-        item_records.append(
-            {
+    placements, atlas_size, footprints = pack_items(items, selected_packing)
+    atlas, debug_atlas, frames = compose_atlas(items, placements, atlas_size)
+    segmentation_record = deepcopy(dict(segmentation))
+    segmentation_record["itemCount"] = len(items)
+    overrides = item_overrides or {}
+
+    staging: Path | None = None
+    try:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        staging = Path(tempfile.mkdtemp(prefix=f".{output.name}.tmp-", dir=output.parent))
+        item_dir = staging / "items"
+        inference_dir = staging / "inference"
+        qa_dir = staging / "qa"
+        item_dir.mkdir()
+        inference_dir.mkdir()
+        qa_dir.mkdir()
+        _atomic_image(staging / "source.png", source_reference)
+        occupied = Image.new("L", source_reference.size, 0)
+        for item in items:
+            occupied.paste(255, (item.source_bbox[0], item.source_bbox[1]), item.image.getchannel("A").point(lambda a: 255 if a else 0))
+        from PIL import ImageChops
+        visible = source_reference.getchannel("A").point(lambda a: 255 if a else 0)
+        discarded = discarded_mask.convert("L").point(lambda a: 255 if a else 0) if discarded_mask is not None else Image.new("L", visible.size, 0)
+        if discarded.size != visible.size or ImageChops.multiply(occupied, discarded).getbbox():
+            raise ItemSheetError("discarded pixels overlap owned pixels or have invalid dimensions")
+        discarded = ImageChops.multiply(discarded, visible)
+        pending = ImageChops.subtract(ImageChops.subtract(visible, occupied), discarded)
+        _atomic_image(qa_dir / "pending-mask.png", pending)
+        _atomic_image(qa_dir / "discarded-mask.png", discarded)
+        ownership["pendingPixels"] = pending.histogram()[255]
+        ownership["discardedPixels"] = discarded.histogram()[255]
+        ownership["accountedSourcePixels"] = ownership["ownedPixels"] + ownership["pendingPixels"] + ownership["discardedPixels"]
+
+        item_records: list[dict[str, Any]] = []
+        for item in items:
+            relative_item = f"items/{item.item_id}.png"
+            item_path = staging / relative_item
+            _atomic_image(item_path, item.image)
+
+            light = Image.new("RGB", item.image.size, (238, 238, 232))
+            dark = Image.new("RGB", item.image.size, (28, 28, 27))
+            light.paste(item.image.convert("RGB"), mask=item.image.getchannel("A"))
+            dark.paste(item.image.convert("RGB"), mask=item.image.getchannel("A"))
+            light_path = staging / f"inference/{item.item_id}-light.png"
+            dark_path = staging / f"inference/{item.item_id}-dark.png"
+            _atomic_image(light_path, light)
+            _atomic_image(dark_path, dark)
+
+            cell = placements[item.item_id]
+            frame = frames[item.item_id]
+            cell_width, cell_height = footprints[item.item_id]
+            override = deepcopy(dict(overrides.get(item.item_id, {})))
+            source_override = override.get("source")
+            item_source: dict[str, Any] = {
+                "bbox": list(item.source_bbox),
+                "strongPixels": item.strong_pixels,
+                "assignedPixels": item.assigned_pixels,
+                "weakPixels": item.weak_pixels,
+            }
+            if isinstance(source_override, Mapping):
+                for key, value in source_override.items():
+                    if key not in {"bbox", "strongPixels", "assignedPixels", "weakPixels"}:
+                        item_source[key] = deepcopy(value)
+            if item.lineage:
+                item_source["lineage"] = deepcopy(item.lineage)
+            item_record: dict[str, Any] = {
                 "id": item.item_id,
                 "contentSha256": item.content_sha256,
-                "source": {
-                    "bbox": list(item.source_bbox),
-                    "strongPixels": item.strong_pixels,
-                    "assignedPixels": item.assigned_pixels,
-                    "weakPixels": item.weak_pixels,
-                },
+                "source": item_source,
                 "artifacts": {
                     "rgba": relative_item,
                     "lightComposite": f"inference/{item.item_id}-light.png",
@@ -711,85 +821,187 @@ def build_item_atlas(
                     "originalSize": [item.width, item.height],
                     "cellRect": [cell.x, cell.y, cell_width, cell_height],
                     "frame": [frame["x"], frame["y"], frame["w"], frame["h"]],
-                    "pivot": [0.5, 0.5],
+                    "pivot": deepcopy(override.get("geometry", {}).get("pivot", [0.5, 0.5]))
+                    if isinstance(override.get("geometry"), Mapping)
+                    else [0.5, 0.5],
                     "scale": 1,
                     "rotated": False,
                 },
-                "classification": _classification_stub(),
-                "review": {
-                    "status": "pending",
-                    "notes": "",
-                    "replacement": None,
-                },
-                "qaFlags": item.qa_flags,
+                "classification": deepcopy(override.get("classification", _classification_stub())),
+                "review": deepcopy(
+                    override.get(
+                        "review",
+                        {"status": "pending", "notes": "", "replacement": None},
+                    )
+                ),
+                "qaFlags": list(
+                    dict.fromkeys(
+                        [
+                            *item.qa_flags,
+                            *(override.get("qaFlags", []) if isinstance(override.get("qaFlags"), list) else []),
+                        ]
+                    )
+                ),
             }
+            controlled = {
+                "id",
+                "contentSha256",
+                "source",
+                "artifacts",
+                "geometry",
+                "classification",
+                "review",
+                "qaFlags",
+            }
+            for key, value in override.items():
+                if key not in controlled:
+                    item_record[key] = deepcopy(value)
+            item_records.append(item_record)
+
+        atlas_path = staging / "atlas.png"
+        debug_path = qa_dir / "atlas-grid.png"
+        source_overlay_path = qa_dir / "source-components.png"
+        ownership_path = qa_dir / "pixel-ownership-report.json"
+        _atomic_image(atlas_path, atlas)
+        _atomic_image(debug_path, debug_atlas)
+        _atomic_image(source_overlay_path, _draw_source_overlay(source_reference, items))
+        _atomic_json(ownership_path, ownership)
+
+        run_fingerprint = _digest_bytes(
+            json.dumps(
+                {
+                    "source": source_record["sha256"],
+                    "segmentation": segmentation_record,
+                    "packing": asdict(selected_packing),
+                    "items": [
+                        {
+                            "id": item.item_id,
+                            "sha256": item.content_sha256,
+                            "sourceBBox": list(item.source_bbox),
+                        }
+                        for item in items
+                    ],
+                    "parentManifestSha256": parent_manifest_sha256,
+                    "manifestExtra": manifest_extra or {},
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
         )
-
-    atlas_path = output / "atlas.png"
-    debug_path = qa_dir / "atlas-grid.png"
-    source_overlay_path = qa_dir / "source-components.png"
-    _atomic_image(atlas_path, atlas)
-    _atomic_image(debug_path, debug_atlas)
-    _atomic_image(source_overlay_path, _draw_source_overlay(source_image, items))
-
-    source_sha = _digest_file(source)
-    run_fingerprint = _digest_bytes(
-        json.dumps(
-            {
-                "source": source_sha,
-                "segmentation": asdict(selected_segmentation),
-                "packing": asdict(selected_packing),
-                "items": [item.content_sha256 for item in items],
+        manifest: dict[str, Any] = {
+            "schemaVersion": "deterministic-item-sheet-v1",
+            "kind": "deterministic-item-atlas",
+            "runId": f"item-atlas-{run_fingerprint[:16]}",
+            "inputFingerprint": run_fingerprint,
+            "parentManifestSha256": parent_manifest_sha256,
+            "source": source_record,
+            "segmentation": segmentation_record,
+            "packing": {
+                **asdict(selected_packing),
+                "algorithm": "size-ordered-shelves",
+                "sort": ["cell-area-desc", "max-side-desc", "height-desc", "stable-id"],
+                "rotation": False,
+                "rescale": False,
             },
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode("utf-8")
-    )
-    manifest: dict[str, Any] = {
-        "schemaVersion": "deterministic-item-sheet-v1",
-        "kind": "deterministic-item-atlas",
-        "runId": f"item-atlas-{run_fingerprint[:16]}",
-        "inputFingerprint": run_fingerprint,
-        "parentManifestSha256": None,
-        "source": {
+            "atlas": {
+                "path": "atlas.png",
+                "width": atlas.width,
+                "height": atlas.height,
+                "sha256": _digest_file(atlas_path),
+            },
+            "items": item_records,
+            "evidence": {
+                "sourceComponents": "qa/source-components.png",
+                "atlasGrid": "qa/atlas-grid.png",
+                "pixelOwnership": "qa/pixel-ownership-report.json",
+                "sourceRgba": "source.png",
+                "sourceRgbaSha256": _digest_file(staging / "source.png"),
+                "pendingMask": "qa/pending-mask.png",
+                "discardedMask": "qa/discarded-mask.png",
+            },
+            "completion": {
+                "geometryBuilt": True,
+                "classificationComplete": False,
+                "reviewComplete": False,
+                "pendingPixels": ownership["pendingPixels"],
+                **(dict(completion) if completion else {}),
+            },
+        }
+        if manifest_extra:
+            protected = set(manifest)
+            for key, value in manifest_extra.items():
+                if key in protected:
+                    raise ItemSheetError(f"manifest extra cannot replace {key}")
+                manifest[key] = deepcopy(value)
+        manifest["completion"]["reviewGatePassed"] = ownership["pendingPixels"] == 0 and not any(
+            item["qaFlags"] and item["review"]["status"] != "approved" for item in item_records)
+        manifest["completion"]["reviewComplete"] = ownership["pendingPixels"] == 0 and all(
+            item["review"]["status"] == "approved" for item in item_records)
+        _atomic_json(staging / "manifest.json", manifest)
+        if output.exists():
+            if any(output.iterdir()) and not force:
+                raise ItemSheetError("output directory changed during atlas compilation")
+            shutil.rmtree(output)
+        staging.replace(output)
+        staging = None
+        return manifest
+    except OSError as exc:
+        raise ItemSheetError(f"cannot write atlas output: {exc}") from exc
+    finally:
+        if staging is not None and staging.exists():
+            shutil.rmtree(staging, ignore_errors=True)
+
+
+def build_item_atlas(
+    source_path: Path,
+    output_dir: Path,
+    *,
+    segmentation: SegmentationConfig | None = None,
+    packing: PackingConfig | None = None,
+    provenance: str,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Compile one RGBA item sheet and return its manifest."""
+
+    source = Path(source_path).expanduser().resolve()
+    output = Path(output_dir).expanduser().resolve()
+    if not source.is_file():
+        raise ItemSheetError(f"source image does not exist: {source}")
+    if source.is_relative_to(output):
+        raise ItemSheetError("output directory cannot contain the source image")
+    _validate_output_dir(output, force)
+
+    selected_segmentation = segmentation or SegmentationConfig()
+    selected_packing = packing or PackingConfig()
+    selected_segmentation.validate()
+    selected_packing.validate()
+    try:
+        with Image.open(source) as opened:
+            opened.load()
+            source_image = opened.convert("RGBA")
+    except OSError as exc:
+        raise ItemSheetError(f"source is not a decodable image: {source}") from exc
+
+    items = segment_items(source_image, selected_segmentation)
+    return write_item_atlas_run(
+        items,
+        output,
+        source={
             "path": source.name,
-            "sha256": source_sha,
+            "sha256": _digest_file(source),
             "width": source_image.width,
             "height": source_image.height,
             "mode": "RGBA",
-            "provenance": "imported",
+            "provenance": provenance,
         },
-        "segmentation": {
+        source_reference=source_image,
+        segmentation={
             **asdict(selected_segmentation),
             "method": "alpha-hysteresis-connected-components",
-            "itemCount": len(item_records),
         },
-        "packing": {
-            **asdict(selected_packing),
-            "algorithm": "maxrects-best-short-side-fit",
-            "sort": ["cell-area-desc", "max-side-desc", "height-desc", "stable-id"],
-            "rotation": False,
-            "rescale": False,
-        },
-        "atlas": {
-            "path": "atlas.png",
-            "width": atlas.width,
-            "height": atlas.height,
-            "sha256": _digest_file(atlas_path),
-        },
-        "items": item_records,
-        "evidence": {
-            "sourceComponents": "qa/source-components.png",
-            "atlasGrid": "qa/atlas-grid.png",
-        },
-        "completion": {
-            "geometryBuilt": True,
-            "classificationComplete": False,
-            "reviewComplete": False,
-        },
-    }
-    _atomic_json(manifest_path, manifest)
-    return manifest
+        packing=selected_packing,
+        force=force,
+    )
 
 
 def validate_manifest_geometry(manifest: Mapping[str, Any]) -> list[str]:
@@ -804,6 +1016,19 @@ def validate_manifest_geometry(manifest: Mapping[str, Any]) -> list[str]:
     height = atlas.get("height")
     if not isinstance(width, int) or not isinstance(height, int):
         return ["atlas dimensions must be integers"]
+    packing = manifest.get("packing")
+    padding = packing.get("padding", 0) if isinstance(packing, Mapping) else 0
+    quantum = packing.get("quantum", 1) if isinstance(packing, Mapping) else 1
+    outer_padding = packing.get("outer_padding", 0) if isinstance(packing, Mapping) else 0
+    if not isinstance(padding, int) or padding < 0:
+        errors.append("packing padding must be a non-negative integer")
+        padding = 0
+    if not isinstance(quantum, int) or quantum < 1:
+        errors.append("packing quantum must be a positive integer")
+        quantum = 1
+    if not isinstance(outer_padding, int) or outer_padding < 0:
+        errors.append("packing outer_padding must be a non-negative integer")
+        outer_padding = 0
 
     cells: list[tuple[str, _Rect]] = []
     for item in items:
@@ -837,6 +1062,17 @@ def validate_manifest_geometry(manifest: Mapping[str, Any]) -> list[str]:
             errors.append(f"{item_id}: cellRect exceeds atlas")
         if not _contains(cell_rect, frame_rect):
             errors.append(f"{item_id}: frame is not contained by cellRect")
+        elif min(
+            frame_rect.x - cell_rect.x,
+            frame_rect.y - cell_rect.y,
+            cell_rect.right - frame_rect.right,
+            cell_rect.bottom - frame_rect.bottom,
+        ) < padding:
+            errors.append(f"{item_id}: frame does not preserve configured padding")
+        if cell_rect.w % quantum or cell_rect.h % quantum:
+            errors.append(f"{item_id}: cell dimensions are not quantum-aligned")
+        if (cell_rect.x - outer_padding) % quantum or (cell_rect.y - outer_padding) % quantum:
+            errors.append(f"{item_id}: cell position is not quantum-aligned")
         if geometry.get("scale") != 1:
             errors.append(f"{item_id}: scale must remain 1")
         if geometry.get("rotated") is not False:
@@ -855,9 +1091,14 @@ __all__ = [
     "ItemSheetError",
     "PackingConfig",
     "SegmentationConfig",
+    "build_pixel_ownership_report",
     "build_item_atlas",
     "compose_atlas",
+    "item_content_sha256",
     "pack_items",
+    "reconstruct_source_reference",
     "segment_items",
+    "unique_item_id",
     "validate_manifest_geometry",
+    "write_item_atlas_run",
 ]

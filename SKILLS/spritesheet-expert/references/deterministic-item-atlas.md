@@ -49,7 +49,7 @@ halo_radius = 6
 connectivity = 8
 ```
 
-Strong components below `min_strong_pixels` are filtered as noise. Remaining strong components grow through weak-alpha pixels only within the configured halo. Competing growth fronts keep a deterministic tie break and produce a review flag.
+Strong components below `min_strong_pixels` remain pending rather than becoming automatic candidates. Remaining strong components grow through weak-alpha pixels only within the configured halo. Competing growth fronts keep a deterministic tie break and produce a review flag. Every unassigned visible pixel remains in the pending mask; nothing is silently discarded.
 
 This prevents a faint alpha bridge from joining unrelated objects across the sheet while retaining thin semitransparent edges near the accepted object.
 
@@ -141,13 +141,7 @@ Items are ordered by:
 3. cell height descending;
 4. stable item ID.
 
-The packer evaluates quantum-aligned candidate atlas widths up to `max_width`, uses a best-short-side-fit MaxRects-style placement, and minimizes:
-
-1. final atlas area;
-2. difference between width and height;
-3. width as a stable tie break.
-
-Rotation remains disabled even when it would improve packing.
+The packer places consecutive shelves in that visual order, without backfilling earlier gaps. Automatic width (`max_width=0`) is quantum-aligned and derived from total cell area and the widest cell. An explicit width bounds the rows. Height grows as needed. Rotation remains disabled.
 
 ## CLI
 
@@ -155,6 +149,7 @@ Rotation remains disabled even when it would improve packing.
 python SKILLS/spritesheet-expert/scripts/build_deterministic_item_atlas.py `
   source/items.png `
   --output-dir build/item-atlas `
+  --provenance imported `
   --alpha-high 64 `
   --alpha-low 2 `
   --halo-radius 6 `
@@ -162,6 +157,8 @@ python SKILLS/spritesheet-expert/scripts/build_deterministic_item_atlas.py `
   --padding 16 `
   --max-width 4096
 ```
+
+Set `--provenance` to the actual source route. The accepted values are `imagegen`, `grok-imagine-image`, `imported`, `fixture`, and `mixed`.
 
 Outputs:
 
@@ -205,6 +202,8 @@ python SKILLS/spritesheet-expert/scripts/apply_item_classification.py `
 
 Low-confidence predictions are converted to `unknown` and receive `low_classification_confidence`. Values outside the taxonomy fail closed.
 
+Write the classified manifest beside its parent. This location keeps all relative item and evidence paths valid.
+
 ## Review workflow
 
 Review states:
@@ -226,7 +225,9 @@ python SKILLS/spritesheet-expert/scripts/apply_item_review.py `
   --output-dir build/item-atlas-reviewed
 ```
 
-The command rejects unresolved regeneration requests, verifies replacement hashes, rebuilds the atlas, regenerates geometry evidence, and writes `parentManifestSha256`.
+The command requires the exact parent-manifest hash from `sourceManifest.sha256`. It rejects stale reviews and unresolved regeneration requests.
+
+The successor includes current item composites, source-component evidence, reviewed replacement sources, rebuilt atlas evidence, and `parentManifestSha256`.
 
 ## Regeneration isolation
 

@@ -68,6 +68,7 @@ const elements = {
   exportReview: document.querySelector("#export-review"),
   copyReview: document.querySelector("#copy-review"),
   reviewProgress: document.querySelector("#review-progress"),
+  reviewFeedback: document.querySelector("#review-feedback"),
   queueList: document.querySelector("#queue-list"),
   queueEmpty: document.querySelector("#queue-empty"),
   queueCount: document.querySelector("#queue-count"),
@@ -81,7 +82,9 @@ function loadQueue() {
   try {
     const raw = localStorage.getItem("spritesheet-expert-studio-queue-v1");
     const value = raw ? JSON.parse(raw) : [];
-    return Array.isArray(value) ? value : [];
+    return Array.isArray(value)
+      ? value.filter((entry) => entry && typeof entry === "object")
+      : [];
   } catch {
     return [];
   }
@@ -96,14 +99,17 @@ function persistQueue() {
 
 function setView(view) {
   for (const item of elements.navItems) {
-    item.classList.toggle("is-active", item.dataset.view === view);
+    const active = item.dataset.view === view;
+    item.classList.toggle("is-active", active);
+    if (active) item.setAttribute("aria-current", "page");
+    else item.removeAttribute("aria-current");
   }
   for (const panel of elements.viewPanels) {
     panel.classList.toggle("is-active", panel.dataset.viewPanel === view);
   }
   const target = document.querySelector(`#${CSS.escape(view)}`);
   if (target) history.replaceState(null, "", `#${view}`);
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  window.scrollTo({ top: 0, behavior: "instant" });
 }
 
 for (const item of elements.navItems) {
@@ -426,6 +432,7 @@ async function loadManifestFile(file) {
     if (manifest?.kind !== "deterministic-item-atlas" || !Array.isArray(manifest.items)) {
       throw new Error("not a deterministic-item-atlas manifest");
     }
+    revokeObjectUrls();
     state.manifest = manifest;
     state.manifestFile = file;
     state.manifestSha256 = await sha256Hex(file);
@@ -542,7 +549,9 @@ function renderItems() {
     const review = state.reviews.get(item.id) ?? initialReview(item);
     card.dataset.status = review.status;
     card.classList.toggle("is-selected", item.id === state.selectedItemId);
-    image.src = itemImageUrl(item);
+    const imageUrl = itemImageUrl(item);
+    if (imageUrl) image.src = imageUrl;
+    else image.removeAttribute("src");
     image.alt = `${review.classification.canonicalType || "Unknown item"} ${item.id}`;
     code.textContent = item.id;
     title.textContent = review.classification.canonicalType || "unknown";
@@ -628,7 +637,9 @@ function renderInspector() {
   elements.itemInspector.hidden = false;
   elements.selectedItemStatus.textContent = review.status;
   elements.inspectorItemId.textContent = item.id;
-  elements.itemPreviewImage.src = itemImageUrl(item);
+  const imageUrl = itemImageUrl(item);
+  if (imageUrl) elements.itemPreviewImage.src = imageUrl;
+  else elements.itemPreviewImage.removeAttribute("src");
   elements.geometryData.replaceChildren(
     geometryEntry("Native size", item.geometry?.originalSize),
     geometryEntry("Source bbox", item.source?.bbox),
@@ -649,7 +660,9 @@ function renderInspector() {
   elements.classificationTags.value = (review.classification.tags ?? []).join(", ");
   elements.reviewNotes.value = review.notes ?? "";
   for (const button of elements.itemStatusButtons) {
-    button.classList.toggle("is-selected", button.dataset.itemStatus === review.status);
+    const selected = button.dataset.itemStatus === review.status;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-pressed", String(selected));
   }
   renderReplacement(item.id);
 }
@@ -667,10 +680,21 @@ for (const button of elements.itemStatusButtons) {
   button.addEventListener("click", () => {
     const review = state.reviews.get(state.selectedItemId);
     if (!review) return;
-    review.status = button.dataset.itemStatus;
+    const nextStatus = button.dataset.itemStatus;
+    if (
+      nextStatus === "replace"
+      && !review.replacement
+      && !state.replacementDrafts.has(state.selectedItemId)
+    ) {
+      elements.replacementInput.click();
+      return;
+    }
+    review.status = nextStatus;
     elements.selectedItemStatus.textContent = review.status;
     for (const candidate of elements.itemStatusButtons) {
-      candidate.classList.toggle("is-selected", candidate === button);
+      const selected = candidate === button;
+      candidate.classList.toggle("is-selected", selected);
+      candidate.setAttribute("aria-pressed", String(selected));
     }
     renderItems();
     updateReviewProgress();
@@ -693,7 +717,10 @@ elements.replacementInput.addEventListener("change", async () => {
   };
   state.replacementDrafts.set(state.selectedItemId, draft);
   const review = state.reviews.get(state.selectedItemId);
-  if (review) review.status = "replace";
+  if (review) {
+    review.status = "replace";
+    elements.reviewFeedback.textContent = "";
+  }
   renderInspector();
   renderItems();
   updateReviewProgress();
@@ -704,7 +731,14 @@ elements.removeReplacement.addEventListener("click", () => {
   if (draft?.objectUrl) URL.revokeObjectURL(draft.objectUrl);
   state.replacementDrafts.delete(state.selectedItemId);
   elements.replacementInput.value = "";
-  renderReplacement(state.selectedItemId);
+  const review = state.reviews.get(state.selectedItemId);
+  if (review) {
+    review.replacement = null;
+    if (review.status === "replace") review.status = "pending";
+  }
+  renderInspector();
+  renderItems();
+  updateReviewProgress();
 });
 
 function saveSelectedDecision() {
@@ -722,15 +756,15 @@ function saveSelectedDecision() {
   };
   review.notes = elements.reviewNotes.value.trim();
   const draft = state.replacementDrafts.get(item.id);
-  review.replacement = draft
-    ? {
-        path: draft.file.name,
-        sha256: draft.sha256,
-        mediaType: draft.file.type || "application/octet-stream",
-        sizeBytes: draft.file.size,
-        provenance: "imported",
-      }
-    : null;
+  if (draft) {
+    review.replacement = {
+      path: draft.file.name,
+      sha256: draft.sha256,
+      mediaType: draft.file.type || "application/octet-stream",
+      sizeBytes: draft.file.size,
+      provenance: "imported",
+    };
+  }
   if (review.replacement && review.status === "pending") review.status = "replace";
   renderItems();
   renderInspector();
@@ -802,6 +836,13 @@ function reviewDocument() {
       replacement: replacement ?? null,
     };
   });
+  const invalidReplacement = items.find((item) => item.status === "replace" && !item.replacement);
+  if (invalidReplacement) {
+    elements.reviewFeedback.textContent =
+      `${invalidReplacement.itemId} needs a replacement file before export.`;
+    return null;
+  }
+  elements.reviewFeedback.textContent = "";
   return {
     schemaVersion: "item-review-v1",
     kind: "deterministic-item-review",
@@ -842,7 +883,7 @@ elements.exportReview.addEventListener("click", () => {
 elements.copyReview.addEventListener("click", () => {
   saveSelectedDecision();
   const review = reviewDocument();
-  if (review) copyText(JSON.stringify(review, null, 2), elements.outputFeedback);
+  if (review) copyText(JSON.stringify(review, null, 2), elements.reviewFeedback);
 });
 
 elements.clearAtlas.addEventListener("click", () => {
@@ -857,6 +898,7 @@ elements.clearAtlas.addEventListener("click", () => {
   elements.runFolderInput.value = "";
   elements.manifestFileName.textContent = "No file selected";
   elements.runFolderName.textContent = "Needed to resolve local images";
+  elements.reviewFeedback.textContent = "";
   renderRunSummary();
   renderItems();
   renderInspector();
@@ -913,8 +955,15 @@ elements.clearQueue.addEventListener("click", () => {
 
 window.addEventListener("beforeunload", revokeObjectUrls);
 
+if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+
 const initialView = location.hash.replace(/^#/, "");
-if (["launcher", "atlas", "queue", "about"].includes(initialView)) setView(initialView);
+setView(["process", "launcher", "atlas", "queue", "about"].includes(initialView) ? initialView : "process");
+window.addEventListener(
+  "pageshow",
+  () => requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "instant" })),
+  { once: true },
+);
 
 renderRunSummary();
 renderItems();

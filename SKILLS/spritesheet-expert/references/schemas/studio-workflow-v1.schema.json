@@ -101,6 +101,7 @@
         "mode": {
           "enum": [
             "deterministic",
+            "local-worker",
             "handoff",
             "review",
             "provider-handoff",

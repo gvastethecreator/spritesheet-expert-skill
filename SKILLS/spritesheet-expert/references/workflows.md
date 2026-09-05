@@ -1,5 +1,9 @@
 # Spritesheet Expert Workflows
 
+## Existing transparent item sheet
+
+Use [Local item-sheet workflow](local-model-item-workflow.md) to import an irregular sheet, propose visual groups with local models, review source masks, classify sprites and export a size-ordered rectangular atlas. Studio and CLI share the same staged runner. Model errors and unassigned pixels remain visible; export a draft until review is complete.
+
 ## New Sheet Workflow
 
 1. Pick preset or collect custom rows.

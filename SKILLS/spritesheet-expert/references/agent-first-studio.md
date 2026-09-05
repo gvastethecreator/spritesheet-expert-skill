@@ -96,7 +96,9 @@ When the result repeats another category, contains several categories, or otherw
 
 ## Local file handling
 
-The static Studio reads files through browser file pickers. It does not receive arbitrary filesystem access.
+The bundled Studio uses `scripts/serve_item_studio.py` for the local item workflow.
+Read `local-model-item-workflow.md` for execution, pixel-mask review, and export.
+The handoff and Atlas Lab views also support browser file pickers.
 
 - Manifest JSON is selected explicitly.
 - A run folder is selected to resolve relative crop paths.
