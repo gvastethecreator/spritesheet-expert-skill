@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+from hashlib import sha256
 from pathlib import Path
 import subprocess
 import sys
+import pytest
 
 from PIL import Image, ImageDraw
 
@@ -41,6 +43,8 @@ def test_item_atlas_cli_build_classify_and_review_round_trip(tmp_path: Path) -> 
         str(source),
         "--output-dir",
         str(run),
+        "--provenance",
+        "fixture",
         "--grid-quantum",
         "16",
         "--padding",
@@ -56,6 +60,7 @@ def test_item_atlas_cli_build_classify_and_review_round_trip(tmp_path: Path) -> 
     manifest_path = run / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert len(manifest["items"]) == 3
+    assert manifest["source"]["provenance"] == "fixture"
 
     taxonomy = (
         REPO_ROOT
@@ -80,6 +85,8 @@ def test_item_atlas_cli_build_classify_and_review_round_trip(tmp_path: Path) -> 
     assert len(job_lines) == 3
     assert all(job["expected"]["count"] == 1 for job in job_lines)
     assert all(job["itemId"] for job in job_lines)
+    assert all(job["sourceManifest"]["sha256"] for job in job_lines)
+    assert all("families" in job["taxonomy"] for job in job_lines)
 
     results = run / "inference" / "results.jsonl"
     results.write_text(
@@ -145,8 +152,6 @@ def test_item_atlas_cli_build_classify_and_review_round_trip(tmp_path: Path) -> 
     ImageDraw.Draw(replacement_image).rectangle((4, 4, 39, 26), fill=(60, 170, 95, 255))
     replacement_image.save(replacement)
 
-    from hashlib import sha256
-
     replacement_sha = sha256(replacement.read_bytes()).hexdigest()
     review_items = []
     for index, item in enumerate(classified["items"]):
@@ -188,7 +193,7 @@ def test_item_atlas_cli_build_classify_and_review_round_trip(tmp_path: Path) -> 
                 "runId": classified["runId"],
                 "sourceManifest": {
                     "filename": classified_path.name,
-                    "sha256": "0" * 64,
+                    "sha256": sha256(classified_path.read_bytes()).hexdigest(),
                 },
                 "createdAt": "2026-09-04T00:00:00Z",
                 "items": review_items,
@@ -217,11 +222,18 @@ def test_item_atlas_cli_build_classify_and_review_round_trip(tmp_path: Path) -> 
     assert reviewed_manifest["reviewApplication"]["replacementCount"] == 1
     assert (reviewed_run / "atlas.png").is_file()
     assert (reviewed_run / "qa/atlas-grid.png").is_file()
+    assert (reviewed_run / "qa/source-components.png").is_file()
+    assert all(
+        (reviewed_run / item["artifacts"]["lightComposite"]).is_file()
+        and (reviewed_run / item["artifacts"]["darkComposite"]).is_file()
+        for item in reviewed_manifest["items"]
+    )
     replaced = next(item for item in reviewed_manifest["items"] if item["id"] == replacement_item["id"])
     assert replaced["geometry"]["originalSize"] == [44, 31]
     assert replaced["geometry"]["scale"] == 1
     assert replaced["geometry"]["rotated"] is False
     assert "replacement_imported" in replaced["qaFlags"]
+    assert (reviewed_run / replaced["review"]["replacement"]["sourcePath"]).is_file()
 
 
 def test_review_cli_rejects_unresolved_regeneration(tmp_path: Path) -> None:
@@ -233,6 +245,8 @@ def test_review_cli_rejects_unresolved_regeneration(tmp_path: Path) -> None:
         str(source),
         "--output-dir",
         str(run),
+        "--provenance",
+        "fixture",
     )
     assert built.returncode == 0
     manifest = json.loads((run / "manifest.json").read_text(encoding="utf-8"))
@@ -244,7 +258,10 @@ def test_review_cli_rejects_unresolved_regeneration(tmp_path: Path) -> None:
                 "kind": "deterministic-item-review",
                 "reviewId": "blocked-review",
                 "runId": manifest["runId"],
-                "sourceManifest": {"filename": "manifest.json", "sha256": "0" * 64},
+                "sourceManifest": {
+                    "filename": "manifest.json",
+                    "sha256": sha256((run / "manifest.json").read_bytes()).hexdigest(),
+                },
                 "createdAt": "2026-09-04T00:00:00Z",
                 "items": [
                     {
@@ -276,3 +293,106 @@ def test_review_cli_rejects_unresolved_regeneration(tmp_path: Path) -> None:
     payload = json.loads(blocked.stdout)
     assert payload["status"] == "contract-failure"
     assert "unresolved items" in payload["errors"][0]
+    assert not (tmp_path / "blocked").exists()
+
+
+def test_review_cli_rejects_manifest_hash_mismatch_without_output(tmp_path: Path) -> None:
+    source = tmp_path / "source.png"
+    run = tmp_path / "run"
+    _source(source)
+    built = _run(
+        str(SCRIPT_ROOT / "build_deterministic_item_atlas.py"),
+        str(source),
+        "--output-dir",
+        str(run),
+        "--provenance",
+        "fixture",
+    )
+    assert built.returncode == 0, built.stderr or built.stdout
+    manifest = json.loads((run / "manifest.json").read_text(encoding="utf-8"))
+    review = tmp_path / "mismatched-review.json"
+    review.write_text(
+        json.dumps(
+            {
+                "schemaVersion": "item-review-v1",
+                "kind": "deterministic-item-review",
+                "reviewId": "mismatched-review",
+                "runId": manifest["runId"],
+                "sourceManifest": {"filename": "manifest.json", "sha256": "0" * 64},
+                "createdAt": "2026-09-04T00:00:00Z",
+                "items": [
+                    {
+                        "itemId": item["id"],
+                        "status": "approved",
+                        "notes": "",
+                        "classification": item["classification"],
+                        "replacement": None,
+                    }
+                    for item in manifest["items"]
+                ],
+                "summary": {"approved": len(manifest["items"])},
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "mismatched-output"
+
+    rejected = _run(
+        str(SCRIPT_ROOT / "apply_item_review.py"),
+        "--manifest",
+        str(run / "manifest.json"),
+        "--review",
+        str(review),
+        "--output-dir",
+        str(output),
+    )
+
+    assert rejected.returncode == 1
+    assert "sourceManifest.sha256 does not match" in rejected.stdout
+    assert not output.exists()
+
+
+def test_workflow_cancel_resume_and_changed_evidence(tmp_path: Path) -> None:
+    source, output = tmp_path / "source.png", tmp_path / "workflow"
+    _source(source)
+    output.mkdir()
+    cancel = output / "cancel.request"
+    cancel.touch()
+    command = (str(SCRIPT_ROOT / "run_item_atlas_workflow.py"), str(source), "--output-dir", str(output), "--models", "none")
+    cancelled = _run(*command)
+    assert cancelled.returncode == 1
+    state = json.loads((output / "workflow.json").read_text())
+    assert state["status"] == "cancelled" and not state["processingComplete"]
+    cancel.unlink()
+    finished = _run(*command)
+    assert finished.returncode == 0, finished.stdout + finished.stderr
+    state = json.loads((output / "workflow.json").read_text())
+    assert state["processingComplete"] and state["manifest"]
+    original = (output / state["manifest"]).read_bytes()
+    resumed = _run(*command)
+    assert resumed.returncode == 0
+    assert (output / state["manifest"]).read_bytes() == original
+    (output / "alpha/atlas.png").write_bytes(b"tampered")
+    rejected = _run(*command)
+    assert rejected.returncode == 1 and "evidence changed" in rejected.stdout
+    assert not json.loads((output / "workflow.json").read_text())["processingComplete"]
+
+
+def test_local_studio_review_is_hash_bound_and_export_gates_pending(tmp_path: Path) -> None:
+    from serve_item_studio import Studio
+    from spritecore.item_sheet import build_item_atlas
+    run_id = "a"*32
+    studio = Studio(tmp_path / "studio", tmp_path / "missing-runtime.json")
+    source = studio.workspace / "imports" / f"{run_id}.png"
+    _source(source)
+    (source.with_suffix(".json")).write_text(json.dumps({"name":"fixture.png"}))
+    root = studio.run_root(run_id)
+    manifest = build_item_atlas(source, root / "alpha", provenance="fixture")
+    (root / "workflow.json").write_text(json.dumps({"status":"review-required", "processingComplete":True,"manifest":"alpha/manifest.json"}))
+    snapshot = studio.snapshot(run_id)
+    with pytest.raises(ValueError, match="stale review"):
+        studio.review(run_id, {"parentManifestSha256":"0"*64, "operations":[]})
+    reviewed = studio.review(run_id, {"parentManifestSha256":snapshot["manifestSha256"], "operations":[
+        {"kind":"approve", "itemIds":[item["id"] for item in manifest["items"]]}]})
+    assert reviewed["status"] == "ready"
+    assert reviewed["document"]["completion"]["reviewComplete"]
