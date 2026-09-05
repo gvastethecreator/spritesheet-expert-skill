@@ -379,6 +379,8 @@ def test_workflow_cancel_resume_and_changed_evidence(tmp_path: Path) -> None:
 
 
 def test_local_studio_review_is_hash_bound_and_export_gates_pending(tmp_path: Path) -> None:
+    from io import BytesIO
+    import zipfile
     from serve_item_studio import Studio
     from spritecore.item_sheet import build_item_atlas
     run_id = "a"*32
@@ -394,5 +396,14 @@ def test_local_studio_review_is_hash_bound_and_export_gates_pending(tmp_path: Pa
         studio.review(run_id, {"parentManifestSha256":"0"*64, "operations":[]})
     reviewed = studio.review(run_id, {"parentManifestSha256":snapshot["manifestSha256"], "operations":[
         {"kind":"approve", "itemIds":[item["id"] for item in manifest["items"]]}]})
-    assert reviewed["status"] == "ready"
+    # Completing human review does not turn synthetic fixture art into production art.
     assert reviewed["document"]["completion"]["reviewComplete"]
+    assert reviewed["reviewCount"] == 0
+    assert reviewed["status"] == "review-required"
+    assert "fixtures are not production artwork" in reviewed["reviewBlockers"]
+    with pytest.raises(ValueError, match="fixtures are not production artwork"):
+        studio.export(run_id, {})
+    with zipfile.ZipFile(BytesIO(studio.export(run_id, {"draft": True}))) as archive:
+        receipt = json.loads(archive.read("qa/delivery-check.json"))
+        assert receipt["status"] == "pass" and receipt["draft"] is True
+        assert "fixtures are not production artwork" in receipt["reviewBlockers"]
