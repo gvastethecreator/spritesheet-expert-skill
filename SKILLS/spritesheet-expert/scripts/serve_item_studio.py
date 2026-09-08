@@ -19,11 +19,14 @@ from urllib.parse import unquote, urlparse
 import uuid
 import zipfile
 
-from PIL import Image
 from spritecore.item_segmentation import digest_file, load_json
 from spritecore.item_ownership import apply_ownership_review
-from spritecore.item_sheet import _atomic_json
+from spritecore.item_sheet import _atomic_json, PackingConfig
 from spritecore.item_delivery import artifact, review_blockers, validate_delivery
+from spritecore.locks import acquire_run_lock
+from spritecore.workspace import Workspace
+from spritecore.model_checkpoints import capabilities
+from spritecore.workflow_lanes import registry as lane_registry
 
 SCRIPTS = Path(__file__).resolve().parent
 SKILL = SCRIPTS.parent
@@ -31,22 +34,35 @@ SKILL = SCRIPTS.parent
 
 class Studio:
     def __init__(self, workspace: Path, runtime_config: Path):
-        self.workspace = workspace.resolve()
+        self.store = (Workspace(workspace) if (workspace / "workspace.json").exists()
+                      else Workspace.create(workspace, workspace.name, adopt=True))
+        self.workspace = self.store.root
         self.runtime_config = runtime_config.resolve()
         self.token = secrets.token_urlsafe(32)
         self.processes = {}
-        self.lock = threading.Lock()
-        for folder in ("imports", "runs", "logs"):
-            (self.workspace / folder).mkdir(parents=True, exist_ok=True)
+        self.lock = threading.RLock()
+
+    def switch_workspace(self, payload, *, create=False):
+        with self.lock:
+            if any(p.poll() is None for p in self.processes.values()):
+                raise ValueError("stop processing before changing workspaces")
+            path = Path(payload.get("path", ""))
+            if not path.is_absolute():
+                raise ValueError("use an absolute workspace folder path")
+            store = Workspace.create(path, payload.get("name", "")) if create else Workspace(path)
+            self.store, self.workspace = store, store.root
+            self.processes = {}
+            self.token = secrets.token_urlsafe(32)
+            return self.store.catalog()
 
     def run_root(self, run_id):
-        if not isinstance(run_id, str) or len(run_id) != 32 or any(c not in "0123456789abcdef" for c in run_id):
-            raise ValueError("invalid run id")
-        return self.workspace / "runs" / run_id
+        return self.store.run_root(run_id)
 
     def snapshot(self, run_id):
         root = self.run_root(run_id)
-        imported = load_json(self.workspace / "imports" / f"{run_id}.json")
+        imported = self.store.metadata(run_id)
+        if imported.get("lane") in {"true-grid", "animation", "tileset"}:
+            return next(row for row in self.store.catalog()["runs"] if row["id"] == run_id) | {"active": False, "workspaceId": self.store.document["id"]}
         state = load_json(root / "workflow.json") if (root / "workflow.json").exists() else {"status": "imported"}
         if state.get("config") and digest_file(root / "input/source.png") != state["config"]["sourceSha256"]:
             raise ValueError("imported source snapshot hash mismatch")
@@ -58,7 +74,8 @@ class Studio:
             state["status"] = "failed"
             log = self.workspace / "logs" / f"{run_id}.log"
             state["error"] = log.read_text(encoding="utf-8", errors="replace")[-2000:]
-        response = {"id": run_id, "name": imported["name"], "active": active, **state}
+        response = {"id": run_id, "name": imported["name"], "collection": imported.get("collection", ""),
+                    "workspaceId": self.store.document["id"], "active": active, **state}
         manifest_relative = state.get("manifest")
         if manifest_relative:
             path = contained(root, manifest_relative)
@@ -85,6 +102,8 @@ class Studio:
             if any(p.poll() is None for p in self.processes.values()):
                 raise ValueError("another workflow is running; wait or cancel it")
             current = self.snapshot(run_id)
+            if current.get("lane") in {"true-grid", "animation", "tileset"}:
+                raise ValueError("use the lane's existing CLI workflow; the item runner does not process temporal or tile contracts")
             if current.get("processingComplete"):
                 # Starting again must not reset the active reviewed successor.
                 return {"status": "already-complete", "id": run_id}
@@ -98,7 +117,9 @@ class Studio:
             quantum, padding = config.get("quantum", 32), config.get("padding", 16)
             if type(quantum) is not int or not 1 <= quantum <= 1024 or type(padding) is not int or not 0 <= padding <= 1024:
                 raise ValueError("invalid grid settings")
-            metadata["config"] = {"models": models, "quantum": quantum, "padding": padding}
+            limits = {key: config.get(key, getattr(PackingConfig(), key)) for key in ("max_width", "max_height", "max_pages", "max_page_pixels", "max_total_pixels")}
+            PackingConfig(quantum=quantum, padding=padding, **limits).validate()
+            metadata["config"] = {"models": models, "quantum": quantum, "padding": padding, **limits}
             _atomic_json(metadata_path, metadata)
             cancel = root / "cancel.request"
             if cancel.exists():
@@ -107,13 +128,15 @@ class Studio:
                 str(self.workspace / "imports" / f"{run_id}.png"), "--output-dir", str(root),
                 "--models", models, "--runtime-config", str(self.runtime_config),
                 "--grid-quantum", str(quantum), "--padding", str(padding)]
+            for key, value in limits.items():
+                command.extend(["--" + key.replace("_", "-"), str(value)])
             with (self.workspace / "logs" / f"{run_id}.log").open("w", encoding="utf-8") as log:
                 self.processes[run_id] = subprocess.Popen(command, stdout=log, stderr=log,
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
             return {"status": "started", "id": run_id}
 
     def review(self, run_id, payload):
-        with self.lock:
+        with self.lock, acquire_run_lock(self.run_root(run_id), "studio-review"):
             state = self.snapshot(run_id)
             if state["active"]:
                 raise ValueError("wait for processing before reviewing")
@@ -129,9 +152,9 @@ class Studio:
             _atomic_json(root / "workflow.json", state)
             return self.snapshot(run_id)
 
-    def export(self, run_id, payload):
+    def export(self, run_id, payload, *, saved=False):
         """Recheck bytes under the mutation lock; drafts only relax review gates."""
-        with self.lock:
+        with self.lock, acquire_run_lock(self.run_root(run_id), "studio-export"):
             snapshot = self.snapshot(run_id)
             if snapshot["active"] or not snapshot.get("processingComplete") or not snapshot.get("manifest"):
                 raise ValueError("processing is incomplete")
@@ -179,7 +202,9 @@ class Studio:
                 for relative in ("alpha", "segmented", "reviews"):
                     for file in sorted((root / relative).rglob("manifest*.json")):
                         add(file, "workflow-evidence/manifests/" + file.relative_to(root).as_posix())
-            return archive.getvalue()
+            data = archive.getvalue()
+            record = self.store.save_export(run_id, data, report["manifestSha256"], draft=draft)
+            return record if saved else data
 
 
 def contained(root, relative):
@@ -214,25 +239,44 @@ class Handler(BaseHTTPRequestHandler):
         return host in allowed and self.headers.get("Origin", f"http://{host}") == f"http://{host}"
 
     def do_GET(self):
+        with self.studio.lock:
+            self.get()
+
+    def get(self):
         try:
             if not self.same_origin():
                 return self.send({"error": "local origin required"}, status=403)
             path = urlparse(self.path).path
+            expected_workspace = self.headers.get("X-Workspace-Id")
+            if expected_workspace and expected_workspace != self.studio.store.document["id"]:
+                return self.send({"error": "workspace changed; reload Studio"}, status=409)
             if path == "/api/session":
-                runtime = load_json(self.studio.runtime_config) if self.studio.runtime_config.exists() else None
-                profiles = []
-                if runtime:
-                    profiles = [p for p in ("standard", "light") if (Path(runtime["modelCacheDir"]) / f"checkpoints-{p}.json").is_file()]
-                return self.send({"token": self.studio.token, "modelProfiles": profiles, "runtimeReady": runtime is not None})
+                return self.send({"token": self.studio.token, **capabilities(self.studio.runtime_config), "lanes": lane_registry(),
+                    "workspace": {**self.studio.store.document, "root": str(self.studio.workspace)}})
+            if path == "/api/workspace":
+                catalog = self.studio.store.catalog()
+                for run in catalog["runs"]:
+                    process = self.studio.processes.get(run["id"])
+                    run["active"] = process is not None and process.poll() is None
+                return self.send(catalog)
+            if path == "/api/handoffs":
+                return self.send(self.studio.store.handoffs())
             if path == "/api/runs":
-                return self.send([self.studio.snapshot(p.stem) for p in sorted((self.studio.workspace / "imports").glob("*.json"))])
+                return self.send([r for r in self.studio.store.catalog()["runs"] if not r.get("archived")])
             pieces = path.strip("/").split("/")
+            if pieces[:2] == ["api", "exports"] and len(pieces) == 3:
+                file, _ = self.studio.store.export_file(pieces[2])
+                return self.send(file.read_bytes(), "application/zip")
             if pieces[:2] == ["api", "runs"] and len(pieces) >= 3:
                 root = self.studio.run_root(pieces[2])
                 if len(pieces) == 3:
                     return self.send(self.studio.snapshot(pieces[2]))
                 if pieces[3] == "files":
                     file = contained(root, "/".join(pieces[4:]))
+                    if self.studio.store.metadata(pieces[2]).get("lane") in {"true-grid", "animation", "tileset"}:
+                        expected = load_json(artifact(root, "workspace-run.json"))["artifacts"].get(file.relative_to(root).as_posix())
+                        if expected is None or digest_file(file) != expected:
+                            raise ValueError("saved snapshot artifact is missing or changed")
                     return self.send(file.read_bytes(), mimetypes.guess_type(file.name)[0] or "application/octet-stream")
             if path == "/skill":
                 return self.send((SKILL / "SKILL.md").read_bytes(), "text/plain; charset=utf-8")
@@ -242,35 +286,45 @@ class Handler(BaseHTTPRequestHandler):
             self.send({"error": str(exc)}, status=404)
 
     def do_POST(self):
+        with self.studio.lock:
+            self.post()
+
+    def post(self):
         try:
             if not self.same_origin() or self.headers.get("X-Studio-Token") != self.studio.token:
                 return self.send({"error": "session token required"}, status=403)
+            expected_workspace = self.headers.get("X-Workspace-Id")
+            if expected_workspace and expected_workspace != self.studio.store.document["id"]:
+                return self.send({"error": "workspace changed; reload Studio"}, status=409)
             size = int(self.headers.get("Content-Length", 0))
             if not 0 < size <= 128 * 1024 * 1024:
                 raise ValueError("request size must be between 1 byte and 128 MiB")
             body = self.rfile.read(size)
             path = urlparse(self.path).path
             if path == "/api/import":
-                with Image.open(BytesIO(body)) as opened:
-                    if opened.width * opened.height > 50_000_000:
-                        raise ValueError("source exceeds 50 million pixels")
-                    opened.load()
-                    if "A" not in opened.getbands() or opened.getchannel("A").getextrema()[0] == 255:
-                        raise ValueError("this workflow requires a transparent source image")
-                run_id = uuid.uuid4().hex
-                (self.studio.workspace / "imports" / f"{run_id}.png").write_bytes(body)
-                _atomic_json(self.studio.workspace / "imports" / f"{run_id}.json",
-                    {"name": unquote(self.headers.get("X-Filename", "source.png")),
-                     "sha256": digest_file(self.studio.workspace / "imports" / f"{run_id}.png")})
-                return self.send({"id": run_id})
+                return self.send(self.studio.store.import_image(body,
+                    unquote(self.headers.get("X-Filename", "source.png")),
+                    collection=unquote(self.headers.get("X-Collection", "")),
+                    job_id=self.headers.get("X-Job-Id") or None))
             payload = json.loads(body)
             if not isinstance(payload, dict):
                 raise ValueError("operation payload must be an object")
+            if path in {"/api/workspace/open", "/api/workspace/create"}:
+                return self.send(self.studio.switch_workspace(payload, create=path.endswith("/create")))
+            if path == "/api/workspace/adopt":
+                return self.send(self.studio.store.adopt_run(Path(payload["path"]),
+                    name=payload["name"], collection=payload.get("collection", ""), lane=payload.get("lane")))
+            if path == "/api/handoffs":
+                return self.send(self.studio.store.handoff(payload))
             pieces = path.strip("/").split("/")
             if pieces[:2] != ["api", "runs"] or len(pieces) != 4:
                 raise ValueError("unknown operation")
             run_id, operation = pieces[2:]
             root = self.studio.run_root(run_id)
+            if operation == "organize":
+                return self.send(self.studio.store.organize(run_id, payload))
+            if operation == "archive-snapshot":
+                return self.send(self.studio.store.archive_run(run_id))
             if operation == "start":
                 return self.send(self.studio.start(run_id, payload))
             if operation == "cancel":
@@ -281,6 +335,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(self.studio.review(run_id, payload))
             if operation == "export":
                 return self.send(self.studio.export(run_id, payload), "application/zip")
+            if operation == "delivery":
+                return self.send(self.studio.export(run_id, payload, saved=True))
             raise ValueError("unknown operation")
         except Exception as exc:
             self.send({"error": str(exc)}, status=400)

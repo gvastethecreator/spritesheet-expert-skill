@@ -20,12 +20,13 @@
       </a>
       <div class="topbar-status">
         <span class="status-dot" aria-hidden="true"></span>
-        <span>Local models · original pixels</span>
+        <span id="workspace-badge">Opening workspace…</span>
       </div>
     </header>
 
     <aside class="sidebar" aria-label="Studio navigation">
       <nav>
+        <button class="nav-item" type="button" data-view="workspaces"><span>↳</span> Workspace</button>
         <button class="nav-item" type="button" data-view="process"><span>00</span> Process a sheet</button>
         <button class="nav-item is-active" type="button" data-view="launcher">
           <span>01</span> Workflow Launcher
@@ -47,14 +48,53 @@
     </aside>
 
     <main class="workspace">
+      <section class="view" id="workspaces" data-view-panel="workspaces" aria-labelledby="workspaces-title">
+        <div class="view-heading"><div><p class="eyebrow">Portable workspace</p><h1 id="workspaces-title">Your work, in one folder.</h1></div>
+          <p class="view-intro">Keep sources, runs, reviews, prepared jobs and deliveries together. Models and Python environments stay outside this folder.</p></div>
+        <section class="panel workspace-current"><h2 id="workspace-name">Opening…</h2><p id="workspace-path"></p><small id="workspace-identity" class="muted"></small>
+          <div class="button-row"><button id="workspace-refresh" class="secondary-button">Refresh</button><button id="workspace-copy" class="secondary-button">Copy agent context</button></div></section>
+        <p id="workspace-status" role="status" aria-live="polite"></p>
+        <div class="local-toolbar"><label class="field"><span>Find a run</span><input id="workspace-search" type="search" placeholder="Name, ID or collection"></label>
+          <label class="field"><span>Collection</span><select id="workspace-collection"><option value="">All collections</option></select></label>
+          <label><input id="workspace-archived" type="checkbox"> Include archived</label></div>
+        <div id="workspace-runs" class="workspace-run-grid"></div>
+        <section class="panel workspace-current"><h2>Saved exports</h2><div id="workspace-exports"></div></section>
+        <details class="panel workspace-locations"><summary>Create, open or import work</summary>
+          <p class="muted">Stop processing before switching or moving the whole folder. Opening saved results does not need model checkpoints.</p>
+          <div class="workspace-run-grid">
+            <form id="workspace-create-form" class="workspace-organize"><h3>Create a workspace</h3>
+              <label class="field"><span>Name</span><input id="workspace-create-name" required maxlength="160"></label>
+              <label class="field"><span>New empty folder</span><input id="workspace-create-path" required placeholder="X:/art-workspaces/blackflag"></label>
+              <button class="primary-button" type="submit">Create and open</button></form>
+            <form id="workspace-open-form" class="workspace-organize"><h3>Open a workspace</h3>
+              <label class="field"><span>Folder containing workspace.json</span><input id="workspace-open-path" required placeholder="X:/art-workspaces/blackflag"></label>
+              <button class="secondary-button" type="submit">Open workspace</button></form>
+            <form id="workspace-adopt-form" class="workspace-organize"><h3>Copy an existing run</h3>
+              <label class="field"><span>Folder containing workflow.json or sprite-request.json</span><input id="workspace-adopt-path" required></label>
+              <label class="field"><span>Workflow lane</span><select id="workspace-adopt-lane"><option value="">From the run contract</option><option value="true-grid">Exact grid / static set</option><option value="animation">Animation / video</option><option value="tileset">Tileset / texture</option></select></label>
+              <label class="field"><span>Run name</span><input id="workspace-adopt-name" required maxlength="160"></label>
+              <label class="field"><span>Collection</span><input id="workspace-adopt-collection" maxlength="160"></label>
+              <button class="secondary-button" type="submit">Copy into workspace</button></form>
+          </div>
+        </details>
+      </section>
       <section class="view" id="process" data-view-panel="process" aria-labelledby="process-title">
         <div class="view-heading"><div><p class="eyebrow">Local workflow</p><h1 id="process-title">Give every sprite its space.</h1></div>
           <p class="view-intro">Import a transparent sheet. Keep visual groups together, review uncertain edges, and export a size-ordered atlas.</p></div>
         <section class="panel local-controls">
           <label class="field"><span>Source sheet</span><input id="local-source" type="file" accept="image/png,image/webp"></label>
+          <label class="field"><span>Collection</span><input id="local-collection" maxlength="160" placeholder="Characters, buildings…"></label>
+          <label class="field"><span>Prepared job (optional)</span><select id="local-job"><option value="">No linked job</option></select></label>
           <label class="field"><span>Models</span><select id="local-models"><option value="standard">Qwen 4B + SAM2</option><option value="light">Qwen 2B + SAM2</option><option value="none">Alpha only · no classification</option></select></label>
           <label class="field"><span>Cell quantum</span><input id="local-quantum" type="number" min="1" max="1024" value="32"></label>
           <label class="field"><span>Padding per side</span><input id="local-padding" type="number" min="0" max="1024" value="16"></label>
+          <details class="field"><summary>Atlas limits and pages</summary>
+            <label class="field"><span>Maximum width (0 = automatic)</span><input id="local-max-width" type="number" min="0" max="16384" value="0"></label>
+            <label class="field"><span>Maximum height</span><input id="local-max-height" type="number" min="1" max="16384" value="8192"></label>
+            <label class="field"><span>Maximum pages</span><input id="local-max-pages" type="number" min="1" max="256" value="16"></label>
+            <label class="field"><span>Pixels per page</span><input id="local-max-page-pixels" type="number" min="1" max="50000000" value="16777216"></label>
+            <label class="field"><span>Total atlas pixels</span><input id="local-max-total-pixels" type="number" min="1" max="50000000" value="50000000"></label>
+          </details>
           <button id="local-start" class="primary-button">Import and process</button>
           <p id="local-runtime" class="muted"></p>
         </section>
@@ -86,7 +126,7 @@
               <label class="field"><span>Tags (comma separated)</span><input id="local-tags"></label><button id="local-save-tags" class="secondary-button">Save tags for selected</button>
             </section>
           </div>
-          <section class="panel"><h2>Atlas · native sprite sizes</h2><div class="local-atlas-scroll"><img id="local-atlas" alt="Sprites arranged in rectangular cells by descending size"></div></section>
+          <section class="panel"><h2>Atlas · native sprite sizes</h2><label class="field"><span>Atlas page</span><select id="local-atlas-page"></select></label><div class="local-atlas-scroll"><img id="local-atlas" alt="Sprites arranged in rectangular cells by descending size"></div></section>
         </section>
       </section>
       <section class="view is-active" id="launcher" data-view-panel="launcher" aria-labelledby="launcher-title">
@@ -342,7 +382,7 @@
             <p class="eyebrow">Explicit execution boundary</p>
             <h1 id="queue-title">Prepared jobs, not hidden side effects.</h1>
           </div>
-          <p class="view-intro">The queue records what another agent or provider should do. Export it, inspect it, and execute it through the selected external route.</p>
+          <p class="view-intro">Jobs are saved in this workspace, not in browser storage. Inspect each job and use your active agent's tools and permissions to execute it.</p>
         </div>
         <section class="panel queue-panel">
           <div class="panel-heading">
@@ -353,6 +393,7 @@
             <span id="queue-count" class="pill">0 jobs</span>
           </div>
           <div id="queue-list" class="queue-list"></div>
+          <p id="queue-status" role="status" aria-live="polite"></p>
           <div class="queue-empty" id="queue-empty">
             <strong>No jobs prepared</strong>
             <p>Add a workflow output or prepare a regeneration job from Atlas Lab.</p>
@@ -360,7 +401,7 @@
           <div class="button-row queue-actions">
             <button id="download-queue" class="primary-button" type="button">Download JSONL</button>
             <button id="copy-queue" class="secondary-button" type="button">Copy JSONL</button>
-            <button id="clear-queue" class="quiet-button" type="button">Clear queue</button>
+            <button id="clear-queue" class="quiet-button" type="button">Archive queue</button>
           </div>
         </section>
       </section>
@@ -433,11 +474,12 @@
         <code class="queue-id"></code>
       </div>
       <p class="queue-summary"></p>
-      <button class="quiet-button queue-remove" type="button">Remove</button>
+      <button class="quiet-button queue-remove" type="button">Archive</button>
     </article>
   </template>
 
   <script type="module" src="app.js"></script>
   <script type="module" src="local-workflow.js"></script>
+  <script type="module" src="workspace.js"></script>
 </body>
 </html>

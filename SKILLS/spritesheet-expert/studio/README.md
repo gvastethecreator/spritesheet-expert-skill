@@ -20,10 +20,59 @@ A local HTTP server is required because the Studio loads `workflows.json` with `
 
 ## What the Studio does
 
+### Workspace
+
+- Create or open a folder in **Workspace → Create, open or import work**.
+- Keep source bytes, processing runs, review successors, prepared jobs and ZIP exports together.
+- Name runs, assign collections, filter the catalog and archive or restore runs without deleting files.
+- Copy existing workflow runs into the workspace after validation. Original runs stay unchanged.
+- Copy relative artifact paths and blockers as context for the active agent. This does not grant execution permission.
+
+Each folder has a stable `workspace.json` identity and a `WORKSPACE.md` guide.
+Stop processing, then move or copy the whole folder and open it from another
+skill installation. No model weights are needed to inspect, review or export
+saved results. Install the skill's Python dependencies on the new host; configure
+its runtime and model cache separately if new inference is needed.
+Incomplete runs require matching inputs, implementation and checkpoint receipts
+to resume. Completed runs retain their reviewed head when reopened.
+
+From the installed skill directory, the same operations are available to an agent:
+
+```powershell
+python scripts/manage_studio_workspace.py create --workspace X:/art-workspaces/blackflag --name "Black Flag"
+python scripts/manage_studio_workspace.py inspect --workspace X:/art-workspaces/blackflag
+python scripts/manage_studio_workspace.py import --workspace X:/art-workspaces/blackflag --source returned.png --collection Heraldry --job-id studio-JOB_ID
+python scripts/manage_studio_workspace.py run --workspace X:/art-workspaces/blackflag --run-id RUN_ID --models none
+python scripts/manage_studio_workspace.py export --workspace X:/art-workspaces/blackflag --run-id RUN_ID --draft
+python scripts/serve_item_studio.py --workspace X:/art-workspaces/blackflag
+```
+
+Use `handoff --file operation.json` for `{ "kind": "add", "job": ... }` or
+`{ "kind": "archive", "jobIds": [...] }`. Jobs use `studio-handoff-v1`.
+Source import can link to a saved job ID, but that link is not provider provenance.
+Use paths relative to the workspace in prepared jobs. Historical absolute paths
+inside logs remain evidence; they are not used to locate current artifacts.
+
+Exports are stored under `exports/` with archive and manifest hashes. Downloading
+checks the archive bytes again. Saved ZIPs are limited to 256 MiB; run copying is
+limited to 2 GiB and rejects linked paths. No files or models are uploaded.
+Archive only hides a run or job; it is not deletion or approval. Old browser-only
+queues are not automatically assigned to a workspace; existing browser storage
+is left untouched. Atlas Lab still requires explicit review JSON export; its
+unsaved editor state is not a portable workspace record.
+
+Copy row/grid/animation/tileset runs with `adopt-run --source <run>` (or the same
+Studio form). The request determines the lane; optional `--lane` asserts it.
+These runs retain `workspace-run.json`, source evidence and their existing QA
+files. Studio can inspect those files, group/archive the run, and save a snapshot
+ZIP. CLI `export --draft` saves the same snapshot. It is not an approved engine
+delivery. Use `check_workflow.py --run-dir <copied-run> --describe` for the typed
+final command, and the existing lane CLI to process a new successor.
+
 ### Process a sheet
 
 - Import transparent source sheets and run the shared local workflow.
-- Choose installed offline model profiles, padding and cell quantum.
+- Choose prepared offline model profiles, padding, cell quantum and page budgets.
 - Cancel or resume saved runs; inspect failures and stage logs.
 - Review source masks, merge components, paint pixel assignments and edit tags.
 - Export a clean atlas, native crops, manifest and evidence; unresolved runs require explicit draft export.
@@ -35,7 +84,7 @@ From a standalone skill installation, run `.local/item-model-runtime/Scripts/pyt
 - Loads the portable workflow registry from `workflows.json`.
 - Generates prompts, CLI commands, and `studio-handoff-v1` JSON jobs.
 - Copies or downloads prepared work.
-- Adds jobs to a local queue for explicit execution by another agent or provider.
+- Saves jobs in the workspace queue for explicit execution by another agent or provider.
 
 ### Atlas Lab
 
@@ -50,6 +99,7 @@ From a standalone skill installation, run `.local/item-model-runtime/Scripts/pyt
 ### Agent Queue
 
 - Holds prepared jobs only.
+- Persists jobs under `handoffs/`; archiving retains their contents and IDs.
 - Exports newline-delimited JSON.
 - Does not execute paid or remote inference.
 - Keeps one-item regeneration jobs isolated from unrelated batch categories.
@@ -83,6 +133,11 @@ python SKILLS/spritesheet-expert/scripts/apply_item_review.py `
 The parent run remains unchanged. The command rejects a review when its source-manifest hash does not match the selected parent.
 
 The successor preserves reviewed replacement sources and rebuilds the item crops, classification composites, atlas, and grid evidence.
+
+Approval is bound separately to pixels, semantics and placement. Changed tags
+invalidate semantic approval; a new replacement receives a successor ID and
+requires fresh review. Every atlas page and native crop is hash-verified before
+the Atlas Lab enables editing. Original runs are never overwritten by review.
 
 ## Validate the Studio bundle
 

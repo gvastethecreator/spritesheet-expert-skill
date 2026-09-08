@@ -24,6 +24,18 @@
   scrollbar-color: var(--line-strong) var(--page);
 }
 
+.workspace-current, .workspace-locations, .workspace-run { padding: 22px; }
+.workspace-current, .workspace-locations { margin-block: 20px; }
+.workspace-current .button-row { margin-top: 18px; }
+#workspace-path, #workspace-identity, .workspace-run code, .workspace-export code { overflow-wrap: anywhere; }
+.workspace-run-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 18px; }
+.workspace-run { min-width: 0; }
+.workspace-run h3 { margin-block: 8px; }
+.workspace-run details { margin-top: 18px; }
+.workspace-organize { display: grid; gap: 12px; margin-top: 16px; align-content: start; }
+.workspace-export { display: grid; gap: 6px; padding-block: 14px; border-top: 1px solid var(--line); }
+#workspace-archived { width: 18px; height: 18px; vertical-align: middle; }
+
 .local-controls { display: grid; grid-template-columns: 2fr 1.5fr 1fr 1fr; gap: 16px; padding: 22px; }
 .local-controls > p { grid-column: 2 / -1; }
 .local-toolbar { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; margin: 18px 0; }

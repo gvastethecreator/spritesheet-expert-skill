@@ -1,3 +1,6 @@
+import {request} from './studio-client.js';
+import {indexFiles, verifyManifestFiles} from './artifacts.js';
+
 const state = {
   registry: null,
   workflow: null,
@@ -11,7 +14,12 @@ const state = {
   reviews: new Map(),
   selectedItemId: null,
   replacementDrafts: new Map(),
-  queue: loadQueue(),
+  queue: [],
+  preparedJob: null,
+  sessionRevision: 0,
+  verified: false,
+  verifiedFiles: new Map(),
+  replacementTokens: new Map(),
 };
 
 const elements = {
@@ -78,23 +86,17 @@ const elements = {
   clearQueue: document.querySelector("#clear-queue"),
 };
 
-function loadQueue() {
-  try {
-    const raw = localStorage.getItem("spritesheet-expert-studio-queue-v1");
-    const value = raw ? JSON.parse(raw) : [];
-    return Array.isArray(value)
-      ? value.filter((entry) => entry && typeof entry === "object")
-      : [];
-  } catch {
-    return [];
-  }
+async function updateQueue(operation) {
+  const records = await request('/api/handoffs', operation);
+  state.queue = records.filter(record => !record.archived).map(record => record.job);
+  renderQueue(); window.dispatchEvent(new Event('studio:handoffs-changed'));
 }
 
-function persistQueue() {
-  localStorage.setItem(
-    "spritesheet-expert-studio-queue-v1",
-    JSON.stringify(state.queue),
-  );
+function queueAction(fn) {
+  return async () => {
+    try { await fn(); }
+    catch (error) { document.querySelector('#queue-status').textContent = error.message; elements.outputFeedback.textContent = error.message; }
+  };
 }
 
 function setView(view) {
@@ -174,7 +176,9 @@ function makeJob(workflow, values = currentWorkflowValues()) {
 function renderWorkflowOutput() {
   if (!state.workflow) return;
   state.formValues = currentWorkflowValues();
-  const job = makeJob(state.workflow, state.formValues);
+  if (!state.preparedJob || state.preparedJob.workflowId !== state.workflow.id || JSON.stringify(state.preparedJob.inputs) !== JSON.stringify(state.formValues))
+    state.preparedJob = makeJob(state.workflow, state.formValues);
+  const job = state.preparedJob;
   if (state.outputMode === "command") {
     elements.workflowOutput.value = job.command;
   } else if (state.outputMode === "json") {
@@ -330,14 +334,13 @@ elements.downloadOutput.addEventListener("click", () => {
   elements.outputFeedback.textContent = "Downloaded.";
 });
 
-elements.queueOutput.addEventListener("click", () => {
+elements.queueOutput.addEventListener("click", queueAction(async () => {
   if (!state.workflow) return;
-  const job = makeJob(state.workflow);
-  state.queue.push(job);
-  persistQueue();
-  renderQueue();
-  elements.outputFeedback.textContent = `Added ${job.jobId} to the queue.`;
-});
+  renderWorkflowOutput(); const job = state.preparedJob;
+  await updateQueue({kind: 'add', job});
+  elements.outputFeedback.textContent = `Saved ${job.jobId} in this workspace.`;
+  state.preparedJob = null; renderWorkflowOutput();
+}));
 
 function revokeObjectUrls() {
   for (const url of state.objectUrls.values()) URL.revokeObjectURL(url);
@@ -356,35 +359,33 @@ async function sha256Hex(input) {
     .join("");
 }
 
-function normalizeRunPath(value) {
-  return String(value ?? "")
-    .replaceAll("\\", "/")
-    .replace(/^\.\//, "")
-    .replace(/^\/+/, "");
-}
-
 function indexRunFiles(fileList) {
-  state.runFiles.clear();
+  state.runFiles = indexFiles(fileList);
   const files = [...fileList];
-  for (const file of files) {
-    const webkit = normalizeRunPath(file.webkitRelativePath || file.name);
-    state.runFiles.set(webkit, file);
-    state.runFiles.set(normalizeRunPath(file.name), file);
-    const slash = webkit.indexOf("/");
-    if (slash >= 0) state.runFiles.set(webkit.slice(slash + 1), file);
-  }
   const first = files[0];
   const rootName = first?.webkitRelativePath?.split("/")[0] || `${files.length} files`;
   elements.runFolderName.textContent = `${rootName} · ${files.length} files`;
 }
 
 function resolveRunFile(relativePath) {
-  const normalized = normalizeRunPath(relativePath);
-  if (state.runFiles.has(normalized)) return state.runFiles.get(normalized);
-  for (const [path, file] of state.runFiles) {
-    if (path.endsWith(`/${normalized}`)) return file;
+  return state.verified ? state.verifiedFiles.get(relativePath) || null : null;
+}
+
+async function verifyRunFiles() {
+  const revision = ++state.sessionRevision;
+  state.verified = false; state.verifiedFiles.clear(); revokeObjectUrls();
+  updateReviewProgress();
+  try {
+    if (!state.manifestFile || !state.runFiles.size) throw new Error('Select the manifest and its run folder before review');
+    const checked = await verifyManifestFiles(state.manifestFile, state.manifest, state.runFiles);
+    if (revision !== state.sessionRevision) return;
+    state.verifiedFiles = checked.verified; state.manifestSha256 = checked.manifestSha256; state.verified = true;
+    elements.reviewFeedback.textContent = 'Source, atlas and crop file hashes verified. Final export still requires the Python delivery check.';
+  } catch (error) {
+    if (revision !== state.sessionRevision) return;
+    elements.reviewFeedback.textContent = `Review blocked: ${error.message}`;
   }
-  return null;
+  renderItems(); renderInspector(); updateReviewProgress();
 }
 
 function itemImageUrl(item) {
@@ -426,8 +427,11 @@ function hydrateReviews() {
 }
 
 async function loadManifestFile(file) {
+  const revision = ++state.sessionRevision;
+  state.verified = false; state.verifiedFiles.clear(); state.reviews.clear(); state.replacementTokens.clear();
   try {
     const text = await file.text();
+    if (revision !== state.sessionRevision) return;
     const manifest = JSON.parse(text);
     if (manifest?.kind !== "deterministic-item-atlas" || !Array.isArray(manifest.items)) {
       throw new Error("not a deterministic-item-atlas manifest");
@@ -435,7 +439,7 @@ async function loadManifestFile(file) {
     revokeObjectUrls();
     state.manifest = manifest;
     state.manifestFile = file;
-    state.manifestSha256 = await sha256Hex(file);
+    state.manifestSha256 = null;
     state.selectedItemId = null;
     elements.manifestFileName.textContent = `${file.name} · ${manifest.items.length} items`;
     hydrateReviews();
@@ -443,6 +447,7 @@ async function loadManifestFile(file) {
     renderItems();
     renderInspector();
     updateReviewProgress();
+    await verifyRunFiles();
   } catch (error) {
     elements.manifestFileName.textContent = `Could not load manifest: ${error.message}`;
   }
@@ -453,11 +458,10 @@ elements.manifestInput.addEventListener("change", async () => {
   if (file) await loadManifestFile(file);
 });
 
-elements.runFolderInput.addEventListener("change", () => {
+elements.runFolderInput.addEventListener("change", async () => {
   revokeObjectUrls();
-  indexRunFiles(elements.runFolderInput.files);
-  renderItems();
-  renderInspector();
+  try { indexRunFiles(elements.runFolderInput.files); await verifyRunFiles(); }
+  catch (error) { state.verified = false; elements.reviewFeedback.textContent = error.message; updateReviewProgress(); }
 });
 
 function renderRunSummary() {
@@ -678,6 +682,8 @@ for (const button of elements.previewBackgroundButtons) {
 
 for (const button of elements.itemStatusButtons) {
   button.addEventListener("click", () => {
+    if (!state.verified) return;
+    saveSelectedDecision();
     const review = state.reviews.get(state.selectedItemId);
     if (!review) return;
     const nextStatus = button.dataset.itemStatus;
@@ -707,19 +713,23 @@ elements.copyItemId.addEventListener("click", () => {
 
 elements.replacementInput.addEventListener("change", async () => {
   const [file] = elements.replacementInput.files;
-  if (!file || !state.selectedItemId) return;
-  const previous = state.replacementDrafts.get(state.selectedItemId);
-  if (previous?.objectUrl) URL.revokeObjectURL(previous.objectUrl);
-  const draft = {
-    file,
-    objectUrl: URL.createObjectURL(file),
-    sha256: await sha256Hex(file),
-  };
-  state.replacementDrafts.set(state.selectedItemId, draft);
-  const review = state.reviews.get(state.selectedItemId);
-  if (review) {
-    review.status = "replace";
-    elements.reviewFeedback.textContent = "";
+  const target = state.selectedItemId, revision = state.sessionRevision, token = Symbol('replacement');
+  if (!file || !target || !state.verified) return;
+  state.replacementTokens.set(target, token);
+  try {
+    if (file.size > 256 * 1024 * 1024) throw new Error('Replacement exceeds byte budget');
+    const sha256 = await sha256Hex(file);
+    const decoded = await createImageBitmap(file);
+    const pixels = decoded.width * decoded.height; decoded.close();
+    if (pixels > 50_000_000) throw new Error('Replacement exceeds pixel budget');
+    if (revision !== state.sessionRevision || state.replacementTokens.get(target) !== token) return;
+    const previous = state.replacementDrafts.get(target);
+    if (previous?.objectUrl) URL.revokeObjectURL(previous.objectUrl);
+    state.replacementDrafts.set(target, {file, objectUrl: URL.createObjectURL(file), sha256});
+    const review = state.reviews.get(target);
+    if (review) review.status = 'replace';
+  } catch (error) {
+    if (revision === state.sessionRevision) elements.reviewFeedback.textContent = error.message;
   }
   renderInspector();
   renderItems();
@@ -727,6 +737,7 @@ elements.replacementInput.addEventListener("change", async () => {
 });
 
 elements.removeReplacement.addEventListener("click", () => {
+  state.replacementTokens.delete(state.selectedItemId);
   const draft = state.replacementDrafts.get(state.selectedItemId);
   if (draft?.objectUrl) URL.revokeObjectURL(draft.objectUrl);
   state.replacementDrafts.delete(state.selectedItemId);
@@ -742,10 +753,11 @@ elements.removeReplacement.addEventListener("click", () => {
 });
 
 function saveSelectedDecision() {
+  if (!state.verified) return;
   const item = selectedItem();
   const review = state.reviews.get(state.selectedItemId);
   if (!item || !review) return;
-  review.classification = {
+  const classification = {
     family: elements.classificationFamily.value.trim() || "unknown",
     canonicalType: elements.classificationType.value.trim() || "unknown",
     tags: elements.classificationTags.value
@@ -754,6 +766,10 @@ function saveSelectedDecision() {
       .filter(Boolean)
       .filter((value, index, values) => values.indexOf(value) === index),
   };
+  if (JSON.stringify(classification) !== JSON.stringify(review.classification) && review.status === 'approved') {
+    review.status = 'pending';
+  }
+  review.classification = classification;
   review.notes = elements.reviewNotes.value.trim();
   const draft = state.replacementDrafts.get(item.id);
   if (draft) {
@@ -777,13 +793,14 @@ function regenerationWorkflow() {
   return state.registry?.workflows?.find((workflow) => workflow.id === "regenerate-single-item") ?? null;
 }
 
-elements.queueRegeneration.addEventListener("click", () => {
+elements.queueRegeneration.addEventListener("click", queueAction(async () => {
+  const revision = state.sessionRevision;
+  if (!state.verified) return;
   const item = selectedItem();
   const review = state.reviews.get(state.selectedItemId);
   const workflow = regenerationWorkflow();
   if (!item || !review || !workflow) return;
   saveSelectedDecision();
-  review.status = "regenerate";
   const type = review.classification.canonicalType !== "unknown"
     ? review.classification.canonicalType.replaceAll("_", " ")
     : "one isolated replacement game prop";
@@ -805,17 +822,18 @@ elements.queueRegeneration.addEventListener("click", () => {
     nativeSize: item.geometry?.originalSize ?? null,
     classification: review.classification,
   };
-  state.queue.push(job);
-  persistQueue();
+  await updateQueue({kind: 'add', job});
+  if (revision !== state.sessionRevision) return;
+  review.status = "regenerate";
   renderItems();
   renderInspector();
   renderQueue();
   updateReviewProgress();
   setView("queue");
-});
+}));
 
 function reviewDocument() {
-  if (!state.manifest) return null;
+  if (!state.manifest || !state.verified) return null;
   const items = state.manifest.items.map((item) => {
     const review = state.reviews.get(item.id) ?? initialReview(item);
     const draft = state.replacementDrafts.get(item.id);
@@ -865,6 +883,7 @@ function reviewDocument() {
 }
 
 function updateReviewProgress() {
+  for (const control of [...elements.itemStatusButtons, elements.replacementInput, elements.saveItem, elements.exportReview, elements.copyReview]) control.disabled = !state.verified;
   const total = state.manifest?.items?.length ?? 0;
   let decided = 0;
   for (const review of state.reviews.values()) {
@@ -887,6 +906,7 @@ elements.copyReview.addEventListener("click", () => {
 });
 
 elements.clearAtlas.addEventListener("click", () => {
+  state.sessionRevision++; state.verified = false; state.verifiedFiles.clear(); state.replacementTokens.clear();
   revokeObjectUrls();
   state.manifest = null;
   state.manifestFile = null;
@@ -913,18 +933,14 @@ function queueSummary(job) {
 }
 
 function renderQueue() {
-  const fragments = state.queue.map((job, index) => {
+  const fragments = state.queue.map((job) => {
     const fragment = elements.queueItemTemplate.content.cloneNode(true);
     fragment.querySelector(".queue-kind").textContent = job.mode ?? "handoff";
     fragment.querySelector(".queue-title").textContent =
       state.registry?.workflows?.find((workflow) => workflow.id === job.workflowId)?.title ?? job.workflowId;
     fragment.querySelector(".queue-id").textContent = job.jobId;
     fragment.querySelector(".queue-summary").textContent = queueSummary(job);
-    fragment.querySelector(".queue-remove").addEventListener("click", () => {
-      state.queue.splice(index, 1);
-      persistQueue();
-      renderQueue();
-    });
+    fragment.querySelector(".queue-remove").addEventListener("click", queueAction(() => updateQueue({kind: 'archive', jobIds: [job.jobId]})));
     return fragment;
   });
   elements.queueList.replaceChildren(...fragments);
@@ -944,21 +960,19 @@ elements.downloadQueue.addEventListener("click", () => {
 });
 
 elements.copyQueue.addEventListener("click", () => {
-  if (state.queue.length) copyText(queueJsonl(), elements.outputFeedback);
+  if (state.queue.length) copyText(queueJsonl(), document.querySelector('#queue-status'));
 });
 
-elements.clearQueue.addEventListener("click", () => {
-  state.queue = [];
-  persistQueue();
-  renderQueue();
-});
+elements.clearQueue.addEventListener("click", queueAction(() => updateQueue({kind: 'archive', jobIds: state.queue.map(job => job.jobId)})));
+
+window.addEventListener('studio:before-workspace-change', event => { if (state.manifest) event.preventDefault(); });
 
 window.addEventListener("beforeunload", revokeObjectUrls);
 
 if ("scrollRestoration" in history) history.scrollRestoration = "manual";
 
 const initialView = location.hash.replace(/^#/, "");
-setView(["process", "launcher", "atlas", "queue", "about"].includes(initialView) ? initialView : "process");
+setView(["workspaces", "process", "launcher", "atlas", "queue", "about"].includes(initialView) ? initialView : "workspaces");
 window.addEventListener(
   "pageshow",
   () => requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "instant" })),
@@ -971,3 +985,4 @@ renderInspector();
 renderQueue();
 updateReviewProgress();
 loadWorkflowRegistry();
+queueAction(() => updateQueue())();

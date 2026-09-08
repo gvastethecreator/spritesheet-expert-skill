@@ -7,6 +7,13 @@ const errors = [];
 const requiredFiles = [
   "SKILLS/spritesheet-expert/scripts/run_item_atlas_workflow.py",
   "SKILLS/spritesheet-expert/scripts/serve_item_studio.py",
+  "SKILLS/spritesheet-expert/scripts/manage_studio_workspace.py",
+  "SKILLS/spritesheet-expert/scripts/spritecore/workspace.py",
+  "SKILLS/spritesheet-expert/studio/studio-client.js",
+  "SKILLS/spritesheet-expert/studio/artifacts.js",
+  "SKILLS/spritesheet-expert/references/workflow-lanes.json",
+  "SKILLS/spritesheet-expert/scripts/check_workflow.py",
+  "SKILLS/spritesheet-expert/studio/workspace.js",
   "SKILLS/spritesheet-expert/studio/local-workflow.js",
   "SKILLS/spritesheet-expert/model-runtime/uv.lock",
   "SKILLS/spritesheet-expert/studio/index.html",

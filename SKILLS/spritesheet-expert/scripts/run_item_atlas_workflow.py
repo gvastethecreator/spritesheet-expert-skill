@@ -25,6 +25,11 @@ SKILL = SCRIPTS.parent
 def artifact_hashes(root: Path, relative: str) -> dict[str, str]:
     target = root / relative
     paths = sorted(target.rglob("*")) if target.is_dir() else [target]
+    if target.name == "manifest.json" and target.is_file():
+        document = load_json(target)
+        if document.get("kind") == "deterministic-item-atlas":
+            pages = document["pages"] if "pages" in document else [document["atlas"]]
+            paths.extend(target.parent / page["path"] for page in pages)
     return {p.relative_to(root).as_posix(): digest_file(p) for p in paths if p.is_file()}
 
 
@@ -36,6 +41,35 @@ def run_workflow(args) -> dict:
     config = {"sourceSha256": digest_file(source), "models": args.models,
               "quantum": args.grid_quantum, "padding": args.padding, "maxWidth": args.max_width,
               "provenance": args.provenance, "taxonomySha256": digest_file(args.taxonomy)}
+    config["budgets"] = {key: getattr(args, key) for key in ("max_height", "max_pages", "max_page_pixels", "max_total_pixels")}
+    state_path = root / "workflow.json"
+    if state_path.is_file():
+        completed = load_json(state_path)
+        if completed.get("processingComplete"):
+            if any(completed["config"].get(key) != value for key, value in config.items()):
+                raise ValueError("inputs changed; use a new output directory")
+            from spritecore.item_delivery import artifact, validate_delivery
+            try:
+                current = artifact(root, completed["manifest"])
+                if digest_file(root / "input/source.png") != config["sourceSha256"]:
+                    raise ValueError("imported source snapshot hash mismatch")
+                if digest_file(current) != completed.get("manifestSha256"):
+                    raise ValueError("current manifest hash mismatch")
+                for name, stage in completed.get("stages", {}).items():
+                    if stage.get("status") != "complete" or any(digest_file(artifact(root, path)) != expected
+                        for path, expected in stage.get("artifacts", {}).items()):
+                        raise ValueError(f"stage evidence changed: {name}; use a new output directory")
+                report = validate_delivery(current, draft=True)
+                if report["status"] != "pass":
+                    raise ValueError("saved result is invalid: " + "; ".join(report["integrityErrors"]))
+            except (ValueError, OSError) as exc:
+                completed.update(status="failed", processingComplete=False, error=str(exc))
+                completed.setdefault("history", []).append({"event": "validation-failed", "error": str(exc),
+                    "at": datetime.now(timezone.utc).isoformat()})
+                _atomic_json(state_path, completed)
+                raise
+            # Reopening finished work must not reload models or replace reviewed successors.
+            return completed
     code_digest = sha256()
     for path in sorted(SCRIPTS.rglob("*.py")):
         code_digest.update(path.relative_to(SCRIPTS).as_posix().encode())
@@ -56,7 +90,6 @@ def run_workflow(args) -> dict:
         environment.update({"HF_HOME": str(cache), "HF_HUB_CACHE": str(cache / "hub"),
                             "HF_HUB_OFFLINE": "1", "PYTHONUNBUFFERED": "1"})
     fingerprint = sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()
-    state_path = root / "workflow.json"
     if state_path.exists():
         state = load_json(state_path)
         if state["fingerprint"] != fingerprint:
@@ -136,7 +169,8 @@ def run_workflow(args) -> dict:
     try:
         stage("alpha", ["build_deterministic_item_atlas.py", root / "input/source.png", "--output-dir", root / "alpha",
             "--provenance", args.provenance, "--grid-quantum", args.grid_quantum, "--padding", args.padding,
-            "--max-width", args.max_width, "--force"], ["alpha/manifest.json", "alpha/items", "alpha/qa", "alpha/atlas.png", "alpha/source.png"])
+            "--max-width", args.max_width, "--max-height", args.max_height, "--max-pages", args.max_pages,
+            "--max-page-pixels", args.max_page_pixels, "--max-total-pixels", args.max_total_pixels, "--force"], ["alpha/manifest.json", "alpha/items", "alpha/qa", "alpha/source.png"])
         manifest = root / "alpha/manifest.json"
         if args.models != "none":
             vision, mask = checkpoint["models"]["vision"], checkpoint["models"]["mask"]
@@ -186,6 +220,10 @@ def parser():
     result.add_argument("--grid-quantum", type=int, default=32)
     result.add_argument("--padding", type=int, default=16)
     result.add_argument("--max-width", type=int, default=0)
+    result.add_argument("--max-height", type=int, default=8192)
+    result.add_argument("--max-pages", type=int, default=16)
+    result.add_argument("--max-page-pixels", type=int, default=16_777_216)
+    result.add_argument("--max-total-pixels", type=int, default=50_000_000)
     result.add_argument("--provenance", choices=("imported", "fixture", "imagegen", "grok-imagine-image", "mixed"), default="imported")
     return result
 

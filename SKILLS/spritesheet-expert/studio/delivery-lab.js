@@ -1,24 +1,15 @@
 /* Local-only artifact viewer. Hashes are of original file bytes, not Canvas pixels. */
+import {exactFile, hashFile as hash, safeRelative, MAX_FILE_BYTES} from './artifacts.js';
 (() => {
   "use strict";
   const $ = id => document.getElementById(id);
   let files = new Map(), manifests = new Map(), current = null, selected = 0, view = "atlas";
   let version = 0, receiptVersion = 0, urls = [], externalReceipt = null;
   const state = {errors: [], hashes: {}, manifestSha256: null, receipt: "not supplied"};
-  const MAX_FILE_BYTES = 256 * 1024 * 1024;
   const pathOf = file => file.webkitRelativePath || file.name;
-  const hash = async file => [...new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer()))].map(v => v.toString(16).padStart(2, "0")).join("");
-  function safeRelative(relative) {
-    return typeof relative === "string" && relative.length > 0 && !relative.startsWith("/") &&
-      !/[\\:]/.test(relative) && !relative.split("/").some(p => !p || p === "." || p === "..");
-  }
   function dispose() { for (const url of urls) URL.revokeObjectURL(url); urls = []; }
   function exact(relative, root) {
-    if (!safeRelative(relative)) throw new Error(`Unsafe artifact path: ${relative}`);
-    const file = files.get(root + relative);
-    if (!file) throw new Error(`Missing exact artifact: ${root + relative}`);
-    if (file.size > MAX_FILE_BYTES) throw new Error(`Artifact exceeds byte budget: ${relative}`);
-    return file;
+    return exactFile(files, relative, root);
   }
   async function image(file) {
     const url = URL.createObjectURL(file); urls.push(url);
@@ -83,7 +74,8 @@
       const manifestHash = await hash(entry.file);
       if (epoch !== version) return;
       state.manifestSha256 = manifestHash;
-      const needed = [[manifest.atlas.path, manifest.atlas.sha256],
+      const pages = manifest.pages || [{id: 'page-0001', ...manifest.atlas}];
+      const needed = [...pages.map(page => [page.path, page.sha256]),
         [manifest.evidence.sourceRgba, manifest.evidence.sourceRgbaSha256],
         ...manifest.items.map(i => [i.artifacts.rgba, i.artifacts.sha256])];
       for (const [relative, expected] of needed) {
@@ -92,16 +84,25 @@
         if (!/^[0-9a-f]{64}$/.test(expected) || actual !== expected) throw new Error(`SHA-256 mismatch: ${relative}`);
         state.hashes[relative] = actual;
       }
-      const atlas = await image(exact(manifest.atlas.path, root));
+      const atlases = new Map();
+      let totalPixels = 0;
+      for (const page of pages) {
+        totalPixels += page.width * page.height;
+        if (totalPixels > 50_000_000 || atlases.has(page.id)) throw new Error('Invalid page count or pixel budget');
+        const atlas = await image(exact(page.path, root));
+        if (atlas.width !== page.width || atlas.height !== page.height) throw new Error('Atlas page dimensions do not match files');
+        atlases.set(page.id, atlas);
+      }
       const source = await image(exact(manifest.evidence.sourceRgba, root));
       if (epoch !== version) return;
-      if (atlas.width !== manifest.atlas.width || atlas.height !== manifest.atlas.height ||
-          source.width !== manifest.source.width || source.height !== manifest.source.height) throw new Error("Declared image dimensions do not match files");
+      if (source.width !== manifest.source.width || source.height !== manifest.source.height) throw new Error("Declared image dimensions do not match files");
       const ids = new Set();
       for (const item of manifest.items) {
         if (typeof item.id !== "string" || ids.has(item.id)) throw new Error("Duplicate or missing stable ID");
         ids.add(item.id);
         const g = item.geometry;
+        const atlas = atlases.get(manifest.pages ? g.pageId : 'page-0001');
+        if (!atlas) throw new Error(`Missing page: ${item.id}`);
         if (!Array.isArray(g.frame) || g.frame.length !== 4 || !g.frame.every(Number.isInteger) ||
             g.frame[0] < 0 || g.frame[1] < 0 || g.frame[2] <= 0 || g.frame[3] <= 0 ||
             g.frame[0] + g.frame[2] > atlas.width || g.frame[1] + g.frame[3] > atlas.height) throw new Error(`Invalid frame: ${item.id}`);
@@ -109,7 +110,7 @@
         if (!Array.isArray(g.cellRect) || g.cellRect.length !== 4 || !g.cellRect.every(Number.isInteger) ||
             !Array.isArray(item.source.bbox) || item.source.bbox.length !== 4 || !item.source.bbox.every(Number.isInteger)) throw new Error(`Invalid bounds: ${item.id}`);
       }
-      current = {manifest, root, atlas, source};
+      current = {manifest, root, atlases, source};
       $("status").textContent = `${manifest.items.length} sprites · ${needed.length} file references verified · ${manifest.items.filter(i => i.review?.status !== "approved").length} awaiting approval. Browser identity checks do not replace the Python delivery gate.`;
       $("empty").hidden = true; $("canvas").hidden = false; $("download").disabled = false;
       $("previous").disabled = false; $("next").disabled = false; $("count").textContent = String(manifest.items.length);
@@ -151,7 +152,9 @@
     if (!current || view === "delivery") return;
     const item = current.manifest.items[selected], canvas = $("canvas"), zoom = Number($("zoom").value);
     const g = item.geometry, [x, y, w, h] = g.frame;
-    const base = view === "source" ? current.source : current.atlas;
+    const pageId = current.manifest.pages ? g.pageId : 'page-0001';
+    const atlas = current.atlases.get(pageId);
+    const base = view === "source" ? current.source : atlas;
     canvas.width = view === "placement" ? Math.max(320, w + 96) : base.width;
     canvas.height = view === "placement" ? Math.max(240, h + 96) : base.height;
     canvas.style.width = `${canvas.width * zoom}px`; canvas.style.height = `${canvas.height * zoom}px`;
@@ -161,7 +164,7 @@
       // Center the actual crop so extreme pivots do not clip the diagnostic.
       const left = Math.floor((canvas.width - w) / 2), top = Math.floor((canvas.height - h) / 2);
       const px = left + w * g.pivot[0], py = top + h * g.pivot[1];
-      ctx.drawImage(current.atlas, x, y, w, h, left, top, w, h);
+      ctx.drawImage(atlas, x, y, w, h, left, top, w, h);
       if (overlays) {
         ctx.strokeStyle = "#a59d90"; ctx.beginPath(); ctx.moveTo(0, py + .5); ctx.lineTo(canvas.width, py + .5); ctx.stroke();
         ctx.strokeStyle = "#e4bf7b"; ctx.beginPath(); ctx.moveTo(px - 8, py); ctx.lineTo(px + 8, py); ctx.moveTo(px, py - 8); ctx.lineTo(px, py + 8); ctx.stroke();
@@ -171,6 +174,7 @@
       if (overlays) {
         ctx.lineWidth = 1; ctx.strokeStyle = "#777";
         for (const other of current.manifest.items) {
+          if (view !== 'source' && current.manifest.pages && other.geometry.pageId !== pageId) continue;
           const r = view === "source" ? other.source.bbox : other.geometry.cellRect;
           ctx.strokeRect(r[0] + .5, r[1] + .5, view === "source" ? r[2] - r[0] : r[2], view === "source" ? r[3] - r[1] : r[3]);
         }
@@ -179,7 +183,7 @@
         else ctx.strokeRect(x, y, w, h);
       }
     }
-    $("item-info").textContent = `${item.id} / ${item.review?.status || "pending"}`;
+    $("item-info").textContent = `${item.id} / ${pageId} / ${item.review?.status || "pending"}`;
     $("geometry-info").textContent = `XYXY [${item.source.bbox.join(", ")}] / XYWH [${g.frame.join(", ")}]`;
     $("pivot-info").textContent = `${w} × ${h} / [${g.pivot.join(", ")}]`;
   }
