@@ -486,6 +486,7 @@ def _refine_masks(
                 mask_image.save(path)
                 generated.append((result["decision"]["instances"][index], path, filename))
             result["maskModel"] = mask_model_id
+            result["maskRevision"] = getattr(getattr(model, "config", None), "_commit_hash", None) or revision
             result["maskInference"] = {"seconds": round(time.monotonic()-started,3),
                 "peakAllocatedMiB": round(torch.cuda.max_memory_allocated()/1048576,1) if torch.cuda.is_available() else None}
 
@@ -623,7 +624,6 @@ def main() -> int:
                 result = _segmentation_result(job, raw, args.model)
             results.append(result)
             result["modelRevision"] = getattr(model.config, "_commit_hash", None) or args.revision
-            result["maskRevision"] = args.mask_revision if args.task == "segment" else None
             import torch
             result["inference"] = {"seconds":round(time.monotonic()-started,3),
                 "peakAllocatedMiB":round(torch.cuda.max_memory_allocated()/1048576,1) if torch.cuda.is_available() else None}

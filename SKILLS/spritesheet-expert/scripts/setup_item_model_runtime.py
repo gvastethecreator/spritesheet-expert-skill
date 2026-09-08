@@ -43,6 +43,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--config", type=Path, default=config)
     parser.add_argument("--python", default="3.12")
     parser.add_argument("--profile", choices=("cpu", "nvidia"), default="cpu")
+    parser.add_argument("--capability", action="append", choices=("lucida", "ben2"), default=[])
+    parser.add_argument("--offline", action="store_true", help="rebuild only from the prepared uv cache")
     parser.add_argument("--dry-run", action="store_true")
     return parser
 
@@ -71,6 +73,10 @@ def main() -> int:
             "--extra",
             args.profile,
         ]
+        for capability in sorted(set(args.capability)):
+            command.extend(["--extra", capability])
+        if args.offline:
+            command.append("--offline")
         payload = {
             "schemaVersion": "item-model-runtime-v1",
             "project": str(PROJECT),
@@ -81,6 +87,7 @@ def main() -> int:
             "command": command,
             "downloadsModelWeights": False,
             "profile": args.profile,
+            "capabilities": ["item-models", *sorted(set(args.capability))],
         }
         if args.dry_run:
             payload["status"] = "dry-run"

@@ -1,6 +1,8 @@
 # Lucida Adaptive Workflow
 
-For Imagegen grids and selected video frames when poses have uneven bounds or soft glow must survive removal.
+For Imagegen grids and selected video frames that require neutral-matte removal.
+Uneven poses alone do not require rematting: keep valid native alpha and use
+adaptive segmentation directly.
 
 ## Contract
 
@@ -40,12 +42,15 @@ Keep the model revision pinned. Lucida uses custom Transformers code. Do not run
 Install the optional model lane:
 
 ```bash
-python -m pip install -r scripts/requirements-lucida.txt
+python scripts/setup_item_model_runtime.py --profile nvidia --capability lucida
 ```
 
-Python 3.12+ for this lane. Keep the core skill on its lighter runtime when Lucida inference is not needed.
+This installs a locked Python 3.12 environment, not weights. Prepare the Lucida
+checkpoint separately and run extraction with that environment's Python. See
+`../model-runtime/README.md` for CPU, offline execution and relocation.
 
-Prepare the run. New sprite component runs select Lucida and adaptive segmentation by default:
+Prepare the run with an explicit Lucida fallback request. For a verified
+transparent source, select `alpha` instead:
 
 ```bash
 python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id enemy --request /abs/run/request.json --force

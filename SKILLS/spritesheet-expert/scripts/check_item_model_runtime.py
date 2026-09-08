@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+from spritecore.model_checkpoints import capabilities
 
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
@@ -29,7 +30,8 @@ def main() -> int:
         if not python.is_file():
             raise RuntimeError(f"runtime Python does not exist: {python}")
         probe = (
-            "import json, torch, transformers, accelerate; "
+            "import json, torch, transformers, accelerate, importlib; "
+            f"[importlib.import_module(name) for name in {(['timm', 'kornia'] if 'lucida' in config.get('capabilities', []) else []) + (['ben2.modeling_ben2', 'cv2'] if 'ben2' in config.get('capabilities', []) else [])!r}]; "
             "print(json.dumps({'torch': torch.__version__, 'transformers': transformers.__version__, "
             "'accelerate': accelerate.__version__, 'cudaAvailable': torch.cuda.is_available(), "
             "'cudaVersion': torch.version.cuda, 'deviceCount': torch.cuda.device_count(), "
@@ -40,6 +42,7 @@ def main() -> int:
             {
                 "HF_HOME": str(Path(config["modelCacheDir"]).resolve()),
                 "HF_HUB_CACHE": str(Path(config["modelCacheDir"]).resolve() / "hub"),
+                "HF_HUB_OFFLINE": "1",
             }
         )
         completed = subprocess.run(
@@ -48,12 +51,13 @@ def main() -> int:
             text=True,
             capture_output=True,
             check=False,
+            timeout=120,
         )
         if completed.returncode:
             detail = completed.stderr.strip() or completed.stdout.strip()
             raise RuntimeError(f"runtime probe failed: {detail}")
         report = json.loads(completed.stdout)
-    except (OSError, KeyError, json.JSONDecodeError, RuntimeError) as exc:
+    except (OSError, KeyError, json.JSONDecodeError, RuntimeError, subprocess.TimeoutExpired) as exc:
         print(
             json.dumps(
                 {
@@ -72,6 +76,7 @@ def main() -> int:
                 "config": str(config_path),
                 "python": str(python),
                 "modelCacheDir": str(Path(config["modelCacheDir"]).resolve()),
+                "capabilities": capabilities(config_path),
                 **report,
             },
             ensure_ascii=False,
