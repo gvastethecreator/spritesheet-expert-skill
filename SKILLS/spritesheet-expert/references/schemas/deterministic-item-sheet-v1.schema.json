@@ -132,6 +132,14 @@
         "sha256": {"$ref": "#/$defs/sha256"}
       }
     },
+    "pages": {
+      "type": "array", "minItems": 2, "maxItems": 256,
+      "items": {"type": "object", "required": ["id", "path", "width", "height", "sha256"],
+        "properties": {"id": {"type": "string", "pattern": "^page-[0-9]{4}$"},
+          "path": {"$ref": "#/$defs/portablePath"}, "sha256": {"$ref": "#/$defs/sha256"},
+          "width": {"type": "integer", "minimum": 1, "maximum": 16384},
+          "height": {"type": "integer", "minimum": 1, "maximum": 16384}}}
+    },
     "items": {
       "type": "array",
       "minItems": 1,
@@ -327,6 +335,7 @@
           "required": ["originalSize", "cellRect", "frame", "pivot", "scale", "rotated"],
           "properties": {
             "originalSize": {"$ref": "#/$defs/size"},
+            "pageId": {"type": "string", "pattern": "^page-[0-9]{4}$"},
             "cellRect": {"$ref": "#/$defs/rect"},
             "frame": {"$ref": "#/$defs/rect"},
             "pivot": {"$ref": "#/$defs/pivot"},

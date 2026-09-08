@@ -10,6 +10,7 @@ import json
 import math
 from pathlib import Path
 from typing import Any, Iterable, Mapping
+from spritecore.item_review import reconcile_review
 
 
 class ClassificationApplicationError(ValueError):
@@ -275,6 +276,7 @@ def main() -> int:
                 continue
             classification, flags = normalized[item_id]
             item["classification"] = classification
+            item["review"] = reconcile_review(item, successor["source"]["sha256"], item["review"])
             current_flags = item.get("qaFlags") if isinstance(item.get("qaFlags"), list) else []
             item["qaFlags"] = list(dict.fromkeys([*current_flags, *flags]))
         completion = successor.setdefault("completion", {})

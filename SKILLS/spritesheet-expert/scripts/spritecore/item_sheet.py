@@ -20,6 +20,8 @@ import tempfile
 from typing import Any, Iterable, Mapping, Sequence
 
 from PIL import Image, ImageDraw
+from .publication import publish_directory
+from .item_review import reconcile_review
 
 
 class ItemSheetError(ValueError):
@@ -53,8 +55,20 @@ class PackingConfig:
     padding: int = 16
     max_width: int = 0
     outer_padding: int = 0
+    max_height: int = 8192
+    max_pages: int = 16
+    max_page_pixels: int = 16_777_216
+    max_total_pixels: int = 50_000_000
 
     def validate(self) -> None:
+        if any(type(value) is not int for value in asdict(self).values()):
+            raise ItemSheetError("packing settings must be integers")
+        if not 1 <= self.max_height <= 16384 or not 1 <= self.max_pages <= 256:
+            raise ItemSheetError("max_height must be 1..16384 and max_pages 1..256")
+        if not 1 <= self.max_page_pixels <= self.max_total_pixels <= 50_000_000:
+            raise ItemSheetError("pixel budgets must be positive, ordered and at most 50000000")
+        if self.max_width > 16384:
+            raise ItemSheetError("max_width must not exceed 16384")
         if self.quantum < 1:
             raise ItemSheetError("quantum must be positive")
         if self.padding < 0:
@@ -65,6 +79,10 @@ class PackingConfig:
             raise ItemSheetError("outer_padding cannot be negative")
         if self.max_width and self.max_width - self.outer_padding * 2 < self.quantum:
             raise ItemSheetError("max_width cannot contain one quantum after outer padding")
+
+    @classmethod
+    def from_metadata(cls, metadata):
+        return cls(**{key: metadata[key] for key in cls.__dataclass_fields__ if key in metadata})
 
 
 @dataclass(frozen=True)
@@ -441,16 +459,18 @@ def _contains(outer: _Rect, inner: _Rect) -> bool:
     )
 
 
-def pack_items(
+def pack_item_pages(
     items: Sequence[ExtractedItem],
     config: PackingConfig | None = None,
-) -> tuple[dict[str, _Rect], tuple[int, int], dict[str, tuple[int, int]]]:
-    """Pack variable rectangular cells without rotation or image scaling."""
+) -> list[tuple[dict[str, _Rect], tuple[int, int], dict[str, tuple[int, int]]]]:
+    """Plan all pages and validate allocation budgets before creating an image."""
 
     selected = config or PackingConfig()
     selected.validate()
     if not items:
         raise ItemSheetError("at least one item is required for packing")
+    if len(items) > 10000 or len({item.item_id for item in items}) != len(items):
+        raise ItemSheetError("packing requires 1..10000 unique item IDs")
     footprints_by_id = {
         item.item_id: (
             _snap(item.width + selected.padding * 2, selected.quantum),
@@ -473,32 +493,49 @@ def pack_items(
     max_cell_width = max(width for _, width, _ in footprints)
     total_area = sum(width * height for _, width, height in footprints)
     width = _snap(max(max_cell_width, math.ceil(math.sqrt(total_area))), selected.quantum)
-    if selected.max_width:
-        available = selected.max_width - selected.outer_padding * 2
-        width = min(width, available - available % selected.quantum)
-        if max_cell_width > width:
-            raise ItemSheetError("items cannot fit inside max_width")
+    offset = selected.outer_padding
+    available = (selected.max_width or 8192) - offset * 2
+    width = min(width, available - available % selected.quantum)
+    tallest = max(height for _, _, height in footprints)
+    pixel_width = selected.max_page_pixels // (tallest + offset * 2) - offset * 2
+    width = min(width, pixel_width - pixel_width % selected.quantum)
+    if max_cell_width > width:
+        raise ItemSheetError("items cannot fit inside max_width or the page pixel budget")
+    height_limit = min(selected.max_height - offset * 2,
+                       selected.max_page_pixels // (width + offset * 2) - offset * 2)
+    if tallest > height_limit:
+        raise ItemSheetError("item cannot fit inside max_height or the page pixel budget")
+    pages = []
     raw_placements: dict[str, _Rect] = {}
     x = y = row_height = 0
+    def finish():
+        size = (width + offset * 2, max(r.bottom for r in raw_placements.values()) + offset * 2)
+        placed = {key: _Rect(r.x + offset, r.y + offset, r.w, r.h) for key, r in raw_placements.items()}
+        pages.append((placed, size, {key: footprints_by_id[key] for key in placed}))
+        if len(pages) > selected.max_pages or sum(w*h for _, (w,h), _ in pages) > selected.max_total_pixels:
+            raise ItemSheetError("atlas exceeds page count or total pixel budget")
     for item_id, item_width, item_height in footprints:
         if x and x + item_width > width:
             x = 0
             y += row_height
             row_height = 0
+        if y + item_height > height_limit:
+            finish()
+            raw_placements = {}
+            x = y = row_height = 0
         raw_placements[item_id] = _Rect(x, y, item_width, item_height)
         x += item_width
         row_height = max(row_height, item_height)
-    height = y + row_height
-    offset = selected.outer_padding
-    placements = {
-        item_id: _Rect(rect.x + offset, rect.y + offset, rect.w, rect.h)
-        for item_id, rect in raw_placements.items()
-    }
-    return (
-        placements,
-        (width + offset * 2, height + offset * 2),
-        footprints_by_id,
-    )
+    finish()
+    return pages
+
+
+def pack_items(items, config=None):
+    """Single-page geometry operation; paged callers use pack_item_pages."""
+    pages = pack_item_pages(items, config)
+    if len(pages) != 1:
+        raise ItemSheetError("layout requires multiple pages; use the paged atlas workflow")
+    return pages[0]
 
 
 def _draw_source_overlay(source: Image.Image, items: Sequence[ExtractedItem]) -> Image.Image:
@@ -692,12 +729,15 @@ def write_item_atlas_run(
     manifest_extra: Mapping[str, Any] | None = None,
     completion: Mapping[str, bool] | None = None,
     discarded_mask: Image.Image | None = None,
+    attachments: Mapping[str, Path] | None = None,
     force: bool = False,
 ) -> dict[str, Any]:
-    """Write a complete, atomically replaceable atlas run from exact item pixels."""
+    """Write exact item pixels, then publish with recoverable prior revisions."""
 
     if not items:
         raise ItemSheetError("at least one item is required")
+    if Path(output_dir).expanduser().is_symlink():
+        raise ItemSheetError("output directory cannot be a symbolic link")
     output = Path(output_dir).expanduser().resolve()
     _validate_output_dir(output, force)
     selected_packing = packing or PackingConfig()
@@ -742,8 +782,8 @@ def write_item_atlas_run(
             f"rgba_mismatches={ownership['rgbaMismatchPixels']}"
         )
 
-    placements, atlas_size, footprints = pack_items(items, selected_packing)
-    atlas, debug_atlas, frames = compose_atlas(items, placements, atlas_size)
+    layouts = pack_item_pages(items, selected_packing)
+    placements, frames, footprints, page_for = {}, {}, {}, {}
     segmentation_record = deepcopy(dict(segmentation))
     segmentation_record["itemCount"] = len(items)
     overrides = item_overrides or {}
@@ -758,6 +798,21 @@ def write_item_atlas_run(
         item_dir.mkdir()
         inference_dir.mkdir()
         qa_dir.mkdir()
+        pages = []
+        by_id = {item.item_id: item for item in items}
+        for index, (placed, size, cells) in enumerate(layouts):
+            page_id = f"page-{index + 1:04}"
+            page_items = [by_id[key] for key in placed]
+            atlas, debug_atlas, page_frames = compose_atlas(page_items, placed, size)
+            filename = "atlas.png" if index == 0 else f"atlas-{index + 1:04}.png"
+            debug_name = "atlas-grid.png" if index == 0 else f"atlas-grid-{index + 1:04}.png"
+            _atomic_image(staging / filename, atlas)
+            _atomic_image(qa_dir / debug_name, debug_atlas)
+            atlas.close(); debug_atlas.close()
+            pages.append({"id": page_id, "path": filename, "width": size[0], "height": size[1],
+                          "sha256": _digest_file(staging / filename), "grid": f"qa/{debug_name}"})
+            placements.update(placed); frames.update(page_frames); footprints.update(cells)
+            page_for.update({key: page_id for key in placed})
         _atomic_image(staging / "source.png", source_reference)
         occupied = Image.new("L", source_reference.size, 0)
         for item in items:
@@ -852,18 +907,22 @@ def write_item_atlas_run(
                 "classification",
                 "review",
                 "qaFlags",
+                "approveScopes",
             }
+            if len(pages) > 1:
+                item_record["geometry"]["pageId"] = page_for[item.item_id]
             for key, value in override.items():
                 if key not in controlled:
                     item_record[key] = deepcopy(value)
+            item_record["review"] = reconcile_review(item_record, source_record["sha256"],
+                item_record["review"], approve=override.get("approveScopes", ()))
             item_records.append(item_record)
+        item_records.sort(key=lambda record: (page_for[record["id"]], record["geometry"]["cellRect"][1], record["geometry"]["cellRect"][0]))
 
         atlas_path = staging / "atlas.png"
         debug_path = qa_dir / "atlas-grid.png"
         source_overlay_path = qa_dir / "source-components.png"
         ownership_path = qa_dir / "pixel-ownership-report.json"
-        _atomic_image(atlas_path, atlas)
-        _atomic_image(debug_path, debug_atlas)
         _atomic_image(source_overlay_path, _draw_source_overlay(source_reference, items))
         _atomic_json(ownership_path, ownership)
 
@@ -905,8 +964,8 @@ def write_item_atlas_run(
             },
             "atlas": {
                 "path": "atlas.png",
-                "width": atlas.width,
-                "height": atlas.height,
+                "width": pages[0]["width"],
+                "height": pages[0]["height"],
                 "sha256": _digest_file(atlas_path),
             },
             "items": item_records,
@@ -927,6 +986,11 @@ def write_item_atlas_run(
                 **(dict(completion) if completion else {}),
             },
         }
+        if len(pages) > 1:
+            manifest["pages"] = pages
+        manifest["packing"]["allocation"] = {"pageCount": len(pages),
+            "totalPixels": sum(page["width"] * page["height"] for page in pages),
+            "peakAtlasWorkingBytes": max(page["width"] * page["height"] for page in pages) * 8}
         if manifest_extra:
             protected = set(manifest)
             for key, value in manifest_extra.items():
@@ -938,11 +1002,16 @@ def write_item_atlas_run(
         manifest["completion"]["reviewComplete"] = ownership["pendingPixels"] == 0 and all(
             item["review"]["status"] == "approved" for item in item_records)
         _atomic_json(staging / "manifest.json", manifest)
-        if output.exists():
-            if any(output.iterdir()) and not force:
-                raise ItemSheetError("output directory changed during atlas compilation")
-            shutil.rmtree(output)
-        staging.replace(output)
+        for relative, attachment in (attachments or {}).items():
+            parts = Path(relative).parts
+            if not parts or Path(relative).is_absolute() or any(p in {"..", "."} for p in parts) or ":" in relative or "\\" in relative:
+                raise ItemSheetError("unsafe attachment path")
+            destination = staging / relative
+            if destination.exists():
+                raise ItemSheetError("attachment would overwrite a generated artifact")
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(attachment, destination)
+        publish_directory(staging, output, replace=force)
         staging = None
         return manifest
     except OSError as exc:
@@ -964,6 +1033,8 @@ def build_item_atlas(
     """Compile one RGBA item sheet and return its manifest."""
 
     source = Path(source_path).expanduser().resolve()
+    if Path(output_dir).expanduser().is_symlink():
+        raise ItemSheetError("output directory cannot be a symbolic link")
     output = Path(output_dir).expanduser().resolve()
     if not source.is_file():
         raise ItemSheetError(f"source image does not exist: {source}")
@@ -977,6 +1048,8 @@ def build_item_atlas(
     selected_packing.validate()
     try:
         with Image.open(source) as opened:
+            if opened.width * opened.height > 50_000_000:
+                raise ItemSheetError("source exceeds 50000000 pixel budget")
             opened.load()
             source_image = opened.convert("RGBA")
     except OSError as exc:
@@ -1008,6 +1081,18 @@ def validate_manifest_geometry(manifest: Mapping[str, Any]) -> list[str]:
     """Return geometry errors without mutating the manifest."""
 
     errors: list[str] = []
+    if "pages" in manifest:
+        pages = manifest["pages"]
+        if not isinstance(pages, list) or not pages or len({page["id"] for page in pages}) != len(pages):
+            return ["pages require unique IDs"]
+        ids = {page["id"] for page in pages}
+        if any(item.get("geometry", {}).get("pageId") not in ids for item in manifest.get("items", [])):
+            errors.append("item refers to a missing page")
+        for page in pages:
+            subset = {**manifest, "atlas": page, "items": [item for item in manifest["items"] if item["geometry"].get("pageId") == page["id"]]}
+            subset.pop("pages")
+            errors.extend(validate_manifest_geometry(subset))
+        return errors
     atlas = manifest.get("atlas")
     items = manifest.get("items")
     if not isinstance(atlas, Mapping) or not isinstance(items, list):

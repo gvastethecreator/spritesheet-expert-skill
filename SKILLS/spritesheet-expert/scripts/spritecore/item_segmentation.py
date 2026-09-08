@@ -283,7 +283,7 @@ def apply_segmentation_results(
     return write_item_atlas_run(
         items,output_dir,source=manifest["source"],source_reference=source,
         segmentation={**manifest["segmentation"],"method":"model-mask-import"},
-        packing=PackingConfig(**{key:pack[key] for key in ("quantum","padding","max_width","outer_padding")}),
+        packing=PackingConfig.from_metadata(pack),
         parent_manifest_sha256=digest_file(manifest_path),item_overrides=overrides,force=force,
         manifest_extra={"segmentationApplication":{
             "jobsSha256":digest_file(jobs_path),"resultsSha256":digest_file(results_path),

@@ -12,6 +12,7 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parents[2] / "SKILLS/spritesheet-expert/scripts"
 sys.path.insert(0, str(SCRIPTS))
 from spritecore.item_delivery import artifact, DeliveryError, validate_delivery
+from spritecore.item_review import reconcile_review, SCOPES
 
 
 def save_manifest(root, manifest):
@@ -42,7 +43,7 @@ def bundle(tmp_path):
     content_hash = sha256((8).to_bytes(4, "big") * 2 + crop.tobytes()).hexdigest()
     manifest = {
         "schemaVersion": "deterministic-item-sheet-v1", "kind": "deterministic-item-atlas",
-        "source": {"mode": "RGBA", "width": 16, "height": 16, "provenance": "imported"},
+        "source": {"mode": "RGBA", "width": 16, "height": 16, "provenance": "imported", "sha256": digest(root / "source.png")},
         "atlas": {"path": "atlas.png", "width": 32, "height": 32, "sha256": digest(root / "atlas.png")},
         "packing": {"padding": 8, "quantum": 16, "outer_padding": 0},
         "evidence": {"sourceRgba": "source.png", "sourceRgbaSha256": digest(root / "source.png"),
@@ -54,6 +55,8 @@ def bundle(tmp_path):
             "geometry": {"originalSize": [8, 8], "frame": [12, 12, 8, 8], "cellRect": [0, 0, 32, 32],
                          "pivot": [0.5, 1], "scale": 1, "rotated": False}}],
     }
+    item = manifest["items"][0]
+    item["review"] = reconcile_review(item, manifest["source"]["sha256"], item["review"], approve=SCOPES)
     save_manifest(root, manifest)
     return root, manifest
 

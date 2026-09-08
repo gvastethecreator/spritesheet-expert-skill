@@ -11,8 +11,11 @@ import math
 from pathlib import Path, PurePosixPath
 import re
 from typing import Any
+from types import SimpleNamespace
 
 from PIL import Image, ImageChops
+from .item_review import stale_scopes
+from .item_sheet import PackingConfig, pack_item_pages
 
 MAX_PIXELS = 50_000_000
 MAX_FILE_BYTES = 256 * 1024 * 1024
@@ -97,6 +100,8 @@ def review_blockers(manifest: dict[str, Any]) -> list[str]:
         item_id = item.get("id", "<missing>")
         if item.get("review", {}).get("status") != "approved":
             blockers.append(f"{item_id}: explicit approval required")
+        for scope in stale_scopes(item, manifest["source"]["sha256"]):
+            blockers.append(f"{item_id}: {scope} review missing or stale")
         for flag in sorted(HARD_FLAGS.intersection(item.get("qaFlags", []))):
             blockers.append(f"{item_id}: hard failure {flag}")
     if manifest.get("completion", {}).get("pendingPixels", 0):
@@ -143,6 +148,8 @@ def validate_delivery(manifest_path: Path, *, draft: bool = False,
             return _read_image(candidate, mask=mask)
 
         source_record, evidence, atlas_record = manifest["source"], manifest["evidence"], manifest["atlas"]
+        _require(isinstance(source_record.get("sha256"), str) and re.fullmatch(r"[0-9a-f]{64}", source_record["sha256"]) is not None,
+                 "invalid source SHA-256")
         _require(source_record.get("provenance") in {"imported", "fixture", "imagegen", "grok-imagine-image", "mixed"},
                  "unsupported source provenance")
         source = read(evidence["sourceRgba"], evidence["sourceRgbaSha256"])
@@ -153,19 +160,36 @@ def validate_delivery(manifest_path: Path, *, draft: bool = False,
         visible = _visible(source)
         _require(visible.getbbox() is not None, "source is completely transparent")
         _require(source.getchannel("A").getextrema()[0] == 0, "source lacks transparent exterior")
-        atlas = read(atlas_record["path"], atlas_record["sha256"])
-        declared_size = (_integer(atlas_record["width"], "atlas width", 1),
-                         _integer(atlas_record["height"], "atlas height", 1))
-        _require(atlas.size == declared_size, "atlas dimensions mismatch")
-        _require(max(atlas.size) <= max_texture_size, "atlas exceeds target texture limit")
+        pages = manifest["pages"] if "pages" in manifest else [{"id": "page-0001", **atlas_record}]
+        budget = PackingConfig.from_metadata(manifest["packing"])
+        budget.validate()
+        _require(isinstance(pages, list) and 1 <= len(pages) <= budget.max_pages, "invalid page count")
+        _require(all(pages[0].get(k) == atlas_record.get(k) for k in ("path", "sha256", "width", "height")), "primary atlas must match the first page")
+        atlases, atlas_alphas, cells_by_page = {}, {}, {}
+        total_atlas_pixels = 0
+        page_paths = set()
+        for page in pages:
+            page_id = page["id"]
+            _require(isinstance(page_id, str) and re.fullmatch(r"page-[0-9]{4}", page_id) is not None
+                     and page_id not in atlases and page["path"] not in page_paths, "invalid or duplicate page identity")
+            declared_size = (_integer(page["width"], "atlas width", 1), _integer(page["height"], "atlas height", 1))
+            total_atlas_pixels += declared_size[0] * declared_size[1]
+            _require(total_atlas_pixels <= budget.max_total_pixels, "aggregate atlas pixel budget exceeded")
+            _require(declared_size[0] <= (budget.max_width or 8192) and declared_size[1] <= budget.max_height
+                     and declared_size[0] * declared_size[1] <= budget.max_page_pixels, "atlas exceeds packing budget")
+            _require(max(declared_size) <= max_texture_size, "atlas exceeds target texture limit")
+            atlas = read(page["path"], page["sha256"])
+            _require(atlas.size == declared_size, "atlas dimensions mismatch")
+            atlases[page_id] = atlas; atlas_alphas[page_id] = Image.new("L", atlas.size); cells_by_page[page_id] = []
+            page_paths.add(page["path"])
         packing = manifest["packing"]
         padding = _integer(packing["padding"], "padding")
         quantum = _integer(packing["quantum"], "quantum", 1)
         outer = _integer(packing.get("outer_padding", 0), "outer padding")
         items = manifest["items"]
         _require(isinstance(items, list) and 0 < len(items) <= 10000, "item count outside 1..10000")
-        owned, atlas_alpha = Image.new("L", source.size), Image.new("L", atlas.size)
-        cells, ids, content_groups = [], set(), {}
+        owned = Image.new("L", source.size)
+        ids, content_groups = set(), {}
         total_crop_pixels = 0
         for item in items:
             item_id = item["id"]
@@ -182,6 +206,9 @@ def validate_delivery(manifest_path: Path, *, draft: bool = False,
             _require(item["contentSha256"] == content_hash, f"{item_id}: content hash mismatch")
             content_groups.setdefault(content_hash, []).append(item_id)
             geometry = item["geometry"]
+            page_id = geometry.get("pageId") if "pages" in manifest else "page-0001"
+            _require(page_id in atlases, f"{item_id}: missing atlas page")
+            atlas, atlas_alpha, cells = atlases[page_id], atlas_alphas[page_id], cells_by_page[page_id]
             _require(type(geometry.get("scale")) in {int, float} and geometry["scale"] == 1
                      and geometry.get("rotated") is False, f"{item_id}: scaling or rotation is forbidden")
             original = geometry["originalSize"]
@@ -219,7 +246,21 @@ def validate_delivery(manifest_path: Path, *, draft: bool = False,
             actual = Image.composite(image, Image.new("RGBA", image.size), mask)
             _require(_same(expected, actual), f"{item_id}: source pixels differ from crop")
             owned.paste(255, (sx, sy), mask)
-        _require(_same(atlas.getchannel("A"), atlas_alpha), "unaccounted atlas pixels outside item frames")
+        planned = pack_item_pages([SimpleNamespace(item_id=i["id"],
+            width=_integer(i["geometry"]["originalSize"][0], "item width", 1),
+            height=_integer(i["geometry"]["originalSize"][1], "item height", 1)) for i in items], budget)
+        _require(len(planned) == len(pages), "page count differs from ordered packing")
+        expected_cells = {}
+        for index, (placements, size, _) in enumerate(planned):
+            page_id = f"page-{index+1:04d}"
+            _require(pages[index]["id"] == page_id and (pages[index]["width"], pages[index]["height"]) == size,
+                     "page identity or dimensions differ from ordered packing")
+            expected_cells.update({key: (page_id, [rect.x, rect.y, rect.w, rect.h]) for key, rect in placements.items()})
+        for item in items:
+            page_id = item["geometry"].get("pageId") if "pages" in manifest else "page-0001"
+            _require((page_id, item["geometry"]["cellRect"]) == expected_cells[item["id"]], f"{item['id']}: cell differs from ordered packing")
+        for page_id, atlas in atlases.items():
+            _require(_same(atlas.getchannel("A"), atlas_alphas[page_id]), "unaccounted atlas pixels outside item frames")
         pending = read(evidence["pendingMask"], mask=True)
         discarded = read(evidence["discardedMask"], mask=True)
         _require(pending.size == source.size == discarded.size, "ownership mask dimensions mismatch")
@@ -233,7 +274,8 @@ def validate_delivery(manifest_path: Path, *, draft: bool = False,
         report["reviewBlockers"] = list(dict.fromkeys(report["reviewBlockers"] + review_blockers(manifest)))
         report["metrics"] = {"items": len(items), "approved": sum(i["review"]["status"] == "approved" for i in items),
             "pendingPixels": pending_pixels, "discardedPixels": discarded.histogram()[255],
-            "ownedPixels": owned.histogram()[255], "atlasSize": list(atlas.size),
+            "ownedPixels": owned.histogram()[255], "atlasSize": [atlas_record["width"], atlas_record["height"]],
+            "pages": [{"id": page["id"], "size": [page["width"], page["height"]]} for page in pages], "totalAtlasPixels": total_atlas_pixels,
             "duplicateContentGroups": [group for group in content_groups.values() if len(group) > 1]}
         report["warnings"] = ["Technical consistency is not visual approval or an engine smoke test."]
         if report["metrics"]["duplicateContentGroups"]:

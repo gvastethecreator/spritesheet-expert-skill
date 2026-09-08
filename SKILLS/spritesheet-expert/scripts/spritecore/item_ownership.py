@@ -10,6 +10,7 @@ from PIL import Image, ImageChops, ImageDraw
 from .item_sheet import (ExtractedItem, ItemSheetError, PackingConfig, item_content_sha256,
                          unique_item_id, write_item_atlas_run)
 from .item_segmentation import digest_file, load_json, portable_artifact
+from .item_review import SCOPES
 
 
 def source_image(root: Path, manifest: Mapping[str, Any]) -> Image.Image:
@@ -120,6 +121,7 @@ def apply_ownership_review(manifest_path: Path, review: Mapping[str, Any], outpu
                 masks[target] = ImageChops.lighter(masks[target], masks.pop(item_id))
                 records.pop(item_id)
             records[target]["parentItemIds"] = selected
+            records[target].pop("approveScopes", None)
             records[target]["review"] = {"status": "pending", "notes": "Merged mask and inherited labels need review", "replacement": None}
         elif kind == "discard":
             for item_id in selected:
@@ -128,7 +130,11 @@ def apply_ownership_review(manifest_path: Path, review: Mapping[str, Any], outpu
         elif kind in {"approve", "tags"}:
             for item_id in selected:
                 if kind == "approve":
-                    records[item_id]["review"] = {"status": "approved", "notes": "Manual review", "replacement": None}
+                    records[item_id]["review"] = {**records[item_id].get("review", {}), "status": "approved", "notes": "Manual review", "replacement": None}
+                    scopes = operation.get("scopes", list(SCOPES))
+                    if not isinstance(scopes, list) or not scopes or any(scope not in SCOPES for scope in scopes):
+                        raise ItemSheetError("approve requires valid review scopes")
+                    records[item_id]["approveScopes"] = scopes
                 else:
                     classification = operation.get("classification")
                     if (not isinstance(classification, dict) or set(classification) != {"family", "canonicalType", "tags"}
@@ -138,6 +144,7 @@ def apply_ownership_review(manifest_path: Path, review: Mapping[str, Any], outpu
                         raise ItemSheetError("classification requires family, canonicalType and string tags")
                     records[item_id]["classification"].update(classification)
                     records[item_id]["classification"]["source"] = "human-review"
+                    records[item_id]["approveScopes"] = [scope for scope in records[item_id].get("approveScopes", []) if scope != "semantics"]
         elif kind == "paint":
             target = operation.get("target")
             if target not in {"new", "pending", "discard"} and target not in masks:
@@ -157,6 +164,7 @@ def apply_ownership_review(manifest_path: Path, review: Mapping[str, Any], outpu
                 draw.ellipse((x-radius, y-radius, x+radius, y+radius), fill=255)
             for item_id in masks:
                 if ImageChops.multiply(masks[item_id], stroke).getbbox() and item_id in records:
+                    records[item_id].pop("approveScopes", None)
                     records[item_id]["review"] = {"status": "pending", "notes": "Mask changed", "replacement": None}
                     records[item_id]["qaFlags"] = list(set(records[item_id].get("qaFlags", []) + ["edited_mask_review"]))
                 masks[item_id] = ImageChops.subtract(masks[item_id], stroke)
@@ -168,6 +176,7 @@ def apply_ownership_review(manifest_path: Path, review: Mapping[str, Any], outpu
                     records[new_target] = {"parentItemIds": [], "qaFlags": ["edited_mask_review"]}
                 target = new_target
             elif target in records:
+                records[target].pop("approveScopes", None)
                 records[target]["review"] = {"status": "pending", "notes": "Mask changed", "replacement": None}
                 records[target]["qaFlags"] = list(set(records[target].get("qaFlags", []) + ["edited_mask_review"]))
             if target == "discard":
@@ -179,7 +188,7 @@ def apply_ownership_review(manifest_path: Path, review: Mapping[str, Any], outpu
     items, overrides = compile_masks(source, masks, records=records)
     pack = manifest["packing"]
     successor = write_item_atlas_run(items, output, source=manifest["source"], source_reference=source,
-        segmentation=manifest["segmentation"], packing=PackingConfig(**{key: pack[key] for key in ("quantum", "padding", "max_width", "outer_padding")}),
+        segmentation=manifest["segmentation"], packing=PackingConfig.from_metadata(pack),
         parent_manifest_sha256=digest_file(manifest_path), item_overrides=overrides, discarded_mask=discarded,
         completion={"classificationComplete": manifest["completion"].get("classificationComplete", False)},
         manifest_extra={"ownershipReview": dict(review)})

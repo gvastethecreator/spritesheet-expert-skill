@@ -29,26 +29,36 @@ def export_atlas(manifest_path: Path, output_dir: Path, *, draft: bool = False,
     if sha256(manifest_bytes).hexdigest() != report["manifestSha256"]:
         raise DeliveryError("manifest changed during export")
     manifest = json.loads(manifest_bytes)
-    atlas_path = artifact(root, manifest["atlas"]["path"])
-    atlas_bytes = atlas_path.read_bytes()
-    if sha256(atlas_bytes).hexdigest() != manifest["atlas"]["sha256"]:
-        raise DeliveryError("atlas changed during export")
-    frames = {}
+    pages = manifest["pages"] if "pages" in manifest else [{"id": "page-0001", **manifest["atlas"]}]
+    page_data = {}
+    frames_by_page = {page["id"]: {} for page in pages}
+    for page in pages:
+        data = artifact(root, page["path"]).read_bytes()
+        if sha256(data).hexdigest() != page["sha256"]:
+            raise DeliveryError("atlas changed during export")
+        page_data[page["id"]] = data
     for item in manifest["items"]:
         x, y, w, h = item["geometry"]["frame"]
         px, py = item["geometry"]["pivot"]
-        frames[item["id"]] = {"frame": {"x": x, "y": y, "w": w, "h": h},
+        page_id = item["geometry"]["pageId"] if "pages" in manifest else "page-0001"
+        frames_by_page[page_id][item["id"]] = {"frame": {"x": x, "y": y, "w": w, "h": h},
             "rotated": False, "trimmed": False,
             "spriteSourceSize": {"x": 0, "y": 0, "w": w, "h": h},
             "sourceSize": {"w": w, "h": h}, "pivot": {"x": px, "y": py}}
-    atlas_json = {"frames": frames, "meta": {"app": "Spritesheet Expert",
-        "version": "item-json-hash-v1", "image": "atlas.png", "format": "RGBA8888",
-        "size": {"w": manifest["atlas"]["width"], "h": manifest["atlas"]["height"]}, "scale": "1"}}
     output.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=f".{output.name}.tmp-", dir=output.parent))
     try:
-        (staging / "atlas.png").write_bytes(atlas_bytes)
-        (staging / "atlas.json").write_text(json.dumps(atlas_json, indent=2) + "\n", encoding="utf-8")
+        page_index = []
+        for index, page in enumerate(pages):
+            name = "atlas" if index == 0 else f"atlas-{index + 1:04}"
+            atlas_json = {"frames": frames_by_page[page["id"]], "meta": {"app": "Spritesheet Expert",
+                "version": "item-json-hash-v1", "image": name + ".png", "format": "RGBA8888",
+                "size": {"w": page["width"], "h": page["height"]}, "scale": "1"}}
+            (staging / f"{name}.png").write_bytes(page_data[page["id"]])
+            (staging / f"{name}.json").write_text(json.dumps(atlas_json, indent=2) + "\n", encoding="utf-8")
+            page_index.append({"id": page["id"], "image": name + ".png", "data": name + ".json",
+                               "items": list(frames_by_page[page["id"]])})
+        (staging / "atlas-index.json").write_text(json.dumps({"schemaVersion": "item-atlas-pages-v1", "pages": page_index}, indent=2) + "\n", encoding="utf-8")
         # Audit snapshot, not a relocatable source-run manifest: crops remain in the parent run.
         (staging / "source-manifest.snapshot.json").write_bytes(manifest_bytes)
         (staging / "delivery-check.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
@@ -59,6 +69,7 @@ def export_atlas(manifest_path: Path, output_dir: Path, *, draft: bool = False,
         (staging / "delivery.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
         (staging / "README.txt").write_text(
             "STATIC ITEM ATLAS\nLoad atlas.png with atlas.json using a JSON Hash atlas loader.\n"
+            "For multiple pages, load each image/data pair in atlas-index.json using its page ID as the texture key.\n"
             "Frame keys are stable item IDs, not ordinal cell numbers. Pivots are normalized to native crop size.\n"
             "source-manifest.snapshot.json is audit evidence, NOT a portable source run.\n"
             "No animation order, durations, collisions, or world-footprint contract is inferred.\n"

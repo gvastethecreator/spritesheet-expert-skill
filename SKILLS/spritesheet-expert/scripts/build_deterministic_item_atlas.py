@@ -29,6 +29,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--padding", type=int, default=16)
     parser.add_argument("--outer-padding", type=int, default=0)
     parser.add_argument("--max-width", type=int, default=0)
+    parser.add_argument("--max-height", type=int, default=8192)
+    parser.add_argument("--max-pages", type=int, default=16)
+    parser.add_argument("--max-page-pixels", type=int, default=16_777_216)
+    parser.add_argument("--max-total-pixels", type=int, default=50_000_000)
     parser.add_argument(
         "--provenance",
         choices=("imagegen", "grok-imagine-image", "imported", "fixture", "mixed"),
@@ -56,6 +60,8 @@ def main() -> int:
                 padding=args.padding,
                 outer_padding=args.outer_padding,
                 max_width=args.max_width,
+                max_height=args.max_height, max_pages=args.max_pages,
+                max_page_pixels=args.max_page_pixels, max_total_pixels=args.max_total_pixels,
             ),
             provenance=args.provenance,
             force=args.force,
