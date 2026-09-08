@@ -18,6 +18,7 @@ from spritecore.item_sheet import (
     validate_manifest_geometry,
     build_pixel_ownership_report,
     item_content_sha256,
+    write_item_atlas_run,
 )
 from spritecore.item_ownership import compile_masks, apply_ownership_review
 from spritecore.item_segmentation import digest_file
@@ -362,6 +363,117 @@ def test_mask_review_preserves_parent_tags_and_records_successor(tmp_path: Path)
         apply_ownership_review(root / "manifest.json", {"parentManifestSha256":"0"*64,"operations":[]}, tmp_path / "bad")
 
 
+def test_tag_correction_invalidates_only_semantic_approval(tmp_path: Path) -> None:
+    source, root = tmp_path / "source.png", tmp_path / "parent"
+    _sheet().save(source)
+    manifest = build_item_atlas(source, root, provenance="fixture")
+    approved = tmp_path / "approved"
+    first = apply_ownership_review(root / "manifest.json", {"parentManifestSha256": digest_file(root / "manifest.json"),
+        "operations": [{"kind": "approve", "itemIds": [i["id"] for i in manifest["items"]]}]}, approved)
+    original = (approved / "manifest.json").read_bytes()
+    target = first["items"][0]["id"]
+    corrected = apply_ownership_review(approved / "manifest.json", {"parentManifestSha256": digest_file(approved / "manifest.json"),
+        "operations": [{"kind": "tags", "itemIds": [target], "classification": {"family": "object", "canonicalType": "token", "tags": ["corrected"]}}]}, tmp_path / "corrected")
+    changed = next(i for i in corrected["items"] if i["id"] == target)
+    assert changed["review"]["status"] == "pending"
+    assert {scope: record["status"] for scope, record in changed["review"]["scopes"].items()} == {"pixels": "approved", "semantics": "pending", "placement": "approved"}
+    assert (approved / "manifest.json").read_bytes() == original
+
+
+def test_failed_directory_publication_restores_prior_bytes(tmp_path: Path, monkeypatch) -> None:
+    from spritecore.publication import publish_directory
+    old, stage = tmp_path / "published", tmp_path / "staged"
+    old.mkdir(); stage.mkdir()
+    (old / "receipt").write_bytes(b"prior-success")
+    (stage / "receipt").write_bytes(b"successor")
+    replace = Path.replace
+    def fail_publish(path, target):
+        if path == stage:
+            raise OSError("injected publication failure")
+        return replace(path, target)
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "replace", fail_publish)
+        with pytest.raises(OSError, match="injected"):
+            publish_directory(stage, old, replace=True)
+    assert (old / "receipt").read_bytes() == b"prior-success"
+    assert (stage / "receipt").read_bytes() == b"successor"
+    publish_directory(stage, old, replace=True)
+    assert (old / "receipt").read_bytes() == b"successor"
+    assert [p.read_bytes() for p in (tmp_path / ".published.revisions").glob("*/receipt")] == [b"prior-success"]
+
+
+def test_review_does_not_follow_output_symlink(tmp_path: Path) -> None:
+    from apply_item_review import apply_review
+    source, parent, target, link = (tmp_path / name for name in ("source.png", "parent", "published", "linked"))
+    _sheet().save(source)
+    manifest = build_item_atlas(source, parent, provenance="fixture")
+    review = tmp_path / "review.json"
+    review.write_text(json.dumps({"schemaVersion": "item-review-v1", "kind": "deterministic-item-review",
+        "runId": manifest["runId"], "sourceManifest": {"sha256": digest_file(parent / "manifest.json")}, "items": []}))
+    target.mkdir()
+    (target / "receipt").write_bytes(b"prior-success")
+    try:
+        link.symlink_to(target, target_is_directory=True)
+    except OSError:
+        pytest.skip("symlink creation unavailable on this host")
+    with pytest.raises(ItemSheetError, match="symbolic link"):
+        apply_review(parent / "manifest.json", review, link, allow_pending=True, force=True)
+    assert link.is_symlink() and (target / "receipt").read_bytes() == b"prior-success"
+
+
+def test_bounded_pages_keep_native_pixels_and_export_every_page(tmp_path: Path, monkeypatch) -> None:
+    from spritecore.item_delivery import validate_delivery
+    from export_item_atlas import export_atlas
+    source = tmp_path / "source.png"
+    _sheet().save(source)
+    root = tmp_path / "pages"
+    packing = PackingConfig(quantum=16, padding=8, max_width=64, max_height=64)
+    manifest = build_item_atlas(source, root, provenance="fixture", packing=packing)
+    assert len(manifest["pages"]) == 3
+    assert [item["geometry"]["pageId"] for item in manifest["items"]] == [p["id"] for p in manifest["pages"]]
+    assert validate_delivery(root / "manifest.json", draft=True)["status"] == "pass"
+    receipt = export_atlas(root / "manifest.json", tmp_path / "export", draft=True)
+    index = json.loads((tmp_path / "export/atlas-index.json").read_text())
+    assert [page["id"] for page in index["pages"]] == [page["id"] for page in manifest["pages"]]
+    for page, exported in zip(manifest["pages"], index["pages"]):
+        assert digest_file(tmp_path / "export" / exported["image"]) == page["sha256"]
+        assert exported["data"] in receipt["files"]
+    reference = _sheet()
+    items = segment_items(reference)
+    def reject_allocation(*args, **kwargs):
+        raise AssertionError("atlas allocation must follow budget checks")
+    monkeypatch.setattr(Image, "new", reject_allocation)
+    with pytest.raises(ItemSheetError, match="page"):
+        write_item_atlas_run(items, tmp_path / "over-budget", source=manifest["source"],
+            source_reference=reference,
+            segmentation=manifest["segmentation"], packing=PackingConfig(quantum=16, padding=8, max_width=64, max_height=64, max_pages=1))
+
+
+def test_group_evaluation_reports_merge_and_rejects_unbound_annotations(tmp_path: Path) -> None:
+    from evaluate_item_atlas import evaluate
+    image = Image.new("RGBA", (20, 10))
+    ImageDraw.Draw(image).rectangle((2, 2, 4, 5), fill=(1, 2, 3, 255))
+    ImageDraw.Draw(image).rectangle((12, 2, 14, 5), fill=(4, 5, 6, 255))
+    path, root = tmp_path / "source.png", tmp_path / "run"
+    image.save(path)
+    manifest = build_item_atlas(path, root, provenance="fixture", segmentation=SegmentationConfig(min_strong_pixels=1))
+    annotations = {"schemaVersion": "item-group-annotations-v1", "reviewer": {"kind": "agent", "name": "fixture"},
+        "sourceSha256": manifest["source"]["sha256"], "groups": [{"id": "left", "rects": [[1, 1, 6, 7]]}, {"id": "right", "rects": [[11, 1, 16, 7]]}]}
+    annotation_path = tmp_path / "annotations.json"
+    annotation_path.write_text(json.dumps(annotations))
+    assert evaluate(annotation_path, root / "manifest.json")["metrics"]["exactGroups"] == 2
+    merged = tmp_path / "merged"
+    apply_ownership_review(root / "manifest.json", {"parentManifestSha256": digest_file(root / "manifest.json"),
+        "operations": [{"kind": "merge", "itemIds": [i["id"] for i in manifest["items"]]}]}, merged)
+    measured = evaluate(annotation_path, merged / "manifest.json")
+    assert measured["metrics"]["crossGroupMerges"] == 1 and measured["metrics"]["meanGroupIoU"] == .5
+    assert measured["productionApproval"] is False
+    annotations["sourceSha256"] = "0" * 64
+    annotation_path.write_text(json.dumps(annotations))
+    with pytest.raises(ValueError, match="source hash"):
+        evaluate(annotation_path, merged / "manifest.json")
+
+
 def test_model_result_rejects_invalid_types_and_out_of_taxonomy_values() -> None:
     from run_item_model_worker import _classification_result, _segmentation_result, classification_schema, ItemModelWorkerError
     job = {"jobId":"fixture", "runId":"fixture", "itemId":"item_000000000000",
@@ -382,6 +494,20 @@ def test_model_result_rejects_invalid_types_and_out_of_taxonomy_values() -> None
     assert not Draft202012Validator(classification_schema(job)).is_valid(result)
     result["canonicalType"] = "villager"
     assert Draft202012Validator(classification_schema(job)).is_valid(result)
+
+
+def test_checkpoint_preparation_rejects_missing_shards(tmp_path: Path) -> None:
+    from spritecore.model_checkpoints import verified_snapshot
+    snapshot = tmp_path / "snapshot"
+    snapshot.mkdir()
+    (snapshot / "config.json").write_text("{}")
+    (snapshot / "one.safetensors").write_bytes(b"fixture")
+    (snapshot / "model.safetensors.index.json").write_text(json.dumps({"weight_map": {"a": "one.safetensors", "b": "missing.safetensors"}}))
+    entry = {"id": "fixture/model", "revision": "a"*40, "snapshot": "snapshot"}
+    with pytest.raises(ValueError, match="shard"):
+        verified_snapshot(entry, tmp_path)
+    with pytest.raises(ValueError, match="revision"):
+        verified_snapshot(entry, tmp_path, revision="b"*40)
 
 
 def test_segmentation_handoff_rejects_changed_mask_bytes(tmp_path: Path) -> None:

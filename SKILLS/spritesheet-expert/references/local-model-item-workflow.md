@@ -54,8 +54,9 @@ Studio imports the source bytes into its workspace. Processing uses one worker
 at a time. Saved runs expose progress, logs, cancel, and resume operations.
 The source remains immutable. Edits create successor manifests.
 
-Review only the flagged items by default. Disable the filter to inspect every
-sprite. Select several items to merge their source masks. Use the source brush
+Review all unapproved items by default, including items without QA flags.
+Disable the filter to inspect approved sprites too. Select several items to
+merge their source masks. Use the source brush
 to assign pixels to the selected sprite, a new sprite, the pending set, or an
 explicit discard. Accept an item after inspecting its borders. Tags are keyed
 by stable item IDs and shown outside the sprite preview.
@@ -83,6 +84,13 @@ Semantic errors and source occlusions require review. The workflow does not
 reconstruct hidden pixels or generate replacement art.
 
 ## Files and state
+
+Use **Workspace** in Studio to choose a persistent project folder, collect runs,
+save agent handoffs and manage exports. The same operations are exposed by
+`scripts/manage_studio_workspace.py`; see `../studio/README.md` for commands.
+The folders below live inside `runs/<run-id>/`. Moving the workspace preserves
+IDs, masks, tags and the current review head. Keep environments and weights in
+the separate host runtime/cache locations.
 
 - `workflow.json`: inputs, checkpoint revisions, compiler fingerprint, stage
   status, elapsed time, output hashes, and current manifest.
@@ -113,6 +121,41 @@ All outputs remain inside the selected workspace. The CLI remains the owner
 of processing behavior.
 
 ## Verification
+
+### Packing and review contracts
+
+Set `--max-width`, `--max-height`, `--max-pages`, `--max-page-pixels` and
+`--max-total-pixels` on the runner or builder. Studio exposes the same limits.
+Defaults are automatic width (at most 8192), height 8192, 16 pages,
+16,777,216 pixels per page and 50,000,000 pixels across pages. These are explicit
+allocation limits, not a device capability probe. Impossible cells fail before
+atlas allocation. Pages follow the same largest-first shelf order without
+rotation, scaling or gap-filling. Multi-page items carry `geometry.pageId`;
+`atlas-index.json` tells a runtime loader which image/JSON pairs to load.
+
+Review scopes are `pixels`, `semantics` and `placement`, each bound to its inputs.
+Changing tags invalidates semantic approval. Changing pixels or ownership creates
+a successor and invalidates dependent review. Repacking invalidates changed
+placement. Legacy unscoped approvals do not satisfy final delivery; review the
+current successor explicitly. Original artifacts and source provenance remain.
+
+### Group evaluation
+
+`evaluate_item_atlas.py` compares valid draft manifests with hash-bound external
+annotations. The repository's `evals/item-group-samples.json` records 13 selected
+groups from three external sheets; it contains no images. From the repository:
+
+```powershell
+python SKILLS/spritesheet-expert/scripts/evaluate_item_atlas.py --annotations evals/item-group-samples.json --sample gothic-buildings --manifest path/to/manifest.json --out evaluations/buildings-v1.json
+```
+
+Repeat `--manifest` to compare candidates from the same source. Output must use
+a new filename. Report IoU, splits, cross-group merges, unknown/matching labels,
+weak-alpha ownership and all pending pixels. `alphaThreshold` explicitly selects
+the IoU mask; it never changes production alpha. The supplied agent annotations
+use 64 for strong foreground and report weak alpha separately. They are not
+whole-sheet ground truth or human approval. Record measured correction time
+when available; otherwise keep it null. Do not infer visual yield from this score.
 
 Use the existing unit and integration suites for masks, packing, lineage,
 resume, cancellation, and relocation. Model inference is an explicit manual

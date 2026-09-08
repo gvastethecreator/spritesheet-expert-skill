@@ -1,6 +1,6 @@
 # Production workflow: usable sprites, not merely a sheet image
 
-Revision: 2026-09-05. This reference supplements, rather than replaces, the animation, video, pixel-art, source-intake and provenance contracts linked by `SKILL.md`.
+Revision: 2026-09-07. This reference supplements, rather than replaces, the animation, video, pixel-art, source-intake and provenance contracts linked by `SKILL.md`. `workflow-lanes.json` owns the lane registry; `check_workflow.py` resolves and executes its final gate.
 
 ## 1. Choose the actual deliverable
 
@@ -88,7 +88,7 @@ Edits invalidate evidence whose inputs changed. Pixel changes invalidate crop re
 
 **Local Process / Ownership editor:** import a transparent source, run available local analysis, inspect source masks, assign pending pixels, merge pieces, discard explicit noise, correct tags and approve selected items. Saved reviews create successor artifacts. Disable the “doubts” filter and review **all** pending items, not only flagged ones. A stopped process is not completed processing.
 
-**Portable Atlas Lab:** review/replacement handoffs exist, but this audit identified legacy basename resolution and asynchronous replacement-target risks. Until the linked hardening work lands, do not use a displayed legacy thumbnail as the sole basis of production approval. Cross-check exact files in Delivery Lab and the authoritative validator. Do not switch selected items while a replacement is hashing.
+**Portable Atlas Lab:** the shared resolver verifies the selected manifest, every atlas page, source and crop before enabling review. Paths are exact within one manifest root; duplicate manifests are rejected. Replacement hash/decode captures its item and session before awaiting, so selection changes cannot retarget a candidate. Export review JSON explicitly; unsaved browser edits are not durable workspace data. Applying a replacement produces a new source composition, tight native crop and successor ID, retaining original bytes and lineage. It requires fresh review.
 
 **Delivery Lab (`studio/delivery-lab.html`):** four read-only views: atlas frames/cells, source bounds, native pivot placement, delivery evidence. It verifies original file identities before drawing; missing or stale files block the preview. It accepts an optional Python receipt and verifies that its manifest and recorded artifacts still match. Its exported browser inspection is not an approval document or a signed attestation. Placement is a Canvas diagnostic, not Phaser/Godot execution.
 
@@ -110,7 +110,7 @@ python scripts/serve_item_studio.py --workspace .local/studio-workspace
 
 Read `references/local-model-item-workflow.md` before using `standard` or `light`: install the isolated runtime, prepare pinned checkpoints, then run the offline worker. Models analyze existing art; they do not change its provenance or certify usable output. No GPU measurements are implied by this documentation.
 
-Use the **active manifest path** in `workflow.json`, including a classified or reviewed successor, not an assumed `alpha/manifest.json`. The server now protects completed processing from a start action that would reset its review head. Direct CLI replay of an already reviewed run remains a known risk: use a fresh output directory for changed processing inputs and preserve reviewed runs.
+Use the **active manifest path** in `workflow.json`, including a classified or reviewed successor, not an assumed `alpha/manifest.json`. Server and CLI completed replay preserve a matching reviewed head and check its evidence without loading models. Changed processing inputs require a new output directory. Compiler publication keeps a predecessor in a sibling revision store and can restore it after a failed rename; it never deletes the sole valid result first.
 
 ```powershell
 # Replace this example with the actual active manifest.
@@ -127,7 +127,7 @@ Validator exit codes: `0` pass; `2` review required; `3` invalid artifacts. Its 
 
 A final static check requires all emitted items approved, no pending source pixels, no source-edge hard failures, valid exact geometry/hashes/ownership, and non-fixture source provenance. Classification completeness is a separate project requirement: the validator does not claim every unknown label is a geometry failure.
 
-Runtime export contains `atlas.png`, `atlas.json`, `delivery-check.json`, `delivery.json`, an audit snapshot and README. Frame coordinates use actual visible crops, not reserved packing cells. The JSON Hash adapter is for static items and preserves stable item IDs. `source-manifest.snapshot.json` is audit evidence, **not** a standalone relocatable source run. The Studio ZIP serves that fuller audit/review use case.
+Runtime export contains `atlas.png`, `atlas.json`, `atlas-index.json`, additional numbered image/JSON pairs when needed, `delivery-check.json`, `delivery.json`, an audit snapshot and README. Frame coordinates use actual visible crops, not reserved packing cells. The JSON Hash adapter is for static items and preserves stable item IDs. `source-manifest.snapshot.json` is audit evidence, **not** a standalone relocatable source run. The Studio ZIP serves that fuller audit/review use case.
 
 ## 7. Quality rubric: review the result at its intended scale
 

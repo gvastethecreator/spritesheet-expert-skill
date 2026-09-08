@@ -1,6 +1,25 @@
 # Studio production backlog and execution order
 
-Revision: 2026-09-05. Companion: [deep audit](../reviews/2026-09-05-studio-production-audit.md). These are implementation tickets, not a claim that the listed features already exist. Paths below are relative to `SKILLS/spritesheet-expert` unless noted.
+Revision: 2026-09-07. Companion: [deep audit](../reviews/2026-09-05-studio-production-audit.md). These tickets retain their full acceptance criteria. The progress table below records shipped subsets; OPEN does not mean no work has landed. Paths below are relative to `SKILLS/spritesheet-expert` unless noted.
+
+## September 7 implementation scope
+
+See [measured closeout](local-item-workflow-review.md#five-audit-improvements--2026-09-07)
+for tests, independent evaluations and local model results.
+
+| Ticket | Implemented in the five-improvement increment | Still outside this increment |
+| --- | --- | --- |
+| 101 | Shared exact browser paths/hashes; unverified review disabled; captured replacement/session targets; adversarial browser checks | Durable unified browser session |
+| 102 | Scoped pixel/semantic/placement approvals, successor review, completed CLI replay and label invalidation | Full undo/history UX and migrations; legacy approvals require fresh review |
+| 103 / 106 | Recoverable publication with retained predecessors; replacement source composition, exact bytes and successor IDs | Full crash-boundary/platform matrix and returned-provider acceptance UX |
+| 107 | Current SAM revision after Qwen cache reuse; locked Lucida/BEN2 extras, checked offline snapshots; cold/warm RTX 3090 proof | CPU/2B measurements and broader held-out model calibration |
+| 109 | Bounded deterministic static pages through CLI, Studio, validator and JSON Hash export | Target-engine proof remains ticket 110 |
+| 111 | Executable grouped-pixel evaluator; 13 externally sourced annotated groups; six behavioral workflow cases and before/after failures | Human-approved held-out corpus, generation yield and measured human correction cost |
+| 112 | All-lane workspace catalogs, copied evidence, draft snapshots, lane-specific final commands | Unified editing/provider/engine surfaces; row processing remains in existing CLIs |
+
+The old baseline warnings below describe the original reproductions. Exact-path
+resolution, replacement retargeting, scoped review and unbounded static packing
+are no longer unfixed baseline behavior. Human/engine approval is still separate.
 
 ## Delivery slices and dependencies
 
@@ -150,6 +169,13 @@ First deliver a trustworthy imported-static-sheet vertical slice, then resilient
 **Definition of done:** New prompt/model/extraction settings are adopted only with reproducible quality/yield or correction-cost evidence; no claim of improved artistic output from unit tests alone.
 
 ## STUDIO-112 — Unified agent-first Studio without a second pipeline
+
+Workspace increment (2026-09-05): the bundled Studio and
+`manage_studio_workspace.py` share disk-backed identity, run collections,
+handoffs, run copying and saved exports. Opening completed work preserves its
+review head without requiring model weights. This is partial progress: provider
+result acceptance, replacement editing and the broader production lifecycle
+remain open. Atlas Lab review drafts still require explicit export.
 
 **Priority/status:** P2 / OPEN. **Owner surface:** workflow navigation, session index, capability API. **Depends on:** STUDIO-105/108 and stable artifact contracts.
 

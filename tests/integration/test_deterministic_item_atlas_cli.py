@@ -218,7 +218,7 @@ def test_item_atlas_cli_build_classify_and_review_round_trip(tmp_path: Path) -> 
     assert reviewed.returncode == 0, reviewed.stderr or reviewed.stdout
     reviewed_manifest = json.loads((reviewed_run / "manifest.json").read_text(encoding="utf-8"))
     assert reviewed_manifest["parentManifestSha256"]
-    assert reviewed_manifest["completion"]["reviewComplete"] is True
+    assert reviewed_manifest["completion"]["reviewComplete"] is False
     assert reviewed_manifest["reviewApplication"]["replacementCount"] == 1
     assert (reviewed_run / "atlas.png").is_file()
     assert (reviewed_run / "qa/atlas-grid.png").is_file()
@@ -228,12 +228,15 @@ def test_item_atlas_cli_build_classify_and_review_round_trip(tmp_path: Path) -> 
         and (reviewed_run / item["artifacts"]["darkComposite"]).is_file()
         for item in reviewed_manifest["items"]
     )
-    replaced = next(item for item in reviewed_manifest["items"] if item["id"] == replacement_item["id"])
-    assert replaced["geometry"]["originalSize"] == [44, 31]
+    replaced = next(item for item in reviewed_manifest["items"] if replacement_item["id"] in item.get("parentItemIds", []) and item["id"] != replacement_item["id"])
+    assert replaced["geometry"]["originalSize"] == [36, 23]
     assert replaced["geometry"]["scale"] == 1
     assert replaced["geometry"]["rotated"] is False
     assert "replacement_imported" in replaced["qaFlags"]
-    assert (reviewed_run / replaced["review"]["replacement"]["sourcePath"]).is_file()
+    with Image.open(reviewed_run / replaced["artifacts"]["rgba"]) as crop:
+        assert crop.tobytes() == replacement_image.crop((4, 4, 40, 27)).tobytes()
+    assert sha256(replacement.read_bytes()).hexdigest() == replacement_sha
+    assert json.loads(classified_path.read_text()) == classified
 
 
 def test_review_cli_rejects_unresolved_regeneration(tmp_path: Path) -> None:
@@ -376,6 +379,29 @@ def test_workflow_cancel_resume_and_changed_evidence(tmp_path: Path) -> None:
     rejected = _run(*command)
     assert rejected.returncode == 1 and "evidence changed" in rejected.stdout
     assert not json.loads((output / "workflow.json").read_text())["processingComplete"]
+
+
+def test_workspace_cli_from_relocated_skill(tmp_path: Path) -> None:
+    import shutil
+    scripts = tmp_path / "installed skill/scripts"
+    shutil.copytree(SCRIPT_ROOT, scripts, ignore=shutil.ignore_patterns("__pycache__"))
+    workspace = tmp_path / "project data"
+    command = str(scripts / "manage_studio_workspace.py")
+    created = _run(command, "create", "--workspace", str(workspace), "--name", "Portable", cwd=tmp_path)
+    assert created.returncode == 0, created.stdout + created.stderr
+    source = tmp_path / "source.png"
+    _source(source)
+    imported = _run(command, "import", "--workspace", str(workspace), "--source", str(source), "--collection", "Props", cwd=tmp_path)
+    assert imported.returncode == 0, imported.stdout + imported.stderr
+    run_id = json.loads(imported.stdout)["id"]
+    copied = tmp_path / "moved project"
+    shutil.copytree(workspace, copied)
+    inspected = _run(command, "inspect", "--workspace", str(copied), cwd=tmp_path)
+    assert inspected.returncode == 0, inspected.stdout + inspected.stderr
+    result = json.loads(inspected.stdout)
+    assert result["id"] == json.loads(created.stdout)["id"]
+    assert result["runs"][0]["id"] == run_id and result["collections"] == ["Props"]
+    assert (copied / "imports" / f"{run_id}.png").read_bytes() == source.read_bytes()
 
 
 def test_local_studio_review_is_hash_bound_and_export_gates_pending(tmp_path: Path) -> None:
