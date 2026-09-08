@@ -354,8 +354,9 @@ def main() -> int:
     cell_w, cell_h = cell_size
     square_like_cell = abs((cell_w / max(1, cell_h)) - 1.0) <= 0.25
     rows = frames_manifest.get("rows", [])
-    if asset_kind not in ASSET_KINDS:
-        raise SystemExit(f"check_asset_slots.py is for non-sprite asset modes, got {asset_kind!r}")
+    static_sprite = asset_kind == "sprite" and request.get("frame_semantics") in {"variants", "still-assets"}
+    if asset_kind not in ASSET_KINDS and not static_sprite:
+        raise SystemExit(f"check_asset_slots.py requires assets or a non-temporal sprite set, got {asset_kind!r}")
 
     errors: list[str] = []
     warnings: list[str] = []

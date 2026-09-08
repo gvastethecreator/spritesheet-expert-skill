@@ -1,5 +1,11 @@
 # Spritesheet Expert QA And Outputs
 
+This guide applies to component-row runs: true grids, non-temporal sets,
+animation and tilesets/textures with `sprite-request.json` and `frame_layout`.
+For irregular static items, use `check_workflow.py --run-dir <run>` and the
+[item delivery gate](local-model-item-workflow.md). Do not require row manifests,
+animation evidence or `validate_run.py` for that lane.
+
 ## QA
 
 Block done unless:

@@ -45,8 +45,22 @@ def test_prepare_writes_a_valid_v2_request(tmp_path: Path) -> None:
     assert written["frame_semantics"] == "animation"
     assert written["sampling_policy"]["filter"] == "nearest"
     assert written["states"]["idle"]["raw_layout"]["columns"] == 2
-    assert written["background_removal"]["method"] == "lucida"
+    assert written["background_removal"]["method"] == "alpha"
     assert written["grid_segmentation"] == "adaptive"
+
+
+def test_static_character_prompt_does_not_invent_an_anchor_or_timeline(tmp_path: Path) -> None:
+    request = {"frame_semantics": "variants", "states": {"poses": {"frames": 4, "fps": 1, "loop": False,
+        "action": "four independent poses", "asset_labels": ["front", "side", "back", "raised-hand"]}}}
+    run = tmp_path / "static"
+    result = subprocess.run([sys.executable, str(PREPARE), "--out-dir", str(run), "--character-id", "hero",
+        "--style-preset", "illustration", "--request-json", json.dumps(request)], capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    prompt = (run / "prompts/poses.txt").read_text()
+    assert "this first sheet establishes the identity" in prompt
+    assert "Static identity lock" in prompt
+    for forbidden in ("Compact animation requirements", "animation keys", "isolated animation frames", "Keep timing readable and loopable", "The attached accepted idle"):
+        assert forbidden not in prompt
 
 
 def test_prepare_preserves_creature_motion_and_adds_anatomy_prompt(tmp_path: Path) -> None:

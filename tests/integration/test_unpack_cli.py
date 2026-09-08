@@ -62,6 +62,28 @@ def test_unpack_writes_a_v2_request_contract(tmp_path: Path) -> None:
     assert request["kind"] == "sprite-gen-request"
 
 
+def test_labeled_static_grid_keeps_semantics_and_import_evidence(tmp_path: Path) -> None:
+    from spritecore.workflow_lanes import describe_run
+    from spritecore.item_delivery import digest_file
+    import pytest
+    atlas, run = tmp_path / "variants.png", tmp_path / "static"
+    _write_atlas(atlas, 2, 1)
+    labels = tmp_path / "labels.json"
+    labels.write_text(json.dumps({"poses": ["front", "side"]}))
+    result = run_unpack("--atlas", str(atlas), "--grid", "2x1", "--states", "poses", "--asset-labels-file", str(labels),
+        "--source-type", "fixture", "--out-dir", str(run))
+    assert result.returncode == 0, result.stdout + result.stderr
+    request = json.loads((run / "sprite-request.json").read_text())
+    assert request["frame_semantics"] == "variants" and request["states"]["poses"]["loop"] is False
+    assert describe_run(run)[0] == "true-grid"
+    with pytest.raises(ValueError, match="conflicts"):
+        describe_run(run, lane="animation")
+    provenance = json.loads((run / "source-provenance.json").read_text())
+    assert provenance["fixture"] is True
+    accepted = provenance["accepted_sources"][0]
+    assert digest_file(run / accepted["path"]) == digest_file(atlas) == accepted["sha256"]
+
+
 def _write_atlas(path: Path, columns: int, rows: int) -> None:
     image = Image.new("RGBA", (columns * 16, rows * 16), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)

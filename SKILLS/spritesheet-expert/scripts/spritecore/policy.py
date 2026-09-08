@@ -31,7 +31,7 @@ _LOCOMOTION_WORKFLOWS = frozenset(
     }
 )
 _ISOMETRIC_PROJECTIONS = frozenset(
-    {"isometric", "dimetric-2:1", "2:1-dimetric", "2:1 dimetric diamond"}
+    {"isometric", "2:1 isometric", "dimetric-2:1", "2:1-dimetric", "2:1 dimetric diamond"}
 )
 _ASSET_KINDS = frozenset(
     {"sprite", "tileset", "texture", "asset", "prop", "icon", "ui", "vfx"}

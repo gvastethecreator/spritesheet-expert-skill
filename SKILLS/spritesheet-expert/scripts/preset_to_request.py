@@ -15,6 +15,7 @@ from spritecore.contracts import ContractError, normalize_contract
 LOOP_HINTS = ("idle", "walk", "run", "running", "move", "blink", "talk", "sleep", "thinking")
 FRAME_BUDGETS = ("default", "compact", "micro")
 BACKGROUND_REMOVAL_METHODS = (
+    "alpha",
     "none",
     "chroma",
     "matte",
