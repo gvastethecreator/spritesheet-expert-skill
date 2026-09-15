@@ -170,7 +170,7 @@ A new playground should reuse the same principles:
 3. Make every mutation produce an inspectable successor artifact.
 4. Keep provider inference outside automatic UI state transitions.
 5. Export decisions and evidence.
-6. Add contract and UI validation.
-7. Add a focused integration test before publishing the workflow.
+6. Reuse contract and UI validation for the changed workflow.
+7. At final integration, add one short case only for a meaningful uncovered failure at an existing seam. Reuse valid proof; do not introduce a test framework or duplicate layers for a small playground.
 
 Planned labs include animation curation, mask editing, tile adjacency, runtime placement, delivery reconciliation, and local model workers. They should share the workspace and handoff contracts instead of becoming isolated miniature applications.

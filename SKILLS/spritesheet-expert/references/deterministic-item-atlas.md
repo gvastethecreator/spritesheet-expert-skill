@@ -173,8 +173,26 @@ build/item-atlas/
 │   └── item_*-dark.png
 └── qa/
     ├── source-components.png
-    └── atlas-grid.png
+    ├── atlas-grid.png
+    └── item-playground/
+        ├── index.html
+        └── playground.evidence.json
 ```
+
+## Curation playground
+
+The workflow runner leaves a self-contained HTML playground under
+`qa/item-playground/`. Rebuild it for any existing manifest:
+
+```powershell
+python SKILLS/spritesheet-expert/scripts/build_item_playground.py `
+  --run-dir build/item-atlas `
+  --manifest manifest.json
+```
+
+It embeds every atlas page and QA preview, filters items by QA flag and decision,
+shows native crops on neutral backgrounds, and exports an `item-review-v1` document
+for `apply_item_review.py`. It never edits the run.
 
 ## Classification workflow
 

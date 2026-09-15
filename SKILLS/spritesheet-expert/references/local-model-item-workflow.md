@@ -100,6 +100,8 @@ the separate host runtime/cache locations.
   and full-source SAM2 masks.
 - `segmented/`: source-preserving groups, native-size crops, classification,
   ordered atlas, and ownership report.
+- `qa/item-playground/`: self-contained curation playground with the embedded atlas
+  and QA previews; export an `item-review.json` and apply it with `apply_item_review.py`.
 - `reviews/`: immutable successors with portable source-coordinate operations.
 
 The ownership report checks RGBA equality, duplicate ownership, pending pixels,

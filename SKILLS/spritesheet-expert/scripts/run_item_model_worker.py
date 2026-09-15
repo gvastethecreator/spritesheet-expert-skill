@@ -142,17 +142,21 @@ def _load_qwen(model_id: str, device: str, local_files_only: bool, revision: str
     return model, processor
 
 
-def _generate_json(
+def _generate_text(
     model: Any,
     processor: Any,
     images: Sequence[Image.Image],
     prompt: str,
     max_new_tokens: int,
-    raw_path: Path | None = None,
-    output_schema: dict[str, Any] | None = None,
-) -> dict[str, Any]:
+    raw_path: Path | None,
+    output_schema: dict[str, Any] | None,
+    *,
+    enforce: bool,
+    brevity: bool = False,
+) -> str:
     content = [{"type": "image", "image": image.convert("RGB")} for image in images]
-    content.append({"type": "text", "text": prompt})
+    text = prompt + " Keep notes under 20 words." if brevity else prompt
+    content.append({"type": "text", "text": text})
     messages = [{"role": "user", "content": content}]
     try:
         inputs = processor.apply_chat_template(
@@ -165,20 +169,23 @@ def _generate_json(
         inputs = inputs.to(model.device)
         import torch
         from transformers import StoppingCriteria, StoppingCriteriaList
-        from lmformatenforcer import JsonSchemaParser, RegexParser
-        from lmformatenforcer.integrations.transformers import (
-            build_token_enforcer_tokenizer_data, build_transformers_prefix_allowed_tokens_fn)
-        if not hasattr(processor, "item_tokenizer_data"):
-            processor.item_tokenizer_data = build_token_enforcer_tokenizer_data(processor.tokenizer)
-        if output_schema is not None:
-            format_parser = JsonSchemaParser(output_schema)
-        else:
-            confidence = r"(?:0(?:\.[0-9]{1,3})?|1(?:\.0{1,3})?)"
-            coordinate = r"(?:0|[1-9][0-9]{0,2}|1000)"
-            row = (r'\["[A-Za-z][A-Za-z0-9 _-]{0,47}",' +
-                   (coordinate + ",")*4 + confidence + r"\]")
-            format_parser = RegexParser(r'\{"confidence":' + confidence + r',"instances":\[' + row + r'(?:,' + row + r')*\]\}')
-        prefix = build_transformers_prefix_allowed_tokens_fn(processor.item_tokenizer_data, format_parser)
+        generation: dict[str, Any] = {"max_new_tokens": max_new_tokens, "do_sample": False}
+        if enforce:
+            from lmformatenforcer import JsonSchemaParser, RegexParser
+            from lmformatenforcer.integrations.transformers import (
+                build_token_enforcer_tokenizer_data, build_transformers_prefix_allowed_tokens_fn)
+            if not hasattr(processor, "item_tokenizer_data"):
+                processor.item_tokenizer_data = build_token_enforcer_tokenizer_data(processor.tokenizer)
+            if output_schema is not None:
+                format_parser = JsonSchemaParser(output_schema)
+            else:
+                confidence = r"(?:0(?:\.[0-9]{1,3})?|1(?:\.0{1,3})?)"
+                coordinate = r"(?:0|[1-9][0-9]{0,2}|1000)"
+                row = (r'\["[A-Za-z][A-Za-z0-9 _-]{0,47}",' +
+                       (coordinate + ",")*4 + confidence + r"\]")
+                format_parser = RegexParser(r'\{"confidence":' + confidence + r',"instances":\[' + row + r'(?:,' + row + r')*\]\}')
+            generation["prefix_allowed_tokens_fn"] = build_transformers_prefix_allowed_tokens_fn(
+                processor.item_tokenizer_data, format_parser)
         prompt_tokens = inputs.input_ids.shape[-1]
         started = time.monotonic()
 
@@ -193,10 +200,9 @@ def _generate_json(
                         "seconds":round(time.monotonic()-started,1)}), file=os.sys.stderr, flush=True)
                 return False
 
+        generation["stopping_criteria"] = StoppingCriteriaList([Progress()])
         with torch.inference_mode():
-            generated = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False,
-                                       stopping_criteria=StoppingCriteriaList([Progress()]),
-                                       prefix_allowed_tokens_fn=prefix)
+            generated = model.generate(**inputs, **generation)
         trimmed = [output[len(input_ids) :] for input_ids, output in zip(inputs.input_ids, generated)]
         response = processor.batch_decode(
             trimmed,
@@ -207,7 +213,30 @@ def _generate_json(
         raise ItemModelWorkerError(f"Qwen inference failed: {exc}") from exc
     if raw_path is not None:
         raw_path.write_text(response, encoding="utf-8")
-    return _extract_json(response)
+    return response
+
+
+def _generate_json(
+    model: Any,
+    processor: Any,
+    images: Sequence[Image.Image],
+    prompt: str,
+    max_new_tokens: int,
+    raw_path: Path | None = None,
+    output_schema: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    response = _generate_text(model, processor, images, prompt, max_new_tokens, raw_path, output_schema, enforce=True)
+    try:
+        return _extract_json(response)
+    except ItemModelWorkerError:
+        # The format enforcer can run out of valid tokens inside long free-form
+        # strings, for example at a schema maxLength boundary, and truncate the
+        # JSON. Retry once without the enforcer; the parser still validates the
+        # object and both responses stay as evidence.
+        fallback_path = raw_path.with_name(raw_path.stem + ".fallback.txt") if raw_path is not None else None
+        response = _generate_text(model, processor, images, prompt, max_new_tokens, fallback_path, None,
+                                  enforce=False, brevity=True)
+        return _extract_json(response)
 
 
 def _number(value: Any, field: str) -> float:

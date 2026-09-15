@@ -192,6 +192,9 @@ def run_workflow(args) -> dict:
                 "--taxonomy", args.taxonomy.resolve(), "--results", root / "classification/results.jsonl",
                 "--out", manifest.parent / "manifest.classified.json", "--require-complete", "--force"], ["segmented/manifest.classified.json"])
             manifest = manifest.parent / "manifest.classified.json"
+        stage("playground", ["build_item_playground.py", "--run-dir", root, "--manifest", manifest.relative_to(root).as_posix(),
+            "--out", "qa/item-playground/index.html", "--report", "qa/item-playground/playground.evidence.json",
+            "--assume-run-lock", "--force"], ["qa/item-playground/index.html", "qa/item-playground/playground.evidence.json"])
         state["manifest"] = manifest.relative_to(root).as_posix()
         state["manifestSha256"] = digest_file(manifest)
         state["status"] = "review-required"

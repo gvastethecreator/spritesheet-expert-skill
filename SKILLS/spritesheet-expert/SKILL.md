@@ -26,6 +26,12 @@ Before an end-to-end batch, read [production-workflow.md](references/production-
 Freeze accepted source hashes, style, camera, apparent scale and output contract.
 Project quotas belong to the accepted project profile, never to every workflow.
 
+## Optional Explicit Pixel-Art Conversion
+
+When the user specifically asks to convert existing imagery to pixel art, use or suggest the project-owned [pixel-art conversion route](references/pixel-art-conversion.md). Run `scripts/convert_pixel_art.py` with an explicit request. It preserves common frame placement and sampled partial alpha, and reduces RGB with one shared palette. It creates a new imported source revision for the existing lane.
+
+Retro styling, extraction, packing or animation requests alone do not activate conversion. Keep those workflows unchanged. This optional import transform is not procedural generation or a local production-art patch. Review the converted source before reusing it; previous source approval does not transfer.
+
 ## Static Items And Portable Workspaces
 
 Use `scripts/serve_item_studio.py` or the same
@@ -39,6 +45,12 @@ Packing uses consecutive, largest-first rectangular shelves, configurable paddin
 and bounded pages. It never rotates or scales sprites to fit. Tags belong to stable
 IDs, outside PNG pixels. Review pixels, semantics and placement separately; changed
 inputs invalidate the affected approval. Inspect light and dark crops before approval.
+
+Every finished item run also writes a self-contained curation playground to
+`qa/item-playground/index.html`; rebuild it with `scripts/build_item_playground.py`.
+Filter items by QA flag and decision, inspect crops on neutral backgrounds, export the
+`item-review-v1` JSON, and apply it with `apply_item_review.py`. The playground never
+mutates the run.
 
 Use `manage_studio_workspace.py` to import, adopt, group, archive and export runs.
 Workspaces store data with relative paths; runtime environments and weights stay
@@ -87,6 +99,7 @@ For neutral matte removal, read [lucida-adaptive-workflow.md](references/lucida-
 - Registration needs the explicit runtime cell and pivot. It may remove extraction jitter, not hide real motion, change anatomy, or recover clipped source pixels.
 - A contact sheet proves inventory and order. Animation additionally needs playback, contact/onion and identity proof; tiles need repeat/adjacency, projection, pivot and map proof.
 - Use [qa-and-outputs.md](references/qa-and-outputs.md) for component-row packaging. It is not the static-item final gate.
+- Leave a self-contained review workbench at `qa/preview-workbench/index.html` (`scripts/build_preview_workbench.py`) with every finished row, animation, or tileset run.
 
 ## Failure Prevention Contract
 

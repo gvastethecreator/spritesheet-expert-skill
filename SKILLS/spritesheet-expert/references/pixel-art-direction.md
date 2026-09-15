@@ -7,6 +7,8 @@ Source: local pixel-art workflow corpus from user. Pipeline treats it as
 production principles — don't copy an artist or name a style after one
 source. Prompts keep user's subject, style, game constraints.
 
+For an explicit request to convert existing images to pixel art, use the optional [conversion workflow](pixel-art-conversion.md). Art direction alone does not activate that transform.
+
 ## Pipeline Contract
 
 `prepare_sprite_run.py` writes:
