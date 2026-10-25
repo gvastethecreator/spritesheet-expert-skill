@@ -130,6 +130,14 @@ First deliver a trustworthy imported-static-sheet vertical slice, then resilient
 
 ## STUDIO-108 — Typed handoffs and an accepted-output batch ledger
 
+**October 25 update:** Command quoting and form validation are implemented.
+The registry uses literal arguments and field references. Prepared jobs include
+`argv`, `commandShell`, and shell-specific presentation for PowerShell 7.3+ or
+POSIX shells. Output tabs and shell selection preserve the job ID. Invalid
+required fields or numbers block copy, download and queue. NUL and carriage
+returns are rejected; multiline values use LF. The accepted-output ledger,
+project style lock and remaining batch acceptance criteria below stay open.
+
 **Priority/status:** P0 execution-boundary correctness / P1 complete batch UX; OPEN. **Owner surface:** workflow registry, launcher, handoff schema, intake ledger. **Depends on:** STUDIO-101/104. **Audit:** F11 and production brief gaps.
 
 **Implement:** Validate form fields before copy/queue; use structured argv and named input artifacts rather than interpolated shell text as authority. Keep a prepared job ID stable across prompt/JSON/command tabs and copying. Store requested, generated, rejected, accepted and delivered counts separately. Expand a versioned project style lock and exact reference hashes into every generation job. Record retries and duplicate identity decisions. Render shell-specific presentation only from validated arguments.

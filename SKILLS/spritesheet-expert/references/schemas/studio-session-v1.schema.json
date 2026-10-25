@@ -41,6 +41,7 @@
         "mode": {
           "enum": [
             "deterministic",
+            "local-worker",
             "handoff",
             "review",
             "provider-handoff",
@@ -50,6 +51,12 @@
         "inputs": {"type": "object"},
         "prompt": {"type": "string", "minLength": 1},
         "command": {"type": "string"},
+        "argv": {
+          "type": ["array", "null"],
+          "minItems": 1,
+          "items": {"type": "string", "pattern": "^[^\u0000\r]*$"}
+        },
+        "commandShell": {"enum": ["posix", "powershell"]},
         "expectedArtifacts": {
           "type": "array",
           "items": {"type": "string"}

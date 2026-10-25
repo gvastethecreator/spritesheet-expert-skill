@@ -352,10 +352,19 @@ verified. The ancestry-only reconciliation keeps the current published tree.
 It retains the original PR commits, including their historical removed files;
 it does not claim to purge those objects from Git history.
 
-STUDIO-108 remains open for shell-specific command quoting and typed execution
-arguments. Prepared command strings are presentation text, not validated argv.
-Review shell quoting before executing a copied command, especially for paths
-containing quotes or shell syntax. Studio does not execute those strings.
+The later October 25 quoting repair replaces interpolated shell templates with
+literal arguments and field references. Prepared jobs carry exact `argv`, a
+selected `commandShell`, and presentation for PowerShell 7.3+ or POSIX shells.
+Invalid required fields and numbers block copy, download and queue. Studio does
+not execute these commands. STUDIO-108 retains its separate accepted-output
+ledger and batch acceptance work.
+
+The existing browser smoke verifies all eight default handoffs against their
+schema, copies and downloads CLI text, and checks exact native arguments with
+quotes, Unicode, shell syntax, trailing backslashes, empty strings and LF
+newlines. PowerShell passed locally on Windows, including clipboard CRLF
+conversion. The POSIX roundtrip runs in the existing Ubuntu browser CI job.
+The Studio validator and default-argument migration check also passed locally.
 
 This is repository and browser verification. It adds no provider generation,
 model benchmark, target-engine rendering or human art approval. Five existing

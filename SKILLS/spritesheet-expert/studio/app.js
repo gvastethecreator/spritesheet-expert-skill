@@ -1,5 +1,6 @@
 import {request} from './studio-client.js';
 import {indexFiles, verifyManifestFiles} from './artifacts.js';
+import {workflowArgv, renderCommand} from './commands.js';
 
 const state = {
   registry: null,
@@ -33,6 +34,7 @@ const elements = {
   workflowProvider: document.querySelector("#workflow-provider"),
   workflowForm: document.querySelector("#workflow-form"),
   workflowOutput: document.querySelector("#workflow-output"),
+  commandShell: document.querySelector("#command-shell"),
   outputFeedback: document.querySelector("#output-feedback"),
   outputModeButtons: [...document.querySelectorAll("[data-output-mode]")],
   resetWorkflow: document.querySelector("#reset-workflow"),
@@ -136,7 +138,7 @@ function currentWorkflowValues() {
     const control = elements.workflowForm.elements.namedItem(field.id);
     if (!control) continue;
     if (field.type === "number") {
-      const parsed = Number(control.value);
+      const parsed = control.valueAsNumber;
       values[field.id] = Number.isFinite(parsed) ? parsed : control.value;
     } else if (field.type === "checkbox") {
       values[field.id] = control.checked;
@@ -149,7 +151,9 @@ function currentWorkflowValues() {
 
 function makeJob(workflow, values = currentWorkflowValues()) {
   const prompt = interpolate(workflow.promptTemplate, values);
-  const command = interpolate(workflow.commandTemplate, values);
+  const argv = workflowArgv(workflow, values);
+  const commandShell = elements.commandShell.value;
+  const command = renderCommand(argv, commandShell);
   const random = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   return {
     schemaVersion: "studio-handoff-v1",
@@ -160,6 +164,8 @@ function makeJob(workflow, values = currentWorkflowValues()) {
     mode: workflow.mode,
     inputs: values,
     prompt,
+    argv,
+    commandShell,
     command,
     expectedArtifacts: workflow.expectedArtifacts ?? [],
     providerBoundary: {
@@ -168,6 +174,7 @@ function makeJob(workflow, values = currentWorkflowValues()) {
       executedByStudio: false,
     },
     batchPolicy: workflow.batchPolicy ?? null,
+    ...(workflow.id === 'regenerate-single-item' ? {targetItem: {id: values.itemId}} : {}),
     status: "prepared",
     createdAt: new Date().toISOString(),
   };
@@ -176,9 +183,23 @@ function makeJob(workflow, values = currentWorkflowValues()) {
 function renderWorkflowOutput() {
   if (!state.workflow) return;
   state.formValues = currentWorkflowValues();
+  try {
+    if (!elements.workflowForm.checkValidity()) throw new Error('Complete the required fields and use valid numbers.');
+    workflowArgv(state.workflow, state.formValues);
+  } catch (error) {
+    state.preparedJob = null;
+    elements.workflowOutput.value = '';
+    elements.outputFeedback.textContent = error.message;
+    for (const button of [elements.copyOutput, elements.downloadOutput, elements.queueOutput]) button.disabled = true;
+    return;
+  }
+  for (const button of [elements.copyOutput, elements.downloadOutput, elements.queueOutput]) button.disabled = false;
+  elements.outputFeedback.textContent = '';
   if (!state.preparedJob || state.preparedJob.workflowId !== state.workflow.id || JSON.stringify(state.preparedJob.inputs) !== JSON.stringify(state.formValues))
     state.preparedJob = makeJob(state.workflow, state.formValues);
   const job = state.preparedJob;
+  job.commandShell = elements.commandShell.value;
+  job.command = renderCommand(job.argv, job.commandShell);
   if (state.outputMode === "command") {
     elements.workflowOutput.value = job.command;
   } else if (state.outputMode === "json") {
@@ -319,12 +340,16 @@ function downloadBlob(filename, content, type = "application/json") {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-elements.copyOutput.addEventListener("click", () =>
-  copyText(elements.workflowOutput.value),
-);
+elements.commandShell.addEventListener('change', renderWorkflowOutput);
+
+elements.copyOutput.addEventListener("click", () => {
+  renderWorkflowOutput();
+  if (state.preparedJob) copyText(elements.workflowOutput.value);
+});
 
 elements.downloadOutput.addEventListener("click", () => {
-  if (!state.workflow) return;
+  renderWorkflowOutput();
+  if (!state.preparedJob) return;
   const extension = state.outputMode === "json" ? "json" : state.outputMode === "command" ? "txt" : "md";
   downloadBlob(
     `${state.workflow.id}.${extension}`,
@@ -337,9 +362,10 @@ elements.downloadOutput.addEventListener("click", () => {
 elements.queueOutput.addEventListener("click", queueAction(async () => {
   if (!state.workflow) return;
   renderWorkflowOutput(); const job = state.preparedJob;
+  if (!job) return;
   await updateQueue({kind: 'add', job});
-  elements.outputFeedback.textContent = `Saved ${job.jobId} in this workspace.`;
   state.preparedJob = null; renderWorkflowOutput();
+  elements.outputFeedback.textContent = `Saved ${job.jobId} in this workspace.`;
 }));
 
 function revokeObjectUrls() {

@@ -9,10 +9,12 @@ import importlib.util
 import json
 import os
 import shutil
+import subprocess
 from pathlib import Path
 import tempfile
 import threading
 
+import jsonschema
 from playwright.sync_api import sync_playwright, expect
 from PIL import Image, ImageDraw
 
@@ -21,6 +23,82 @@ SKILL = ROOT / "SKILLS/spritesheet-expert"
 spec = importlib.util.spec_from_file_location("delivery_fixtures", ROOT / "tests/unit/test_item_delivery.py")
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
+
+
+def check_prepared_commands(page, temporary, screenshots):
+    page.context.grant_permissions(['clipboard-read', 'clipboard-write'])
+    schemas = SKILL / 'references/schemas'
+    registry = json.loads((SKILL / 'studio/workflows.json').read_text())
+    jsonschema.validate(registry, json.loads((schemas / 'studio-workflow-v1.schema.json').read_text()))
+    handoff_schema = json.loads((schemas / 'studio-session-v1.schema.json').read_text())
+    page.locator('[data-output-mode="json"]').click()
+    for workflow in registry['workflows']:
+        page.locator('#workflow-select').select_option(workflow['id'])
+        job = json.loads(page.locator('#workflow-output').input_value())
+        errors = list(jsonschema.Draft202012Validator(handoff_schema).iter_errors(job))
+        assert not errors, (workflow['id'], [error.message for error in errors[0].context])
+        assert (job['argv'] is None) == workflow['requiresProvider']
+    page.locator('#workflow-select').select_option('build-deterministic-item-atlas')
+    source = 'assets/á 雪 \' " ‘ ’ ‚ ‛ $(1+1) `echo UNEXPECTED` ; & | > < %PATH% ! *.png'
+    output = 'build/quoted folder\\'
+    page.get_by_label('Source image · required', exact=True).fill(source)
+    page.get_by_label('Output directory · required', exact=True).fill(output)
+    job = json.loads(page.locator('#workflow-output').input_value())
+    expected = ['python', 'scripts/build_deterministic_item_atlas.py', source,
+                '--output-dir', output, '--provenance', 'imported', '--alpha-high', '64',
+                '--alpha-low', '2', '--halo-radius', '6', '--grid-quantum', '32',
+                '--padding', '16', '--max-width', '4096']
+    assert job['argv'] == expected
+    probe = temporary / 'command quoting'
+    (probe / 'scripts').mkdir(parents=True)
+    (probe / expected[1]).write_text('import json, sys\nprint(json.dumps(sys.argv[1:]))\n')
+    shells = {'powershell': shutil.which('pwsh'), 'posix': shutil.which('sh')}
+    assert shells['powershell' if os.name == 'nt' else 'posix'], 'Native shell is required for the quoting regression'
+    for shell, executable in shells.items():
+        page.get_by_label('Command shell', exact=True).select_option(shell)
+        current = json.loads(page.locator('#workflow-output').input_value())
+        assert current['jobId'] == job['jobId'] and current['argv'] == expected
+        assert current['commandShell'] == shell
+        page.locator('[data-output-mode="command"]').click()
+        command = page.locator('#workflow-output').input_value()
+        assert command == current['command']
+        page.get_by_role('button', name='Copy output', exact=True).click()
+        expect(page.locator('#output-feedback')).to_have_text('Copied.')
+        clipboard = page.evaluate('navigator.clipboard.readText()')
+        assert clipboard.replace('\r\n', '\n') == command
+        with page.expect_download() as downloaded:
+            page.get_by_role('button', name='Download', exact=True).click()
+        downloaded.value.save_as(probe / 'download.txt')
+        assert (probe / 'download.txt').read_text(encoding='utf-8') == command
+        if executable:
+            script = probe / ('command.ps1' if shell == 'powershell' else 'command.sh')
+            script.write_text(clipboard, encoding='utf-8', newline='\n')
+            flags = ['-NoProfile', '-NonInteractive', '-File'] if shell == 'powershell' else []
+            result = subprocess.run([executable, *flags, str(script)], cwd=probe, capture_output=True, text=True, encoding='utf-8', timeout=30, check=True)
+            assert json.loads(result.stdout) == expected[2:], result.stdout
+            multiline = [*expected, '', 'first line\nsecond line\t雪', "'\"\\"]
+            rendered = page.evaluate("async ({argv, shell}) => (await import('./commands.js')).renderCommand(argv, shell)", {'argv': multiline, 'shell': shell})
+            page.evaluate('text => navigator.clipboard.writeText(text)', rendered)
+            copied_multiline = page.evaluate('navigator.clipboard.readText()')
+            script.write_text(copied_multiline, encoding='utf-8', newline='\n')
+            result = subprocess.run([executable, *flags, str(script)], cwd=probe, capture_output=True, text=True, encoding='utf-8', timeout=30, check=True)
+            assert json.loads(result.stdout) == multiline[2:], result.stdout
+            print(f'PASS: {shell} receives exact prepared arguments, including quotes, Unicode, shell syntax, empty strings and LF newlines')
+        page.locator('[data-output-mode="json"]').click()
+    page.get_by_label('Command shell', exact=True).select_option('powershell')
+    page.locator('[data-output-mode="command"]').click()
+    page.screenshot(path=str(screenshots / 'prepared-command-quoting.png'), full_page=True)
+    page.locator('[data-output-mode="json"]').click()
+    for field, value in [('source', ''), ('source', '   '), ('alphaHigh', ''), ('alphaHigh', '256'), ('alphaHigh', '1.5')]:
+        page.locator(f'#workflow-field-{field}').fill(value)
+        expect(page.locator('#workflow-output')).to_have_value('')
+        for button in ['copy-output', 'download-output', 'queue-output']:
+            expect(page.locator(f'#{button}')).to_be_disabled()
+        page.get_by_role('button', name='Reset', exact=True).click()
+    expect(page.locator('#queue-output')).to_be_enabled()
+    page.get_by_label('Source image · required', exact=True).fill(source)
+    page.get_by_label('Output directory · required', exact=True).fill(output)
+    print('PASS: invalid prepared jobs cannot be copied, downloaded or queued')
 
 
 def check_workspace(browser, temporary, source, screenshots):
@@ -43,6 +121,7 @@ def check_workspace(browser, temporary, source, screenshots):
         page.get_by_role("button", name="Create and open", exact=True).click()
         expect(page.locator("#workspace-name")).to_have_text("QA project")
         page.locator('[data-view="launcher"]').click()
+        check_prepared_commands(page, temporary, screenshots)
         page.locator("#workflow-select").select_option("build-deterministic-item-atlas")
         page.locator('[data-output-mode="json"]').click()
         job = json.loads(page.locator("#workflow-output").input_value())
