@@ -11,6 +11,7 @@ const requiredFiles = [
   "SKILLS/spritesheet-expert/scripts/spritecore/workspace.py",
   "SKILLS/spritesheet-expert/studio/studio-client.js",
   "SKILLS/spritesheet-expert/studio/artifacts.js",
+  "SKILLS/spritesheet-expert/studio/commands.js",
   "SKILLS/spritesheet-expert/references/workflow-lanes.json",
   "SKILLS/spritesheet-expert/scripts/check_workflow.py",
   "SKILLS/spritesheet-expert/studio/workspace.js",
@@ -70,7 +71,7 @@ if (registry) {
       } else {
         ids.add(workflow.id);
       }
-      for (const field of ["title", "description", "ownerSkill", "mode", "promptTemplate", "commandTemplate"]) {
+      for (const field of ["title", "description", "ownerSkill", "mode", "promptTemplate"]) {
         if (typeof workflow[field] !== "string" || workflow[field].trim() === "") {
           errors.push(`${workflow.id ?? "<unknown>"}: missing ${field}`);
         }
@@ -88,15 +89,27 @@ if (registry) {
           fieldIds.add(field.id);
         }
       }
-      for (const templateName of ["promptTemplate", "commandTemplate"]) {
-        const placeholders = new Set(
-          [...String(workflow[templateName] ?? "").matchAll(/\{\{([a-zA-Z0-9_-]+)\}\}/g)]
-            .map((match) => match[1]),
-        );
-        for (const placeholder of placeholders) {
-          if (!fieldIds.has(placeholder)) {
-            errors.push(`${workflow.id}: ${templateName} placeholder has no field: ${placeholder}`);
+      if ('commandTemplate' in workflow) errors.push(`${workflow.id}: replace commandTemplate with argvTemplate`);
+      if (workflow.argvTemplate === null) {
+        if (!workflow.requiresProvider) errors.push(`${workflow.id}: local workflows need command arguments`);
+      } else if (!Array.isArray(workflow.argvTemplate) || typeof workflow.argvTemplate[0] !== 'string' || !workflow.argvTemplate[0]) {
+        errors.push(`${workflow.id}: argvTemplate must start with a literal executable`);
+      } else {
+        for (const argument of workflow.argvTemplate) {
+          if (typeof argument === 'string') {
+            if (/[\0\r]|\{\{/.test(argument)) errors.push(`${workflow.id}: use a field reference for command inputs`);
+          } else if (!argument || Object.keys(argument).length !== 1 || !fieldIds.has(argument.field)) {
+            errors.push(`${workflow.id}: invalid command field reference`);
           }
+        }
+      }
+      const placeholders = new Set(
+        [...String(workflow.promptTemplate ?? "").matchAll(/\{\{([a-zA-Z0-9_-]+)\}\}/g)]
+          .map((match) => match[1]),
+      );
+      for (const placeholder of placeholders) {
+        if (!fieldIds.has(placeholder)) {
+          errors.push(`${workflow.id}: promptTemplate placeholder has no field: ${placeholder}`);
         }
       }
     }

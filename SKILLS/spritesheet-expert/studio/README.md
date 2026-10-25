@@ -50,8 +50,9 @@ python scripts/serve_item_studio.py --workspace X:/art-workspaces/blackflag
 Use `handoff --file operation.json` for `{ "kind": "add", "job": ... }` or
 `{ "kind": "archive", "jobIds": [...] }`. Jobs use `studio-handoff-v1`.
 Source import can link to a saved job ID, but that link is not provider provenance.
-Use paths relative to the workspace in prepared jobs. Historical absolute paths
-inside logs remain evidence; they are not used to locate current artifacts.
+Prepared CLI paths are relative to the installed skill directory, or absolute.
+Workspace records locate their artifacts relative to the workspace. Historical
+absolute paths inside logs remain evidence; they do not locate current artifacts.
 
 Exports are stored under `exports/` with archive and manifest hashes. Downloading
 checks the archive bytes again. Saved ZIPs are limited to 256 MiB; run copying is
@@ -85,6 +86,20 @@ From a standalone skill installation, run `.local/item-model-runtime/Scripts/pyt
 - Generates prompts, CLI commands, and `studio-handoff-v1` JSON jobs.
 - Copies or downloads prepared work.
 - Saves jobs in the workspace queue for explicit execution by another agent or provider.
+
+Choose **PowerShell 7.3+** or **POSIX sh / Bash / Zsh** before copying a CLI
+command. Run it from the installed `spritesheet-expert` skill directory. The
+JSON job contains the exact `argv` list, the selected `commandShell`, and the
+rendered `command`. Workers should pass `argv` directly to a process API with
+shell execution disabled. Provider jobs have `argv: null` and require an
+external adapter.
+
+Values stay literal, including spaces, quotes, Unicode and shell syntax.
+PowerShell commands require 7.3 or newer and set native argument passing only
+inside the command's local scope. Windows PowerShell 5.1 and cmd.exe are not
+supported command formats. Required fields and numeric limits must be valid
+before copy, download or queue. NUL and carriage returns are rejected; multiline
+values use LF. Changing the shell or output tab keeps the prepared job ID.
 
 ### Atlas Lab
 

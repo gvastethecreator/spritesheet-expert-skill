@@ -76,7 +76,7 @@
         "mode",
         "fields",
         "promptTemplate",
-        "commandTemplate",
+        "argvTemplate",
         "expectedArtifacts",
         "requiresProvider"
       ],
@@ -113,7 +113,22 @@
           "items": {"$ref": "#/$defs/field"}
         },
         "promptTemplate": {"type": "string", "minLength": 20},
-        "commandTemplate": {"type": "string", "minLength": 1},
+        "argvTemplate": {
+          "type": ["array", "null"],
+          "minItems": 1,
+          "prefixItems": [{"type": "string", "minLength": 1}],
+          "items": {
+            "oneOf": [
+              {"type": "string"},
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["field"],
+                "properties": {"field": {"type": "string", "minLength": 1}}
+              }
+            ]
+          }
+        },
         "expectedArtifacts": {
           "type": "array",
           "items": {"type": "string", "minLength": 1}

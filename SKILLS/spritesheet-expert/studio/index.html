@@ -182,7 +182,14 @@
                 <button type="button" role="tab" aria-selected="false" data-output-mode="json">JSON</button>
               </div>
             </div>
-            <textarea id="workflow-output" spellcheck="false" aria-label="Rendered workflow output"></textarea>
+            <label class="field compact-field">
+              <span>Command shell</span>
+              <select id="command-shell" aria-label="Command shell">
+                <option value="powershell">PowerShell 7.3+</option>
+                <option value="posix">POSIX sh / Bash / Zsh</option>
+              </select>
+            </label>
+            <textarea id="workflow-output" spellcheck="false" aria-label="Rendered workflow output" readonly></textarea>
             <div class="button-row">
               <button class="primary-button" id="copy-output" type="button">Copy output</button>
               <button class="secondary-button" id="download-output" type="button">Download</button>

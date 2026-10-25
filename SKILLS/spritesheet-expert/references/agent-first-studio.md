@@ -46,11 +46,19 @@ A complete natural-language handoff for another agent. It names the owner skill,
 
 ### CLI
 
-A local deterministic command. A CLI string may prepare jobs or process accepted media, but it must not imply that external inference already ran.
+A local command rendered from an argument list for the selected shell. Choose
+PowerShell 7.3+ or POSIX sh / Bash / Zsh, then run it from the installed skill
+directory. Quoting preserves literal values. Invalid fields block preparation;
+NUL and carriage returns are rejected, and multiline values use LF. Studio does
+not execute the command. Windows PowerShell 5.1 and cmd.exe are not supported.
 
 ### JSON
 
-A `studio-handoff-v1` job containing the prompt, command, structured inputs, expected artifacts, provider boundary, and execution status.
+A `studio-handoff-v1` job containing the prompt, structured inputs, `argv`,
+`commandShell`, rendered `command`, expected artifacts, provider boundary, and
+execution status. Workers use `argv` with shell execution disabled. External
+provider jobs have `argv: null`. Changing the output format or shell keeps the
+same prepared job ID.
 
 Copying, downloading, or queuing a handoff leaves `status: prepared`. Only an actual provider or worker adapter may advance execution state.
 
