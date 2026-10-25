@@ -1,5 +1,6 @@
 /* Local-only artifact viewer. Hashes are of original file bytes, not Canvas pixels. */
 import {exactFile, hashFile as hash, safeRelative, MAX_FILE_BYTES} from './artifacts.js';
+import {paintMatte} from './matte.js';
 (() => {
   "use strict";
   const $ = id => document.getElementById(id);
@@ -139,15 +140,7 @@ import {exactFile, hashFile as hash, safeRelative, MAX_FILE_BYTES} from './artif
     [...$("items").children].forEach((button, index) => button.setAttribute("aria-pressed", String(index === selected)));
     draw();
   }
-  function backdrop(ctx, width, height) {
-    const backgrounds = {black: "#000", white: "#fff", gray: "#777", checker: "#292929"};
-    ctx.fillStyle = backgrounds[$("background").value]; ctx.fillRect(0, 0, width, height);
-    if ($("background").value === "checker") {
-      ctx.fillStyle = "#363636";
-      for (let y = 0; y < height; y += 16) for (let x = 0; x < width; x += 16)
-        if ((x / 16 + y / 16) % 2) ctx.fillRect(x, y, 16, 16);
-    }
-  }
+  function backdrop(ctx, width, height) { paintMatte(ctx, width, height, $("background").value); }
   function draw() {
     if (!current || view === "delivery") return;
     const item = current.manifest.items[selected], canvas = $("canvas"), zoom = Number($("zoom").value);

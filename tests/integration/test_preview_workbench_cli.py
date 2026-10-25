@@ -184,4 +184,4 @@ def test_workbench_starts_large_provider_frames_at_a_fitted_zoom(tmp_path: Path)
     html = (run_dir / response["artifact"]["path"]).read_text(encoding="utf-8")
     assert "function fitInitialZoom()" in html
     assert "stage.dataset.initialZoom = zoomSelect.value" in html
-    assert "scrollbar-color:var(--line) #0d0d0c" in html
+    assert "scrollbar-color:var(--line) var(--scroll-track)" in html

@@ -179,6 +179,22 @@ def test_lucida_hard_alpha_policy_uses_the_declared_threshold(monkeypatch) -> No
     assert list(cutout.getchannel("A").tobytes()) == [0, 0, 255, 255]
 
 
+def test_native_alpha_honors_the_declared_hard_alpha_policy() -> None:
+    source = Image.new("RGBA", (8, 1), (220, 80, 40, 0))
+    source.putalpha(Image.frombytes("L", (8, 1), bytes([0, 0, 0, 0, 0, 0, 100, 200])))
+
+    cutout, method = backgrounds.remove_background(
+        source,
+        (255, 0, 255),
+        {"method": "alpha", "alpha_mode": "hard", "hard_alpha_threshold": 128},
+        _args(),
+        {},
+    )
+
+    assert method == "alpha"
+    assert list(cutout.getchannel("A").tobytes()) == [0, 0, 0, 0, 0, 0, 0, 255]
+
+
 def test_lucida_conservative_cleanup_removes_only_neutral_edge_leak(monkeypatch) -> None:
     source = Image.new("RGBA", (8, 8), (0, 0, 0, 255))
     soft = Image.new("RGBA", source.size, (0, 0, 0, 0))
@@ -305,3 +321,15 @@ def test_canonical_reference_state_falls_back_when_only_attack_exists() -> None:
     request = {"states": {"attack": {"animation_workflows": ["front-fps-attack"]}}}
 
     assert backgrounds.canonical_reference_state(request) == "attack"
+
+
+def test_row_frames_share_one_scale_when_a_wide_pose_needs_shrinking() -> None:
+    idle = Image.new("RGBA", (40, 80), (0, 0, 0, 0))
+    idle.paste((200, 60, 40, 255), (10, 0, 30, 80))
+    strike = Image.new("RGBA", (120, 80), (0, 0, 0, 0))
+    strike.paste((200, 60, 40, 255), (0, 0, 120, 80))
+
+    frames = backgrounds.fit_pose_frames([idle, strike], None, None, 64, 96, 2, 2)
+
+    heights = [frame.getbbox()[3] - frame.getbbox()[1] for frame in frames]
+    assert heights[0] == heights[1]

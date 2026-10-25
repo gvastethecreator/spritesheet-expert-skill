@@ -242,7 +242,11 @@ def main() -> int:
                 policy=resize_policy,
             )
             nontransparent = alpha_nonzero_count(frame)
-            validation = validate_frame(frame, allow_full_cell=allow_full_cell)
+            validation = validate_frame(
+                frame,
+                allow_full_cell=allow_full_cell,
+                allow_sparse=request.get("asset_kind") == "vfx",
+            )
             errors.extend(
                 f"{state} frame {frame_index}: {failure}"
                 for failure in validation.failures

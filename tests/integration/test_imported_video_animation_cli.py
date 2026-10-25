@@ -113,12 +113,12 @@ def test_imported_video_builds_raw_provenance_and_required_selector(tmp_path: Pa
     selector_html = selector.read_text(encoding="utf-8")
     assert "unsafeFrames" in selector_html
     assert "scaleUnsafeFrames" in selector_html
-    assert "BORDE" in selector_html
-    assert "ESCALA" in selector_html
-    assert "márgenes fuente seguros" in selector_html
-    assert "Copiar comando revisado" in selector_html
+    assert "EDGE" in selector_html
+    assert "SCALE" in selector_html
+    assert "safe source margins" in selector_html
+    assert "Copy reviewed command" in selector_html
     assert "reviewContract" in selector_html
-    assert "confirma 5 checks" in selector_html
+    assert "confirm all review checks" in selector_html
     evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
     assert evidence["status"] == "pass"
     assert evidence["decoded_frame_count"] == 36

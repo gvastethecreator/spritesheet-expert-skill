@@ -373,7 +373,9 @@ def test_registration_resampling_follows_canonical_sampling_policy(
     )
 
     assert registered.returncode == 0, registered.stdout + registered.stderr
+    manifest = json.loads((out_dir / "frames" / "frames-manifest.json").read_text(encoding="utf-8"))
     output = Image.open(out_dir / "frames" / "props" / "frame-0.png").convert("RGBA")
+    assert manifest["sprite_registration"]["baseline_y"] == output.getbbox()[3]
     source_palette = {
         (0, 0, 0, 0),
         (32, 96, 224, 255),

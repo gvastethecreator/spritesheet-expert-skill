@@ -9,7 +9,7 @@ import sys
 from PIL import Image
 import pytest
 
-from convert_pixel_art import convert, validate
+from convert_pixel_art import accent_preserving_palette, convert, validate
 
 SCRIPTS = Path(__file__).resolve().parents[2] / 'SKILLS/spritesheet-expert/scripts'
 
@@ -26,7 +26,7 @@ def fixture(tmp_path, *, temporal=True):
     request = {'operation': 'convert-to-pixel-art', 'source': 'source.png', 'grid': [2, 1],
                'cell': [8, 8], 'palette_size': 2, 'semantics': 'animation' if temporal else 'variants', 'state': 'jump'}
     if temporal:
-        request.update(fps=9, loop=False, pivot=[4, 7])
+        request.update(fps=9, loop=False, pivot=[4, 7], action='responsive jump', animation_workflows=['responsive-jump'])
     path = tmp_path / 'request.json'
     path.write_text(json.dumps(request))
     return path, request, image
@@ -45,15 +45,18 @@ def test_conversion_preserves_motion_alpha_timing_and_existing_import(tmp_path):
     manifest = json.loads((output / 'conversion.json').read_text())
     assert manifest['conversion']['output_pivot'] == [4, 7]
     assert len(manifest['conversion']['palette']) == 2
-    assert manifest['animation']['rows']['jump'] == {'fps': 9, 'loop': False}
+    assert manifest['animation']['rows']['jump'] == {
+        'fps': 9, 'loop': False, 'action': 'responsive jump', 'animation_workflows': ['responsive-jump']}
     result = subprocess.run([sys.executable, str(SCRIPTS / 'unpack_atlas_run.py'),
         '--manifest', str(output / 'conversion.json'), '--out-dir', str(tmp_path / 'run'),
-        '--frame-semantics', 'animation', '--background-removal', 'none', '--extraction-mode', 'slots'],
+        '--frame-semantics', 'animation', '--background-removal', 'none', '--extraction-mode', 'components'],
         capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
     imported = json.loads((tmp_path / 'run/sprite-request.json').read_text())
     assert imported['states']['jump']['fps'] == 9
     assert imported['states']['jump']['loop'] is False
+    assert imported['states']['jump']['action'] == 'responsive jump'
+    assert imported['states']['jump']['animation_workflows'] == ['responsive-jump']
     images = sorted((tmp_path / 'run/frames/jump').glob('*.png'))
     assert len(images) == 2
     assert Image.open(images[1]).convert('RGBA').tobytes() == Image.open(output / 'frames/0001.png').convert('RGBA').tobytes()
@@ -100,3 +103,13 @@ def test_conversion_rejects_output_reuse_and_pixel_drift(tmp_path):
     image.save(out / 'frames/0000.png')
     with pytest.raises(ValueError, match='Pixel mismatch'):
         validate(out)
+
+
+def test_palette_keeps_a_small_saturated_accent_that_median_cut_drops():
+    browns = [(90 + i % 40, 50 + i % 25, 30 + i % 10) for i in range(4000)]
+    purple_tongue = [(110, 30, 150)] * 40
+
+    palette = accent_preserving_palette(browns + purple_tongue, 8)
+
+    assert len(palette) <= 8
+    assert (110, 30, 150) in palette

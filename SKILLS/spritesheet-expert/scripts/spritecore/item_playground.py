@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from base64 import b64encode
 from io import BytesIO
+import html
 import json
 import posixpath
 from pathlib import Path, PurePosixPath
@@ -19,6 +20,7 @@ from typing import Any, Mapping
 from PIL import Image
 
 from spritecore.paths import PathSafetyError, resolve_run_path
+from spritecore.tool_theme import THEME_SCRIPT, TOOL_CSS
 
 
 class ItemPlaygroundError(ValueError):
@@ -300,9 +302,52 @@ def prepare_playground(
 
 def _render_html(data: Mapping[str, Any]) -> str:
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-    return _HTML_TEMPLATE.replace("__TITLE__", "Item atlas playground").replace(
-        "__RUN_ID__", str(data.get("runId") or "")
-    ).replace("__PAYLOAD__", payload)
+    return (
+        _HTML_TEMPLATE.replace("__THEME_CSS__", TOOL_CSS + _PLAYGROUND_CSS)
+        .replace("__THEME_SCRIPT__", THEME_SCRIPT)
+        .replace("__TITLE__", "Item atlas playground")
+        .replace("__RUN_ID__", html.escape(str(data.get("runId") or "")))
+        .replace("__PAYLOAD__", payload)
+    )
+
+
+_PLAYGROUND_CSS = """
+.pg-toolbar { padding:10px 16px; border-bottom:1px solid var(--line); background:var(--surface); position:sticky; top:0; z-index:5; }
+.pg-toolbar .spacer { flex:1; }
+.pg-toolbar input[type="search"] { min-height:32px; min-width:0; width:200px; max-width:100%; padding:0 10px; border:1px solid var(--line); border-radius:var(--radius); background:var(--raised); }
+.stats { display:flex; flex-wrap:wrap; gap:4px 16px; padding:8px 16px; border-bottom:1px solid var(--line); color:var(--muted); font:12px var(--font-mono); }
+.stats b { color:var(--ink); font-weight:600; }
+.pg-main { display:grid; grid-template-columns:minmax(0,1fr) 340px; min-height:0; }
+.cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(156px,1fr)); gap:8px; padding:12px 16px 24px; align-content:start; }
+.item-card { display:grid; gap:6px; min-width:0; padding:6px; border:1px solid var(--line); border-radius:var(--radius-lg); background:var(--surface); color:var(--ink); cursor:pointer; text-align:left; }
+.item-card:hover { border-color:var(--line-strong); }
+.item-card[aria-current="true"] { border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent); }
+.item-card .thumb { display:grid; place-items:center; height:100px; border-radius:var(--radius); overflow:hidden; background:conic-gradient(var(--checker-a) 25%, var(--checker-b) 0 50%, var(--checker-a) 0 75%, var(--checker-b) 0) 0 0/12px 12px; }
+.item-card canvas { max-width:100%; max-height:92px; image-rendering:pixelated; }
+.item-card .row { display:flex; flex-wrap:wrap; justify-content:space-between; gap:4px 6px; align-items:center; }
+.item-card { overflow:hidden; }
+.item-card > *, .item-card .row > * { min-width:0; }
+.item-card .chip { display:block; max-width:100%; height:auto; padding:3px 7px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.item-card .chip::before { display:inline-block; margin-right:5px; vertical-align:1px; }
+.item-card .id { color:var(--muted); font:10px var(--font-mono); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.item-card .dims { font:11px var(--font-mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.item-card .marks { display:flex; flex-wrap:wrap; gap:4px; }
+.chip.flag { color:var(--warn); }
+.pg-main .stage { min-height:260px; }
+.pg-main .stage canvas { margin:24px; }
+.rail .toolbar { margin-top:10px; }
+.decision { display:flex; }
+.decision .btn { flex:1; }
+.decision .btn[data-status="approved"][aria-pressed="true"] { background:var(--ok); border-color:var(--ok); color:var(--bg); }
+.decision .btn[data-status="rejected"][aria-pressed="true"] { background:var(--bad); border-color:var(--bad); color:var(--bg); }
+textarea { width:100%; min-height:56px; margin-top:8px; padding:7px 9px; resize:vertical; border:1px solid var(--line); border-radius:var(--radius); background:var(--raised); color:var(--ink); font:inherit; }
+details.previews summary { cursor:pointer; color:var(--muted); }
+details.previews img { display:block; width:100%; margin-top:8px; border:1px solid var(--line); border-radius:var(--radius); image-rendering:pixelated; }
+.apply code { display:block; margin-top:6px; padding:8px; border:1px solid var(--line); border-radius:var(--radius); background:var(--sunken); color:var(--ink); font:11px/1.5 var(--font-mono); white-space:pre-wrap; word-break:break-all; }
+.hint { margin-top:6px; color:var(--muted); font-size:12px; }
+.atlas-source { display:none; }
+@media (max-width:900px) { .pg-main { grid-template-columns:minmax(0,1fr); } .rail { border-left:0; border-top:1px solid var(--line); } .brand-mark { display:none; } }
+"""
 
 
 _HTML_TEMPLATE = """<!doctype html>
@@ -310,84 +355,21 @@ _HTML_TEMPLATE = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="dark">
+<meta name="color-scheme" content="dark light">
 <title>__TITLE__</title>
-<style>
-:root { color-scheme: dark; --ink:#f4f0e8; --muted:#a9a49b; --line:#393832; --panel:#171715; --accent:#ffbd59; --stage:#252522; --ok:#7bd88f; --bad:#ff7a6b; --warn:#e8c66b; }
-* { box-sizing:border-box; scrollbar-width:thin; scrollbar-color:var(--line) #0d0d0c; }
-*::-webkit-scrollbar { width:10px; height:10px; }
-*::-webkit-scrollbar-track { background:#0d0d0c; }
-*::-webkit-scrollbar-thumb { background:var(--line); border:2px solid #0d0d0c; border-radius:999px; }
-body { margin:0; min-width:320px; background:#0d0d0c; color:var(--ink); font:14px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; }
-button, select, input, textarea { font:inherit; }
-button, select { color:var(--ink); background:#22221f; border:1px solid var(--line); border-radius:5px; }
-button { min-height:32px; padding:5px 10px; cursor:pointer; }
-button:hover, select:focus-visible, input:focus-visible, textarea:focus-visible { border-color:var(--accent); outline:2px solid transparent; }
-input[type="search"] { min-height:32px; padding:5px 9px; background:#22221f; border:1px solid var(--line); border-radius:5px; color:var(--ink); }
-header { padding:18px 22px 14px; border-bottom:1px solid var(--line); }
-.eyebrow { margin:0 0 5px; color:var(--accent); font-size:11px; letter-spacing:.14em; text-transform:uppercase; }
-h1 { margin:0; font:600 clamp(18px, 2.6vw, 26px)/1.1 ui-sans-serif, system-ui, sans-serif; letter-spacing:-.03em; word-break:break-all; }
-.stats { display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:10px; color:var(--muted); font-size:12px; }
-.stats b { color:var(--ink); font-weight:600; }
-.toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:12px 22px; border-bottom:1px solid var(--line); position:sticky; top:0; background:#0d0d0cEE; backdrop-filter:blur(4px); z-index:5; }
-.toolbar .gap { flex:1; }
-.toolbar select { min-height:32px; padding:5px 24px 5px 8px; }
-.chip { min-height:26px; padding:3px 9px; font-size:12px; border-radius:999px; }
-.chip[aria-pressed="true"] { color:#15120d; background:var(--accent); border-color:var(--accent); }
-.progress { color:var(--muted); font-size:12px; }
-main { display:grid; grid-template-columns:minmax(0,1fr) 340px; min-height:0; }
-.cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(148px,1fr)); gap:10px; padding:16px 22px 24px; align-content:start; }
-.card { display:grid; justify-items:center; gap:6px; padding:10px 8px 8px; background:var(--panel); border:1px solid var(--line); border-radius:8px; cursor:pointer; text-align:center; }
-.card:hover { border-color:var(--accent); }
-.card[aria-current="true"] { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
-.card .thumb { display:grid; place-items:center; width:100%; height:104px; border-radius:5px; background:#333026; background-image:linear-gradient(45deg,#2c2c29 25%,transparent 25%),linear-gradient(-45deg,#2c2c29 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#2c2c29 75%),linear-gradient(-45deg,transparent 75%,#2c2c29 75%); background-position:0 0,0 8px,8px -8px,-8px 0; background-size:16px 16px; overflow:hidden; }
-.card canvas { image-rendering:pixelated; image-rendering:crisp-edges; max-width:100%; max-height:100px; }
-.card .id { font-size:10px; color:var(--muted); word-break:break-all; }
-.card .dims { font-size:11px; }
-.card .marks { display:flex; flex-wrap:wrap; gap:4px; justify-content:center; min-height:16px; }
-.mark { font-size:9px; padding:1px 6px; border-radius:999px; border:1px solid var(--line); color:var(--warn); }
-.mark.approved { color:var(--ok); border-color:var(--ok); }
-.mark.rejected { color:var(--bad); border-color:var(--bad); }
-aside { border-left:1px solid var(--line); background:var(--panel); padding:16px; display:flex; flex-direction:column; gap:14px; }
-.stage { display:grid; place-items:center; min-height:280px; overflow:auto; border:1px solid var(--line); border-radius:8px; }
-.stage[data-background="checker"] { background-image:linear-gradient(45deg,#333 25%,transparent 25%),linear-gradient(-45deg,#333 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#333 75%),linear-gradient(-45deg,transparent 75%,#333 75%); background-position:0 0,0 8px,8px -8px,-8px 0; background-size:16px 16px; }
-.stage[data-background="black"] { background:#000; }
-.stage[data-background="gray"] { background:#808080; }
-.stage[data-background="white"] { background:#fff; }
-.stage canvas { image-rendering:pixelated; image-rendering:crisp-edges; }
-.meta { display:grid; grid-template-columns:auto 1fr; gap:4px 12px; font-size:12px; }
-.meta dt { color:var(--muted); }
-.meta dd { margin:0; word-break:break-all; }
-.decision { display:flex; gap:6px; }
-.decision button { flex:1; }
-.decision button[aria-pressed="true"] { color:#15120d; background:var(--accent); border-color:var(--accent); }
-.decision button[data-status="approved"][aria-pressed="true"] { background:var(--ok); border-color:var(--ok); }
-.decision button[data-status="rejected"][aria-pressed="true"] { background:var(--bad); border-color:var(--bad); }
-textarea { width:100%; min-height:56px; resize:vertical; background:#22221f; border:1px solid var(--line); border-radius:5px; color:var(--ink); padding:7px 9px; }
-.controls { display:flex; flex-wrap:wrap; gap:6px; }
-details.previews { border:1px solid var(--line); border-radius:8px; padding:10px; }
-details.previews summary { cursor:pointer; color:var(--muted); }
-details.previews img { display:block; width:100%; margin-top:8px; border:1px solid var(--line); border-radius:5px; image-rendering:pixelated; }
-.evidence-list { list-style:none; margin:0; padding:0; font-size:12px; }
-.evidence-list a { color:var(--ink); text-decoration:none; }
-.evidence-list a:hover { color:var(--accent); }
-.apply-box { border:1px solid var(--line); border-radius:8px; padding:10px; font-size:12px; }
-.apply-box code { display:block; margin-top:6px; padding:8px; background:#0d0d0c; border:1px solid var(--line); border-radius:5px; white-space:pre-wrap; word-break:break-all; color:var(--accent); }
-.hint { color:var(--muted); font-size:11px; }
-.empty { color:var(--muted); font-style:italic; padding:22px; }
-.atlas-source { display:none; }
-kbd { border:1px solid var(--line); border-bottom-width:2px; border-radius:3px; padding:0 4px; font-size:11px; }
-@media (max-width:900px) { main { grid-template-columns:1fr; } aside { border-left:0; border-top:1px solid var(--line); } }
-</style>
+<style>__THEME_CSS__</style>
 </head>
 <body>
-<header>
-  <p class="eyebrow">Deterministic item atlas</p>
-  <h1>__RUN_ID__</h1>
-  <div class="stats" id="stats"></div>
+<div class="tool">
+<header class="tool-header">
+  <div class="brand"><span class="brand-mark">Item atlas</span><h1>__RUN_ID__</h1></div>
+  <div class="status" id="progress" aria-live="polite"></div>
+  <button type="button" class="btn btn-icon" id="theme-toggle" aria-label="Switch theme"><span aria-hidden="true">&#9680;</span></button>
 </header>
-<div class="toolbar">
-  <input type="search" id="query" placeholder="Filter by item id" aria-label="Filter by item id" style="min-width:180px">
+<div>
+<div class="stats" id="stats"></div>
+<div class="toolbar pg-toolbar">
+  <input type="search" id="query" placeholder="Filter by item id" aria-label="Filter by item id">
   <select id="status-filter" aria-label="Filter by decision">
     <option value="all">All decisions</option>
     <option value="pending">Pending</option>
@@ -401,46 +383,51 @@ kbd { border:1px solid var(--line); border-bottom-width:2px; border-radius:3px; 
     <option value="area-asc">Area: small to large</option>
     <option value="id">Item id</option>
   </select>
-  <button class="chip" id="bulk-approve" title="Approve every item passing the current filters">Approve shown</button>
-  <button class="chip" id="bulk-reset">Reset shown</button>
-  <span class="gap"></span>
-  <span class="progress" id="progress"></span>
-  <button id="export" style="border-color:var(--accent); color:var(--accent)">Export item-review.json</button>
+  <div class="seg"><button type="button" class="btn" id="bulk-approve" title="Approve every item passing the current filters">Approve shown</button><button type="button" class="btn" id="bulk-reset">Reset shown</button></div>
+  <span class="spacer"></span>
+  <button type="button" class="btn btn-primary" id="export">Export item-review.json</button>
 </div>
-<main>
+<main class="pg-main">
   <section aria-label="Item grid">
     <div class="cards" id="cards"></div>
     <p class="empty" id="empty" hidden>No items match the current filters.</p>
   </section>
-  <aside aria-label="Selected item">
-    <div class="stage" data-background="checker" id="stage"><canvas id="detail-canvas" role="img" alt="Selected item"></canvas></div>
-    <div class="controls">
-      <button id="prev" aria-label="Previous item">&#8592;</button>
-      <button id="next" aria-label="Next item">&#8594;</button>
-      <select id="zoom" aria-label="Zoom"><option value="1">1x</option><option value="2">2x</option><option value="4">4x</option><option value="8">8x</option></select>
-      <select id="background" aria-label="Background">
-        <option value="checker">Checker</option><option value="black">Black</option><option value="gray">Gray</option><option value="white">White</option>
-      </select>
-    </div>
-    <dl class="meta" id="meta"></dl>
-    <div class="decision" role="group" aria-label="Review decision">
-      <button data-status="pending">Pending</button>
-      <button data-status="approved">Approve</button>
-      <button data-status="rejected">Reject</button>
-    </div>
-    <textarea id="notes" placeholder="Notes for this item (kept in the exported review)"></textarea>
-    <details class="previews" id="previews"><summary>Sheet previews</summary></details>
-    <ul class="evidence-list" id="evidence"></ul>
-    <div class="apply-box">
+  <aside class="rail" aria-label="Selected item">
+    <section class="rail-section">
+      <div class="stage" data-background="checker" id="stage"><canvas id="detail-canvas" data-sampling="nearest" role="img" aria-label="Selected item"></canvas></div>
+      <div class="toolbar">
+        <div class="group"><button type="button" class="btn btn-icon" id="prev" aria-label="Previous item">&#9664;</button><button type="button" class="btn btn-icon" id="next" aria-label="Next item">&#9654;</button></div>
+        <label class="field">Zoom <select id="zoom" aria-label="Zoom"><option value="1">1&#215;</option><option value="2">2&#215;</option><option value="4">4&#215;</option><option value="8">8&#215;</option></select></label>
+        <label class="field">Matte <select id="background" aria-label="Background"><option value="checker">Checker</option><option value="black">Black</option><option value="gray">Gray</option><option value="white">White</option></select></label>
+      </div>
+    </section>
+    <section class="rail-section">
+      <h2 class="rail-title">Decision</h2>
+      <div class="seg decision" role="group" aria-label="Review decision">
+        <button type="button" class="btn" data-status="pending">Pending</button>
+        <button type="button" class="btn" data-status="approved">Approve</button>
+        <button type="button" class="btn" data-status="rejected">Reject</button>
+      </div>
+      <textarea id="notes" aria-label="Notes" placeholder="Notes for this item (kept in the exported review)"></textarea>
+      <p class="hint"><kbd>&#8592;</kbd> <kbd>&#8594;</kbd> move &#183; <kbd>A</kbd> approve &#183; <kbd>X</kbd> reject &#183; <kbd>P</kbd> pending</p>
+    </section>
+    <section class="rail-section"><h2 class="rail-title">Item</h2><dl class="facts" id="meta"></dl></section>
+    <section class="rail-section"><h2 class="rail-title">Evidence</h2>
+      <details class="previews" id="previews"><summary>Sheet previews</summary></details>
+      <ul class="list" id="evidence"></ul>
+    </section>
+    <section class="rail-section apply"><h2 class="rail-title">Apply</h2>
       Apply the exported review, then validate the successor:
       <code id="apply-command"></code>
       <p class="hint">Undecided items stay <b>pending</b>; applying them requires <b>--allow-pending</b> or a full decision set. The playground never edits the run.</p>
-    </div>
-    <p class="hint"><kbd>&#8592;</kbd><kbd>&#8594;</kbd> move &#183; <kbd>A</kbd> approve &#183; <kbd>X</kbd> reject &#183; <kbd>P</kbd> pending</p>
+    </section>
   </aside>
 </main>
+</div>
+</div>
 <div id="page-images" class="atlas-source"></div>
 <script type="application/json" id="playground-data">__PAYLOAD__</script>
+<script>__THEME_SCRIPT__</script>
 <script>
 (() => {
   'use strict';
@@ -511,25 +498,23 @@ kbd { border:1px solid var(--line); border-bottom-width:2px; border-radius:3px; 
     const pending = document.createDocumentFragment();
     visible.forEach(item => {
       const card = document.createElement('button');
-      card.type = 'button'; card.className = 'card'; card.dataset.id = item.id;
+      card.type = 'button'; card.className = 'item-card'; card.dataset.id = item.id;
       card.setAttribute('aria-current', String(item.id === selected));
       const thumb = document.createElement('div'); thumb.className = 'thumb';
       const canvas = document.createElement('canvas');
       thumb.append(canvas);
-      const dims = document.createElement('div'); dims.className = 'dims';
-      dims.textContent = item.size ? item.size[0] + ' x ' + item.size[1] : '';
+      const row = document.createElement('div'); row.className = 'row';
+      const dims = document.createElement('span'); dims.className = 'dims';
+      dims.textContent = item.size ? item.size[0] + ' \u00d7 ' + item.size[1] : '';
+      const chip = document.createElement('span'); chip.className = 'chip'; chip.dataset.status = decisionOf(item.id).status; chip.textContent = decisionOf(item.id).status;
+      row.append(dims, chip);
       const id = document.createElement('div'); id.className = 'id'; id.textContent = item.id;
       const marks = document.createElement('div'); marks.className = 'marks';
-      const status = decisionOf(item.id).status;
-      if (status !== 'pending') {
-        const mark = document.createElement('span'); mark.className = 'mark ' + status; mark.textContent = status;
-        marks.append(mark);
-      }
       item.flags.forEach(flag => {
-        const mark = document.createElement('span'); mark.className = 'mark'; mark.title = flag; mark.textContent = flagLabel(flag);
+        const mark = document.createElement('span'); mark.className = 'chip flag'; mark.title = flag; mark.textContent = flagLabel(flag);
         marks.append(mark);
       });
-      card.append(thumb, dims, marks, id);
+      card.append(thumb, row, id, marks);
       card.addEventListener('click', () => { selected = item.id; render(); });
       pending.append(card);
       drawThumb(canvas, item);
@@ -542,16 +527,17 @@ kbd { border:1px solid var(--line); border-bottom-width:2px; border-radius:3px; 
     statsBox.replaceChildren();
     const add = (label, value) => {
       const span = document.createElement('span');
-      span.innerHTML = label.replace('__V__', '<b>' + value + '</b>');
+      const strong = document.createElement('b'); strong.textContent = String(value);
+      span.append(label + ' ', strong);
       statsBox.append(span);
     };
-    add('items <b>__V__</b>', data.stats.items);
-    add('flagged <b>__V__</b>', flagged);
-    add('pending px <b>__V__</b>', data.stats.pendingPixels == null ? 'n/a' : data.stats.pendingPixels);
-    add('pages <b>__V__</b>', data.pages.length);
-    add('classification <b>__V__</b>', data.stats.classificationComplete ? 'complete' : 'unclassified');
-    add('source <b>__V__</b>', data.sourceProvenance || 'n/a');
-    progressBox.textContent = 'reviewed ' + (summary.approved + summary.rejected) + ' / ' + data.stats.items;
+    add('items', data.stats.items);
+    add('flagged', flagged);
+    add('pending px', data.stats.pendingPixels == null ? 'n/a' : data.stats.pendingPixels);
+    add('pages', data.pages.length);
+    add('classification', data.stats.classificationComplete ? 'complete' : 'unclassified');
+    add('source', data.sourceProvenance || 'n/a');
+    progressBox.textContent = 'reviewed ' + (summary.approved + summary.rejected) + ' / ' + data.stats.items + ' \u00b7 approved ' + summary.approved + ' \u00b7 rejected ' + summary.rejected;
   }
   function renderDetail() {
     const item = itemById(selected);
@@ -565,7 +551,7 @@ kbd { border:1px solid var(--line); border-bottom-width:2px; border-radius:3px; 
     detailContext.clearRect(0, 0, frame[2], frame[3]);
     detailContext.drawImage(source, frame[0], frame[1], frame[2], frame[3], 0, 0, frame[2], frame[3]);
     if (item.pivot) {
-      detailContext.fillStyle = 'rgba(255,189,89,.85)';
+      detailContext.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#7aa2ff';
       const px = Math.round(item.pivot[0] * frame[2]) - .5;
       const py = Math.round(item.pivot[1] * frame[3]) - .5;
       detailContext.fillRect(px, 0, 1, frame[3]);
@@ -613,7 +599,7 @@ kbd { border:1px solid var(--line); border-bottom-width:2px; border-radius:3px; 
     if (!data.evidence.length) { list.replaceChildren(); return; }
     data.evidence.forEach(entry => {
       const li = document.createElement('li');
-      const link = document.createElement('a');
+      const link = document.createElement('a'); link.className = 'list-row';
       link.href = entry.href; link.target = '_blank'; link.rel = 'noopener'; link.textContent = entry.label;
       li.append(link); list.append(li);
     });

@@ -23,7 +23,9 @@ Example request for one temporal row:
   "state": "jump",
   "fps": 8,
   "loop": true,
-  "pivot": [96, 168]
+  "pivot": [96, 168],
+  "action": "responsive jump with takeoff and landing",
+  "animation_workflows": ["responsive-jump"]
 }
 ```
 
@@ -45,10 +47,11 @@ Validation recomputes palette, frames, layout and preview from the copied source
 After inspecting the conversion, import its exact layout through the existing entry point:
 
 ```bash
-python <skill-dir>/scripts/unpack_atlas_run.py --manifest work/pixel-conversion/conversion.json --out-dir work/converted-run --frame-semantics animation --background-removal none --extraction-mode slots
+python <skill-dir>/scripts/unpack_atlas_run.py --manifest work/pixel-conversion/conversion.json --out-dir work/converted-run --frame-semantics animation --background-removal none --extraction-mode components
+python <skill-dir>/scripts/register_sprite_frames.py --run-dir work/converted-run --out-dir work/registered-run --target-bottom <output pivot y>
 ```
 
-Use the actual semantics instead of `animation` for another kind. The existing manifest reader carries the rectangles, integer FPS and loop policy. The converted source has imported provenance. Keep the conversion bundle linked in the run's source evidence.
+Use the actual semantics instead of `animation` for another kind; static variants and still assets keep `--extraction-mode slots` and the asset-slot review. The existing manifest reader carries the rectangles, integer FPS, loop policy, and the optional `action` and `animation_workflows` that the conversion request declares. Declare them in the conversion request so the animation contract gate knows the row's workflow. Registration writes the per-frame identity metrics that the identity gate reads; run the gates on the registered run. The converted source has imported provenance. Keep the conversion bundle linked in the run's source evidence.
 
 The converted pivot remains in `conversion.output_pivot`; the importer does not apply that field as runtime registration. Carry it into the explicit registration/runtime contract before packaging. Do not infer a new foot baseline from the reduced frames. Run the lane's existing playback/contact/identity and final validation gates. Recheck any accepted source or art review because conversion creates new pixels. Tiles and seamless textures need their adjacency/repeat contract and are outside this first converter.
 

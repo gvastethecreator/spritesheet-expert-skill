@@ -977,12 +977,12 @@ def remove_background(
     if method == "alpha":
         if transparent_edge_ratio(source) < 0.70 or source.getchannel("A").getbbox() is None:
             raise RuntimeError("native alpha failed exterior validation; review the source before selecting neutral matte removal")
-        return source, "alpha"
+        return apply_alpha_policy(source, config), "alpha"
     if method == "none":
         return source, "none"
     if method == "auto":
         if transparent_edge_ratio(source) >= 0.70:
-            return source, "alpha"
+            return apply_alpha_policy(source, config), "alpha"
         if (
             config.get("source_family") == "legacy-chroma"
             and chroma_edge_ratio(source, chroma_key, args.key_threshold) >= 0.45
@@ -2427,11 +2427,26 @@ def fit_pose_frames(
 ) -> list[Image.Image]:
     frames = []
     reference_height = int(reference_metrics.get("height", 0)) if reference_metrics else None
+    # One scale per row: contain-fitting each pose on its own shrinks only the
+    # wide poses (an extended strike arm) and makes the body jump in size.
+    max_width = max(1, cell_width - safe_margin_x * 2)
+    max_height_all = max(1, cell_height - safe_margin_y * 2)
+    boxes = [sprite.getbbox() for sprite in sprites]
+    row_scale = min(
+        [1.0]
+        + [
+            min(max_width / (box[2] - box[0]), max_height_all / (box[3] - box[1]))
+            for box in boxes
+            if box
+        ]
+    )
     for index, sprite in enumerate(sprites):
         bottom_y = None
         max_height = None
         top_margin = None
         scale_override = stable_feature_scale(sprite, pose_geometry, reference_metrics)
+        if scale_override is None and row_scale < 1.0:
+            scale_override = row_scale
         if (
             registration
             and registration.get("scale_policy") == "source-reference"
@@ -2643,6 +2658,7 @@ def inspect_frames(
         validation = validate_frame(
             frame,
             allow_full_cell=bool(getattr(args, "allow_full_cell", False)),
+            allow_sparse=bool(getattr(args, "allow_sparse", False)),
         )
         if bool(getattr(args, "pixel_art", False)):
             alpha_invariant = inspect_hard_alpha(frame)
@@ -2792,6 +2808,7 @@ def main() -> int:
     args.allow_full_cell = (
         extraction_mode == "slots" and asset_kind in {"texture", "tileset"}
     )
+    args.allow_sparse = asset_kind == "vfx"
     background_removal = normalize_background_removal(request, args)
     grid_segmentation = normalize_grid_segmentation(request, args, extraction_mode)
     background_sessions: dict[str, Any] = {}

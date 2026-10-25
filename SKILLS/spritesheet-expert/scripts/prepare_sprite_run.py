@@ -1126,7 +1126,7 @@ def normalize_states(raw: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
             normalized[state]["pose_geometry"] = entry["pose_geometry"]
         if "raw_layout" in entry:
             normalized[state]["raw_layout"] = entry["raw_layout"]
-        for key in ("label", "labels", "asset_labels", "asset_names"):
+        for key in ("vfx", "label", "labels", "asset_labels", "asset_names"):
             if key in entry:
                 normalized[state][key] = entry[key]
     return normalized

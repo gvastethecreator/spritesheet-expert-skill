@@ -1,4 +1,5 @@
 import {request as api, session} from './studio-client.js';
+import {paintMatte} from './matte.js';
 
 const $ = (id) => document.getElementById(`local-${id}`);
 let runId = "", snapshot = null, sourceImage = null, pendingImage = null;
@@ -73,7 +74,7 @@ function draw() {
   canvas.width = sourceImage.width; canvas.height = sourceImage.height;
   const zoom = $("zoom").value;
   canvas.style.width = zoom === "fit" ? "100%" : `${sourceImage.width * Number(zoom)}px`;
-  context.fillStyle = $("bg").value; context.fillRect(0,0,canvas.width,canvas.height);
+  paintMatte(context, canvas.width, canvas.height, $("bg").value);
   context.drawImage(sourceImage,0,0);
   if ($("overlay").checked) {
     const item = primary(), image = item ? itemImages.get(item.id) : pendingImage;

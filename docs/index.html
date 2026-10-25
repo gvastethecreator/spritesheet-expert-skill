@@ -3,88 +3,169 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Spritesheet Expert is a production-minded Codex skill pack for generating, processing, and validating 2D game assets." />
-    <title>Spritesheet Expert — 2D asset pipeline</title>
-    <link rel="stylesheet" href="styles.css" />
+    <meta name="description" content="Agent skills that turn generated 2D game art into verified, game-ready sprites, atlases, backgrounds, and UI kits." />
+    <meta name="color-scheme" content="dark light" />
+    <title>Spritesheet Expert</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Cpath fill='%237aa2ff' d='M0 0h4v4H0zM4 4h4v4H4z'/%3E%3Cpath fill='%23464944' d='M4 0h4v4H4zM0 4h4v4H0z'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="tool-theme.css" />
+    <link rel="stylesheet" href="site.css" />
   </head>
   <body>
-    <header class="masthead">
-      <a class="wordmark" href="https://github.com/gvastethecreator/spritesheet-expert-skill" aria-label="Open the Spritesheet Expert GitHub repository">
-        <span class="mark" aria-hidden="true">SE</span>
-        <span>Spritesheet Expert</span>
+    <a class="skip" href="#bench">Skip to the workbench</a>
+    <header class="tool-header site-header">
+      <a class="brand" href="#top" aria-label="Spritesheet Expert home">
+        <span class="brand-mark">Agent skills</span>
+        <span class="brand-name">Spritesheet Expert</span>
       </a>
-      <a class="text-link" href="https://github.com/sponsors/gvastethecreator">Sponsor</a>
+      <nav class="site-nav" aria-label="Page">
+        <a href="#lanes">Lanes</a>
+        <a href="#tools">Tools</a>
+        <a href="#install">Install</a>
+        <a href="https://github.com/gvastethecreator/spritesheet-expert-skill">GitHub</a>
+      </nav>
+      <button class="btn btn-icon" id="theme-toggle" type="button" aria-label="Switch theme">◐</button>
     </header>
 
-    <main>
-      <section class="hero" aria-labelledby="hero-title">
-        <p class="eyebrow">Six focused Codex skills · One accountable pipeline</p>
-        <h1 id="hero-title">Game art needs a trail of evidence.</h1>
-        <p class="lede">Generate with visual models. Extract and register with deterministic tools. Review motion, alpha, provenance, and delivery contracts before an asset reaches the game.</p>
-        <div class="actions">
-          <a class="button" href="https://github.com/gvastethecreator/spritesheet-expert-skill#quick-install">Install the skills</a>
-          <a class="button secondary" href="https://github.com/gvastethecreator/spritesheet-expert-skill/tree/main/SKILLS">Browse the suite</a>
+    <main id="top">
+      <section class="intro" aria-labelledby="intro-title">
+        <div class="intro-copy">
+          <p class="eyebrow">For Codex, Claude Code, and any agent that runs skills</p>
+          <h1 id="intro-title">Generated art in. Game&#8209;ready sprites out.</h1>
+          <p class="lede">An image model draws. These skills do everything after: cut exact pixels, register frames, pack atlases, check motion and identity, and keep a receipt for every file.</p>
+        </div>
+        <div class="install-box">
+          <span class="rail-title">Install</span>
+          <div class="copy-line">
+            <code id="install-cmd">npx skills add gvastethecreator/spritesheet-expert-skill</code>
+            <button class="btn" type="button" data-copy="install-cmd">Copy</button>
+          </div>
+          <p class="install-note">Six skills. Python 3.11+. Image provider of your choice.</p>
         </div>
       </section>
 
-      <section class="ledger" aria-labelledby="ledger-title">
-        <div>
-          <p class="section-number">01 / Contract</p>
-          <h2 id="ledger-title">A proof bench, not a prompt gallery.</h2>
+      <section class="bench card" id="bench" aria-label="Interactive sprite workbench">
+        <div class="bench-head">
+          <div class="seg" role="group" aria-label="World">
+            <button class="btn" type="button" data-world="scifi">Sci-fi</button>
+            <button class="btn" type="button" data-world="fight">Fighting</button>
+            <button class="btn" type="button" data-world="dungeon">Dungeon</button>
+          </div>
+          <p class="world-blurb" id="world-blurb"></p>
+          <p class="status" id="bench-status" aria-live="polite"></p>
         </div>
-        <ol>
-          <li><span>Generate</span><strong>Provider-native alpha first</strong></li>
-          <li><span>Process</span><strong>Extract, register, and compose</strong></li>
-          <li><span>Inspect</span><strong>Motion, identity, and transparency</strong></li>
-          <li><span>Deliver</span><strong>Atlases, manifests, previews, and provenance</strong></li>
-        </ol>
+
+        <div class="bench-body">
+          <aside class="bench-list" aria-label="Assets">
+            <p class="rail-title">Assets</p>
+            <ul class="list" id="asset-list"></ul>
+          </aside>
+
+          <div class="bench-main">
+            <div class="stage" id="stage" data-background="checker" tabindex="0" aria-label="Sprite preview. Space plays or pauses, arrows step frames.">
+              <canvas id="sprite" data-sampling="nearest" aria-label="Animation frame"></canvas>
+              <img id="source-img" alt="" hidden />
+            </div>
+            <div class="bench-controls">
+              <div class="transport">
+                <div class="group">
+                  <button class="btn btn-icon" type="button" id="prev" aria-label="Previous frame">◀</button>
+                  <button class="btn btn-primary" type="button" id="play" aria-label="Play animation">Play</button>
+                  <button class="btn btn-icon" type="button" id="next" aria-label="Next frame">▶</button>
+                </div>
+                <input class="scrub" id="scrub" type="range" min="0" value="0" aria-label="Frame" />
+                <output class="readout" id="readout">1 / 1</output>
+              </div>
+              <div class="toolbar">
+                <div class="seg" role="group" aria-label="View">
+                  <button class="btn" type="button" data-view="runtime" aria-pressed="true">Delivered</button>
+                  <button class="btn" type="button" data-view="source">Provider</button>
+                </div>
+                <div class="seg" role="group" aria-label="Style" id="style-seg">
+                  <button class="btn" type="button" data-style="pixel">Pixel</button>
+                  <button class="btn" type="button" data-style="hd">HD</button>
+                </div>
+                <div class="seg" role="group" aria-label="Background">
+                  <button class="btn" type="button" data-bg="checker" aria-pressed="true"><span class="swatch" data-swatch="checker"></span>Checker</button>
+                  <button class="btn" type="button" data-bg="black"><span class="swatch" data-swatch="black"></span>Black</button>
+                  <button class="btn" type="button" data-bg="gray"><span class="swatch" data-swatch="gray"></span>Gray</button>
+                  <button class="btn" type="button" data-bg="white"><span class="swatch" data-swatch="white"></span>White</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <aside class="rail bench-rail" aria-label="Asset details">
+            <section class="rail-section">
+              <p class="rail-title">Asset</p>
+              <h2 class="asset-title" id="asset-title"></h2>
+              <p class="asset-caption" id="asset-caption"></p>
+              <dl class="facts" id="asset-facts"></dl>
+            </section>
+            <section class="rail-section">
+              <p class="rail-title">Gates on this asset</p>
+              <ul class="list gates" id="asset-gates"></ul>
+            </section>
+            <section class="rail-section">
+              <p class="rail-title">Keys</p>
+              <dl class="keys">
+                <dt><kbd>Space</kbd></dt><dd>Play or pause</dd>
+                <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Step one frame</dd>
+                <dt><kbd>B</kbd></dt><dd>Next background</dd>
+              </dl>
+            </section>
+          </aside>
+        </div>
       </section>
 
-      <section class="evidence" aria-labelledby="evidence-title">
-        <div class="section-heading">
-          <p class="section-number">02 / Evidence</p>
-          <h2 id="evidence-title">Review sheets from the real pipeline.</h2>
-          <p>These frames stay useful because they reveal decisions and defects. They are not decorative mockups.</p>
-        </div>
-        <div class="evidence-grid">
-          <figure>
-            <img src="assets/screenshots/character-transfer.png" alt="Six-frame character transfer review with QA marks" />
-            <figcaption><span>Character transfer</span><small>Identity · registration · motion</small></figcaption>
-          </figure>
-          <figure>
-            <img src="assets/screenshots/motion-mechanics.png" alt="Six-frame anchored motion mechanics review" />
-            <figcaption><span>Motion mechanics</span><small>Contact · lift · cadence</small></figcaption>
-          </figure>
-          <figure>
-            <img src="assets/screenshots/organic-motion.png" alt="Six-frame organic motion reference review" />
-            <figcaption><span>Organic motion</span><small>Silhouette · weight · recovery</small></figcaption>
-          </figure>
-          <figure>
-            <img src="assets/screenshots/alpha-review.png" alt="Real-character transparency and frame review" />
-            <figcaption><span>Alpha review</span><small>Edges · contamination · coverage</small></figcaption>
-          </figure>
-        </div>
+      <section class="lanes" id="lanes" aria-labelledby="lanes-title">
+        <header class="section-head">
+          <p class="eyebrow">Lanes</p>
+          <h2 id="lanes-title">Each asset family has its own contract.</h2>
+          <p>Left is what the provider gave. Right is what shipped. The chips list the gates that passed on that exact file.</p>
+        </header>
+        <div class="lane-grid" id="lane-grid"></div>
       </section>
 
-      <section class="suite" aria-labelledby="suite-title">
-        <div>
-          <p class="section-number">03 / Suite</p>
-          <h2 id="suite-title">Choose the narrowest skill that owns the delivery.</h2>
+      <section class="tools" id="tools" aria-labelledby="tools-title">
+        <header class="section-head">
+          <p class="eyebrow">Tools</p>
+          <h2 id="tools-title">Every run builds its own review tools.</h2>
+          <p>Single-file HTML, no server, no network. Open them from the run folder, review, and export a decision file the pipeline reads back.</p>
+        </header>
+        <div class="tool-grid" id="tool-grid"></div>
+      </section>
+
+      <section class="install" id="install" aria-labelledby="install-title">
+        <header class="section-head">
+          <p class="eyebrow">Install</p>
+          <h2 id="install-title">Pick the narrowest skill that owns the asset.</h2>
+        </header>
+        <div class="install-grid">
+          <ul class="list skill-list">
+            <li><code>spritesheet-expert</code><span>Item atlases, animation rows, pose sets, VFX, tilesets, video frames</span></li>
+            <li><code>build-static-game-assets</code><span>Props, pickups, decals, item packs</span></li>
+            <li><code>build-game-backgrounds</code><span>Layered, scrolling, parallax backgrounds</span></li>
+            <li><code>build-game-ui-kits</code><span>UI states, densities, nine-slice assets</span></li>
+            <li><code>compose-asset-mockups</code><span>Labeled presentation boards from validated assets</span></li>
+            <li><code>produce-2d-assets</code><span>Deliveries that span several families</span></li>
+          </ul>
+          <div class="card commands">
+            <p class="rail-title">First run</p>
+<pre><code>npx skills add gvastethecreator/spritesheet-expert-skill
+pnpm run setup:test
+python SKILLS/spritesheet-expert/scripts/smoke_pipeline.py
+pnpm run studio</code></pre>
+          </div>
         </div>
-        <ul>
-          <li><code>spritesheet-expert</code><span>Animated characters and atlas QA</span></li>
-          <li><code>build-static-game-assets</code><span>Props, icons, and isolated assets</span></li>
-          <li><code>build-game-backgrounds</code><span>Full-bleed scenes and layered spaces</span></li>
-          <li><code>build-game-ui-kits</code><span>Raster interface states and kits</span></li>
-          <li><code>compose-asset-mockups</code><span>Truthful presentation and review boards</span></li>
-          <li><code>produce-2d-assets</code><span>Coherent multi-family deliveries</span></li>
-        </ul>
       </section>
     </main>
 
-    <footer>
-      <span>MIT licensed · Built for inspectable 2D production</span>
-      <a href="https://github.com/gvastethecreator/spritesheet-expert-skill">Source and documentation</a>
+    <footer class="site-footer">
+      <span>MIT licensed. Example art generated with Cozy Studio, then processed and checked by this repo.</span>
+      <a href="https://github.com/sponsors/gvastethecreator">Sponsor</a>
     </footer>
+
+    <script src="tool-theme.js"></script>
+    <script src="site.js"></script>
   </body>
 </html>

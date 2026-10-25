@@ -43,11 +43,14 @@ def main() -> int:
         print("reason must explain the proxy false positive", file=sys.stderr)
         return 1
     states = sorted({str(error).split(":", 1)[0] for error in errors})
+    request = json.loads((run_dir / "sprite-request.json").read_text(encoding="utf-8"))
+    # A run without background removal (an imported or converted sheet) has no matte to review.
+    removal = (request.get("background_removal") or {}).get("method")
     paths = [
         "sprite-request.json",
         "frames/frames-manifest.json",
         "sprite-sheet-alpha.png",
-        "qa/background-matte-review.png",
+        *([] if removal == "none" else ["qa/background-matte-review.png"]),
         *[f"qa/{state}-contact.png" for state in states],
         *[f"qa/{state}-onion.png" for state in states],
     ]

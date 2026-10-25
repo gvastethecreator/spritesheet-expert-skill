@@ -1,0 +1,176 @@
+[
+  {
+    "file": "intern-directions-source.png",
+    "lane": "pose-set",
+    "style": "pixel",
+    "kind": "source",
+    "caption": "Provider output: the intern in four directions with native transparency.",
+    "gates": [
+      "source-provenance"
+    ]
+  },
+  {
+    "file": "intern-directions-atlas.png",
+    "lane": "pose-set",
+    "style": "pixel",
+    "kind": "atlas",
+    "caption": "Runtime row at 64 px per cell, hard alpha, shown at 4x.",
+    "gates": [
+      "source-provenance",
+      "pose-set-contract",
+      "identity-consistency",
+      "validate-run"
+    ]
+  },
+  {
+    "file": "mimic-idle-pixel-source.png",
+    "lane": "animation",
+    "style": "pixel",
+    "kind": "source",
+    "caption": "Provider 2x2 grid: four idle frames of the mimic accountant.",
+    "gates": [
+      "source-provenance"
+    ]
+  },
+  {
+    "file": "mimic-idle-pixel-atlas.png",
+    "lane": "animation",
+    "style": "pixel",
+    "kind": "atlas",
+    "caption": "Registered 4-frame idle row, 64 px cells, one shared baseline.",
+    "gates": [
+      "source-provenance",
+      "frame-alignment",
+      "identity-consistency",
+      "idle-breath-contract",
+      "runtime-playback",
+      "validate-run"
+    ]
+  },
+  {
+    "file": "mimic-idle-hd-source.png",
+    "lane": "animation",
+    "style": "hd",
+    "kind": "source",
+    "caption": "Provider 2x2 grid in the hand-drawn style.",
+    "gates": [
+      "source-provenance"
+    ]
+  },
+  {
+    "file": "mimic-idle-hd-atlas.png",
+    "lane": "animation",
+    "style": "hd",
+    "kind": "atlas",
+    "caption": "Registered HD idle row, 256 px cells, soft alpha kept.",
+    "gates": [
+      "source-provenance",
+      "frame-alignment",
+      "identity-consistency",
+      "idle-breath-contract",
+      "runtime-playback",
+      "validate-run"
+    ]
+  },
+  {
+    "file": "mimic-idle-hd.gif",
+    "lane": "animation",
+    "style": "hd",
+    "kind": "animation",
+    "caption": "HD idle loop at 4 fps with the same timing contract.",
+    "gates": [
+      "source-provenance",
+      "frame-alignment",
+      "identity-consistency",
+      "idle-breath-contract",
+      "runtime-playback",
+      "validate-run"
+    ]
+  },
+  {
+    "file": "loot-pixel-source.png",
+    "lane": "item-atlas",
+    "style": "pixel",
+    "kind": "source",
+    "caption": "Loose provider sheet: twelve office-crypt items with detached drips and sparks.",
+    "gates": [
+      "source-provenance"
+    ]
+  },
+  {
+    "file": "loot-pixel-atlas.png",
+    "lane": "item-atlas",
+    "style": "pixel",
+    "kind": "atlas",
+    "caption": "After review: twelve complete items packed by size, fragments kept with their parent.",
+    "gates": [
+      "exact-rgba",
+      "exclusive-ownership",
+      "agent-review-approved",
+      "item-delivery-validated"
+    ]
+  },
+  {
+    "file": "loot-hd-source.png",
+    "lane": "item-atlas",
+    "style": "hd",
+    "kind": "source",
+    "caption": "Loose provider sheet: twelve office-crypt items with detached drips and sparks.",
+    "gates": [
+      "source-provenance"
+    ]
+  },
+  {
+    "file": "loot-hd-atlas.png",
+    "lane": "item-atlas",
+    "style": "hd",
+    "kind": "atlas",
+    "caption": "After review: twelve complete items packed by size, fragments kept with their parent.",
+    "gates": [
+      "exact-rgba",
+      "exclusive-ownership",
+      "agent-review-approved",
+      "item-delivery-validated"
+    ]
+  },
+  {
+    "file": "ui-state-board.png",
+    "lane": "ui-kit",
+    "style": "pixel",
+    "kind": "proof",
+    "caption": "Every state at 1x and 2x on checker, black, gray and white.",
+    "gates": [
+      "state-board",
+      "nine-slice-stretch",
+      "token-contrast",
+      "validate-ui-kit"
+    ]
+  },
+  {
+    "file": "ui-nine-slice.png",
+    "lane": "ui-kit",
+    "style": "pixel",
+    "kind": "proof",
+    "caption": "Form panel stretched by nine-slice: corners and bolts stay intact.",
+    "gates": [
+      "state-board",
+      "nine-slice-stretch",
+      "token-contrast",
+      "validate-ui-kit"
+    ]
+  },
+  {
+    "file": "tiles-repeat-proof.png",
+    "lane": "tileset",
+    "style": "pixel",
+    "kind": "proof",
+    "caption": "3x3 self-repeat proof for each floor tile; the carpet stain repeat is visible on purpose.",
+    "gates": [
+      "source-provenance",
+      "self-repeat-edges",
+      "3x3-repeat-proof",
+      "asset-slots",
+      "validate-run"
+    ]
+  }
+]

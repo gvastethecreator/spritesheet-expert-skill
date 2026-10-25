@@ -3,43 +3,40 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
+  <meta name="color-scheme" content="dark light">
   <meta name="description" content="Portable, agent-first workflow and review Studio for Spritesheet Expert.">
+  <link rel="icon" href="data:,">
   <title>Spritesheet Expert Studio</title>
+  <link rel="stylesheet" href="tool-theme.css">
   <link rel="stylesheet" href="styles.css">
+  <script src="tool-theme.js" defer></script>
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
       <a class="brand" href="#launcher" aria-label="Spritesheet Expert Studio home">
-        <span class="brand-mark" aria-hidden="true">SE</span>
-        <span>
-          <strong>Spritesheet Expert</strong>
-          <small>Portable agent studio</small>
-        </span>
+        <span class="brand-mark" aria-hidden="true">Studio</span>
+        <strong>Spritesheet Expert</strong>
+        <small>Portable agent studio</small>
       </a>
       <div class="topbar-status">
         <span class="status-dot" aria-hidden="true"></span>
         <span id="workspace-badge">Opening workspace…</span>
       </div>
+      <button id="theme-toggle" class="btn btn-icon" type="button" aria-label="Switch theme">◐</button>
     </header>
 
     <aside class="sidebar" aria-label="Studio navigation">
       <nav>
-        <button class="nav-item" type="button" data-view="workspaces"><span>↳</span> Workspace</button>
-        <button class="nav-item" type="button" data-view="process"><span>00</span> Process a sheet</button>
-        <button class="nav-item is-active" type="button" data-view="launcher">
-          <span>01</span> Workflow Launcher
-        </button>
-        <button class="nav-item" type="button" data-view="atlas">
-          <span>02</span> Atlas Lab
-        </button>
-        <button class="nav-item" type="button" data-view="queue">
-          <span>03</span> Agent Queue
-        </button>
-        <button class="nav-item" type="button" data-view="about">
-          <span>04</span> Contracts
-        </button>
+        <p class="nav-group">Work</p>
+        <button class="nav-item" type="button" data-view="workspaces"><span>W</span>Workspace</button>
+        <button class="nav-item" type="button" data-view="process"><span>P</span>Process a sheet</button>
+        <button class="nav-item" type="button" data-view="atlas"><span>A</span>Atlas Lab</button>
+        <p class="nav-group">Prepare</p>
+        <button class="nav-item is-active" type="button" data-view="launcher"><span>L</span>Workflow Launcher</button>
+        <button class="nav-item" type="button" data-view="queue"><span>Q</span>Agent Queue</button>
+        <p class="nav-group">Reference</p>
+        <button class="nav-item" type="button" data-view="about"><span>C</span>Contracts</button>
       </nav>
       <div class="sidebar-foot">
         <p>Provider output is accepted only through source intake, provenance, hashing, and review.</p>
@@ -49,7 +46,7 @@
 
     <main class="workspace">
       <section class="view" id="workspaces" data-view-panel="workspaces" aria-labelledby="workspaces-title">
-        <div class="view-heading"><div><p class="eyebrow">Portable workspace</p><h1 id="workspaces-title">Your work, in one folder.</h1></div>
+        <div class="view-heading"><div><p class="eyebrow">Portable workspace</p><h1 id="workspaces-title">Workspace</h1></div>
           <p class="view-intro">Keep sources, runs, reviews, prepared jobs and deliveries together. Models and Python environments stay outside this folder.</p></div>
         <section class="panel workspace-current"><h2 id="workspace-name">Opening…</h2><p id="workspace-path"></p><small id="workspace-identity" class="muted"></small>
           <div class="button-row"><button id="workspace-refresh" class="secondary-button">Refresh</button><button id="workspace-copy" class="secondary-button">Copy agent context</button></div></section>
@@ -79,7 +76,7 @@
         </details>
       </section>
       <section class="view" id="process" data-view-panel="process" aria-labelledby="process-title">
-        <div class="view-heading"><div><p class="eyebrow">Local workflow</p><h1 id="process-title">Give every sprite its space.</h1></div>
+        <div class="view-heading"><div><p class="eyebrow">Local workflow</p><h1 id="process-title">Process a sheet</h1></div>
           <p class="view-intro">Import a transparent sheet. Keep visual groups together, review uncertain edges, and export a size-ordered atlas.</p></div>
         <section class="panel local-controls">
           <label class="field"><span>Source sheet</span><input id="local-source" type="file" accept="image/png,image/webp"></label>
@@ -111,7 +108,7 @@
             <section class="panel local-inspector">
               <h2>Source and pixel ownership</h2>
               <p class="muted">Select an item to inspect its mask. Paint only when you need to change ownership. Original colors stay intact.</p>
-              <div class="local-toolbar"><label class="field"><span>Background</span><select id="local-bg"><option value="#252824">Dark</option><option value="#eeeeE8">Light</option></select></label>
+              <div class="local-toolbar"><label class="field"><span>Background</span><select id="local-bg"><option value="checker">Checker</option><option value="black">Black</option><option value="gray">Gray</option><option value="white">White</option></select></label>
                 <label class="field"><span>Zoom</span><select id="local-zoom"><option value="fit">Fit</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
                 <label><input id="local-overlay" type="checkbox" checked> Mask overlay</label></div>
               <div id="local-canvas-scroll"><canvas id="local-canvas" aria-label="Source image and editable ownership mask"></canvas></div>
@@ -133,7 +130,7 @@
         <div class="view-heading">
           <div>
             <p class="eyebrow">Workflow registry</p>
-            <h1 id="launcher-title">Compose the job before an agent runs it.</h1>
+            <h1 id="launcher-title">Workflow Launcher</h1>
           </div>
           <p class="view-intro">Select a production workflow, fill its explicit contract, then copy a prompt, CLI command, or portable JSON handoff.</p>
         </div>
@@ -204,7 +201,7 @@
         <div class="view-heading">
           <div>
             <p class="eyebrow">Deterministic Item Atlas</p>
-            <h1 id="atlas-title">Inspect every extracted item before delivery.</h1>
+            <h1 id="atlas-title">Atlas Lab</h1>
           </div>
           <p class="view-intro">Load a manifest and its local run folder. Review source geometry, alpha, classification, status, and exact replacements without changing the parent run.</p>
         </div>
@@ -285,7 +282,7 @@
                 <p class="section-number">03 / Decision</p>
                 <h2 id="inspector-title">Inspector</h2>
               </div>
-              <span id="selected-item-status" class="pill">none</span>
+              <span id="selected-item-status" class="chip">none</span>
             </div>
             <div id="empty-inspector" class="empty-state">
               <strong>Select an extracted item</strong>
@@ -301,7 +298,7 @@
                   <button type="button" aria-pressed="false" data-preview-background="white">White</button>
                 </div>
               </div>
-              <div id="item-preview" class="item-preview" data-background="checker">
+              <div id="item-preview" class="item-preview stage" data-background="checker">
                 <img id="item-preview-image" alt="Selected item preview">
               </div>
               <div class="identity-line">
@@ -387,7 +384,7 @@
         <div class="view-heading">
           <div>
             <p class="eyebrow">Explicit execution boundary</p>
-            <h1 id="queue-title">Prepared jobs, not hidden side effects.</h1>
+            <h1 id="queue-title">Agent Queue</h1>
           </div>
           <p class="view-intro">Jobs are saved in this workspace, not in browser storage. Inspect each job and use your active agent's tools and permissions to execute it.</p>
         </div>
@@ -417,7 +414,7 @@
         <div class="view-heading">
           <div>
             <p class="eyebrow">Portable contracts</p>
-            <h1 id="about-title">The interface is replaceable. The evidence is not.</h1>
+            <h1 id="about-title">Contracts</h1>
           </div>
           <p class="view-intro">Studio state can be reconstructed from manifests, review records, classification results, and handoff jobs. No production decision should exist only in this browser.</p>
         </div>
@@ -469,7 +466,7 @@
         <strong></strong>
         <small></small>
       </span>
-      <span class="item-card-status"></span>
+      <span class="item-card-status chip"></span>
     </button>
   </template>
 

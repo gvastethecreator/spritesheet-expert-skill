@@ -588,6 +588,7 @@ function renderItems() {
     const size = item.geometry?.originalSize ?? ["?", "?"];
     meta.textContent = `${size[0]} × ${size[1]} · ${review.classification.family || "unknown"}`;
     status.textContent = review.status;
+    status.dataset.status = review.status;
     card.addEventListener("click", () => {
       state.selectedItemId = item.id;
       renderItems();
@@ -659,13 +660,13 @@ function renderInspector() {
   if (!item) {
     elements.emptyInspector.hidden = false;
     elements.itemInspector.hidden = true;
-    elements.selectedItemStatus.textContent = "none";
+    elements.selectedItemStatus.textContent = "none"; delete elements.selectedItemStatus.dataset.status;
     return;
   }
   const review = state.reviews.get(item.id) ?? initialReview(item);
   elements.emptyInspector.hidden = true;
   elements.itemInspector.hidden = false;
-  elements.selectedItemStatus.textContent = review.status;
+  elements.selectedItemStatus.textContent = review.status; elements.selectedItemStatus.dataset.status = review.status;
   elements.inspectorItemId.textContent = item.id;
   const imageUrl = itemImageUrl(item);
   if (imageUrl) elements.itemPreviewImage.src = imageUrl;
@@ -722,7 +723,7 @@ for (const button of elements.itemStatusButtons) {
       return;
     }
     review.status = nextStatus;
-    elements.selectedItemStatus.textContent = review.status;
+    elements.selectedItemStatus.textContent = review.status; elements.selectedItemStatus.dataset.status = review.status;
     for (const candidate of elements.itemStatusButtons) {
       const selected = candidate === button;
       candidate.classList.toggle("is-selected", selected);

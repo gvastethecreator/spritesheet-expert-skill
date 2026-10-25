@@ -1,0 +1,163 @@
+[
+  {
+    "file": "oyone-strike-px-source.png",
+    "lane": "animation",
+    "style": "pixel",
+    "kind": "source",
+    "caption": "Provider sheet: 6-frame palm strike, 3x2 grid, native alpha.",
+    "gates": [
+      "provenance intake"
+    ]
+  },
+  {
+    "file": "oyone-strike-px-row.png",
+    "lane": "animation",
+    "style": "pixel",
+    "kind": "output",
+    "caption": "Runtime row after true pixel conversion: 6 x 128x96 cells, 24 colors, hard alpha (shown 3x).",
+    "gates": [
+      "provenance",
+      "alignment",
+      "identity (reviewed proxy)",
+      "combat-quick-strike contract",
+      "validate_run post-extract",
+      "pixel conversion validate"
+    ]
+  },
+  {
+    "file": "oyone-strike-px.gif",
+    "lane": "animation",
+    "style": "pixel",
+    "kind": "output",
+    "caption": "Palm strike at 12 fps: guard, snap, contact, follow-through, recover, settle.",
+    "gates": [
+      "provenance",
+      "alignment",
+      "identity (reviewed proxy)",
+      "combat-quick-strike contract",
+      "validate_run post-extract",
+      "pixel conversion validate"
+    ]
+  },
+  {
+    "file": "pixel-conversion-before-after.png",
+    "lane": "pixel-conversion",
+    "style": "pixel",
+    "kind": "qa",
+    "caption": "Contact frame at 4x: same frame downscaled with smooth resampling (left) vs convert_pixel_art output on an exact grid with a shared 24-color palette (right).",
+    "gates": [
+      "pixel conversion validate"
+    ]
+  },
+  {
+    "file": "oyone-strike-hd-source.png",
+    "lane": "animation",
+    "style": "hd",
+    "kind": "source",
+    "caption": "Provider sheet: inked HD palm strike, 3x2 grid, native alpha.",
+    "gates": [
+      "provenance intake"
+    ]
+  },
+  {
+    "file": "oyone-strike-hd-row.png",
+    "lane": "animation",
+    "style": "hd",
+    "kind": "output",
+    "caption": "HD runtime row: 6 x 384x288 cells on one baseline.",
+    "gates": [
+      "provenance",
+      "alignment",
+      "identity (reviewed proxy)",
+      "combat-quick-strike contract",
+      "validate_run post-extract"
+    ]
+  },
+  {
+    "file": "oyone-strike-hd.gif",
+    "lane": "animation",
+    "style": "hd",
+    "kind": "output",
+    "caption": "HD palm strike at 12 fps.",
+    "gates": [
+      "runtime playback"
+    ]
+  },
+  {
+    "file": "barros-idle-px-source.png",
+    "lane": "animation",
+    "style": "pixel",
+    "kind": "source",
+    "caption": "Provider sheet: 4-frame fighting-stance idle, 2x2 grid, native alpha.",
+    "gates": [
+      "provenance intake"
+    ]
+  },
+  {
+    "file": "barros-idle-px-row.png",
+    "lane": "animation",
+    "style": "pixel",
+    "kind": "output",
+    "caption": "Runtime row after true pixel conversion: 4 x 216x168 cells, 28 colors (shown 2x).",
+    "gates": [
+      "provenance",
+      "alignment",
+      "identity",
+      "fighting-stance-idle contract",
+      "validate_run post-extract",
+      "pixel conversion validate"
+    ]
+  },
+  {
+    "file": "hit-spark-px-source.png",
+    "lane": "vfx",
+    "style": "pixel",
+    "kind": "source",
+    "caption": "Provider sheet: 8-frame impact spark, 4x2 grid, native alpha.",
+    "gates": [
+      "provenance intake"
+    ]
+  },
+  {
+    "file": "hit-spark-px-row.png",
+    "lane": "vfx",
+    "style": "pixel",
+    "kind": "output",
+    "caption": "Effect row: 8 x 70x80 cells, fixed central emitter, 12 colors, hard alpha (shown 4x).",
+    "gates": [
+      "pixel conversion validate",
+      "alignment",
+      "vfx-buildup-peak-decay contract"
+    ]
+  },
+  {
+    "file": "hit-spark-px.gif",
+    "lane": "vfx",
+    "style": "pixel",
+    "kind": "output",
+    "caption": "Hit spark at 15 fps: fast buildup, peak, slow decay.",
+    "gates": [
+      "vfx-buildup-peak-decay contract"
+    ]
+  },
+  {
+    "file": "fight-arena-px.png",
+    "lane": "background",
+    "style": "pixel",
+    "kind": "output",
+    "caption": "Arena stage converted to a 418x235 pixel grid, 32 colors (shown 2x).",
+    "gates": [
+      "pixel conversion validate"
+    ]
+  },
+  {
+    "file": "fight-matchup.gif",
+    "lane": "presentation",
+    "style": "pixel",
+    "kind": "output",
+    "caption": "Animated presentation: strike, idle, and hit spark timed together. Not a gameplay capture.",
+    "gates": [
+      "labeled presentation"
+    ]
+  }
+]
