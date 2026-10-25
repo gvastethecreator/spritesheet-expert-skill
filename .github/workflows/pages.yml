@@ -31,13 +31,13 @@ jobs:
           persist-credentials: false
 
       - name: Configure Pages
-        uses: actions/configure-pages@7a8fb91d3f352b8a94447eeec72e3d70e089aa10 # v5.0.0
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
 
       - name: Upload site
-        uses: actions/upload-pages-artifact@d47a015d1674b8237153663e1c8841d31261cf09 # v4.0.0
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
         with:
           path: docs
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@2a3c1173872a2c81519e9d5ec14e39d8c63b2f10 # v4.0.5
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
