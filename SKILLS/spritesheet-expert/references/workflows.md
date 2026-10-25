@@ -1,5 +1,9 @@
 # Spritesheet Expert Workflows
 
+## Existing transparent item sheet
+
+Use [Local item-sheet workflow](local-model-item-workflow.md) to import an irregular sheet, propose visual groups with local models, review source masks, classify sprites and export a size-ordered rectangular atlas. Studio and CLI share the same staged runner. Model errors and unassigned pixels remain visible; export a draft until review is complete.
+
 ## New Sheet Workflow
 
 1. Pick preset or collect custom rows.
@@ -92,7 +96,7 @@ Locomotion phase guides generate for 4-, 6-, and 8-frame cycles when state name/
    - Accept provider output only via the executable source-intake contract. Intake checks expected job/state/kind, hashes the selected file, writes provenance; no prose-only inbox/outbox handoff.
    - Do not generate a whole atlas in one image for animated production unless the user asks for a sheet-level prototype/import. Generate per-state raw sheets; assemble the runtime atlas after QA.
    - Animated body rows: `prepare_sprite_run.py` writes `states.<state>.raw_layout`. Compact grids (`2x2`, `3x2`, `4x2`, `3x3`, `4x3`) are default — long raw `1xN` character strips drift and crop more often. Final atlas can still be a runtime row; raw generation and delivery shape are separate contracts.
-   - New sprite component runs also write `background_removal.method: lucida` and `grid_segmentation: adaptive`. With no identity image, use the black fallback background. Read `lucida-adaptive-workflow.md` before changing pinned revision, alpha mode, threshold, or segmentation method.
+   - New isolated component art requests native alpha first. Use `background_removal.method: alpha` when it passes review and `grid_segmentation: adaptive` for uneven bounds. If alpha is absent or invalid, select the neutral Lucida fallback. Read `lucida-adaptive-workflow.md` before changing revision, alpha mode, threshold, or segmentation.
    - Use `raw_layout_policy: "legacy-strip"` only for explicit low-risk compatibility/import; report that the row uses the weaker long-strip path.
    - Walk/run/advance/retreat: prefer 8 frames when quality matters. Use 4 or 6 only when the frame budget is intentional and the motion-phase guide still proves contact/pass/opposite-contact logic.
    - If the selected provider has no local accepted file in the current turn, report that the generated-art path cannot be completed honestly yet; do not substitute a scripted drawing.
@@ -139,10 +143,10 @@ python scripts/extract_sprite_row_frames.py --run-dir /abs/run --background-remo
 
 `rembg` no longer runs post-chroma cleanup by default because it can erase legitimate subject pixels. Use `--post-rembg-chroma-cleanup` only after visual review proves remaining key color is border/background residue.
 
-Preferred new Imagegen sprite lane: install Lucida; request is source of truth:
+For a source that needs the Lucida fallback, prepare the locked optional runtime
+and checkpoint as described in `../model-runtime/README.md`. Use its Python:
 
 ```bash
-python -m pip install -r scripts/requirements-lucida.txt
 python scripts/extract_sprite_row_frames.py --run-dir /abs/run
 ```
 
@@ -158,7 +162,9 @@ python scripts/extract_sprite_row_frames.py --run-dir /abs/run --background-remo
 
 Backend name is not proof. Review `qa/background-matte-review.png` on checker, black, gray, white, and alpha-mask panels before atlas composition.
 
-New generation must use a flat neutral gray, black, or white background. Lucida is the preferred new sprite model. `birefnet-general` remains the quality default for the `auto` compatibility lane. `birefnet-general-lite` is an explicit speed option. Chroma mode is for declared legacy imports only.
+Keep verified native alpha. When it is absent or invalid, the fallback uses flat
+neutral gray, black, or white. Lucida and BEN2 require prepared local checkpoints;
+compare their mattes on the actual source. Chroma is for declared legacy imports only.
 
 For animated sprites with walk/run/move rows, also run:
 

@@ -60,7 +60,7 @@
       "required": ["method"],
       "properties": {
         "method": {
-          "enum": ["none", "chroma", "matte", "rembg", "ben2", "lucida", "auto"]
+          "enum": ["alpha", "none", "chroma", "matte", "rembg", "ben2", "lucida", "auto"]
         },
         "model": { "type": "string", "minLength": 1 },
         "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
@@ -79,7 +79,7 @@
           "maximum": 0.5
         },
         "post_rembg_chroma_cleanup": { "type": "boolean" },
-        "source_family": { "enum": ["neutral", "legacy-chroma", "unknown"] }
+        "source_family": { "enum": ["transparent", "neutral", "legacy-chroma", "unknown"] }
       },
       "additionalProperties": true
     },
@@ -87,9 +87,9 @@
       "type": "object",
       "required": ["family", "name", "hex", "rgb"],
       "properties": {
-        "family": { "const": "neutral" },
-        "name": { "enum": ["gray", "black", "white"] },
-        "hex": { "enum": ["#808080", "#000000", "#FFFFFF"] },
+        "family": { "enum": ["neutral", "transparent"] },
+        "name": { "enum": ["gray", "black", "white", "transparent"] },
+        "hex": { "enum": ["#808080", "#000000", "#FFFFFF", "#00000000"] },
         "rgb": {
           "type": "array",
           "prefixItems": [
@@ -104,8 +104,12 @@
       },
       "oneOf": [
         {
+          "properties": { "family": { "const": "transparent" }, "name": { "const": "transparent" }, "hex": { "const": "#00000000" }, "rgb": { "const": [0, 0, 0] } }
+        },
+        {
           "properties": {
             "name": { "const": "gray" },
+            "family": { "const": "neutral" },
             "hex": { "const": "#808080" },
             "rgb": { "const": [128, 128, 128] }
           }
@@ -113,6 +117,7 @@
         {
           "properties": {
             "name": { "const": "black" },
+            "family": { "const": "neutral" },
             "hex": { "const": "#000000" },
             "rgb": { "const": [0, 0, 0] }
           }
@@ -120,6 +125,7 @@
         {
           "properties": {
             "name": { "const": "white" },
+            "family": { "const": "neutral" },
             "hex": { "const": "#FFFFFF" },
             "rgb": { "const": [255, 255, 255] }
           }

@@ -70,7 +70,7 @@ STYLE_PRESETS: dict[str, dict[str, str]] = {
             "that remains readable at runtime size. Anti-aliased edges are allowed."
         ),
         "rendering": "Keep the rendering as a clean 2D illustrated game asset: readable silhouette, consistent linework, controlled cel shading, no tiny noisy detail.",
-        "avoid": "Do not turn it into photorealism, 3D render, marketing key art, or scene illustration; keep it as isolated animation frames.",
+        "avoid": "Do not turn it into photorealism, 3D render, marketing key art, or scene illustration; keep it as isolated game sprites.",
     },
     "painterly": {
         "contract": (
@@ -115,6 +115,7 @@ STYLE_PRESETS: dict[str, dict[str, str]] = {
 STYLE_DEFAULT_PRESET = "pixel-art"
 STYLE_DEFAULT = STYLE_PRESETS[STYLE_DEFAULT_PRESET]["contract"]
 BACKGROUND_REMOVAL_METHODS = {
+    "alpha",
     "none",
     "chroma",
     "matte",
@@ -978,16 +979,18 @@ def normalize_background_removal(
     style_preset: str,
 ) -> dict[str, Any]:
     source = raw.get("background_removal") if isinstance(raw.get("background_removal"), dict) else {}
+    neutral_requested = (args.generation_background not in {None, "auto"} or
+        isinstance(raw.get("generation_background"), dict) and raw["generation_background"].get("family") == "neutral")
     if extraction_mode == "slots" and asset_kind in {"texture", "tileset"}:
         default_method = "none"
-    elif asset_kind == "sprite" and extraction_mode == "components":
-        default_method = "lucida"
+    elif extraction_mode == "components":
+        default_method = "lucida" if neutral_requested and asset_kind == "sprite" else "auto" if neutral_requested else "alpha"
     else:
         default_method = "auto"
     method = args.background_removal or str(source.get("method", default_method))
     if method not in BACKGROUND_REMOVAL_METHODS:
         raise SystemExit(
-            "background_removal.method must be none, chroma, matte, rembg, ben2, lucida, or auto"
+            "background_removal.method must be alpha, none, chroma, matte, rembg, ben2, lucida, or auto"
         )
     if method == "chroma":
         raise SystemExit(
@@ -1055,7 +1058,7 @@ def normalize_background_removal(
         "device": device,
         "alpha_matting": alpha_matting,
         "post_rembg_chroma_cleanup": False,
-        "source_family": "neutral",
+        "source_family": "transparent" if method == "alpha" else "neutral",
     }
     if method == "lucida":
         normalized.update(
@@ -1754,6 +1757,12 @@ def professional_requirements_for_row(
     entry: dict[str, Any],
     asset_kind: str,
 ) -> list[str]:
+    if asset_kind == "sprite" and request.get("frame_semantics", "animation") not in TEMPORAL_FRAME_SEMANTICS:
+        return [
+            "Each slot is one declared non-temporal variant. Keep the inventory and order; do not infer timing or a loop.",
+            "Keep one character identity, camera and runtime scale across all slots. Preserve head, body, costume, palette and asymmetric details.",
+            "Every pose needs a clear silhouette, plausible anatomy and complete safe margins at runtime size.",
+        ]
     if asset_kind == "sprite":
         requirements = [*SPRITE_PRODUCTION_RULES]
         if is_fighting_context(request, state, entry):
@@ -2146,6 +2155,8 @@ def draw_guide(
 
 
 def motion_reference_contract(request: dict[str, Any], state: str, entry: dict[str, Any]) -> dict[str, Any] | None:
+    if request.get("frame_semantics", "animation") not in TEMPORAL_FRAME_SEMANTICS:
+        return None
     frames = int(entry["frames"])
     phases = state_motion_phases(state, frames, entry)
     if not phases or not request.get("motion_phase_guides"):
@@ -2372,6 +2383,7 @@ def row_prompt(request: dict[str, Any], state: str, entry: dict[str, Any]) -> st
     character = request["character"]
     asset_kind = str(request.get("asset_kind", "sprite"))
     is_sprite = asset_kind == "sprite"
+    is_temporal = request.get("frame_semantics", "animation") in TEMPORAL_FRAME_SEMANTICS
     frames = int(entry["frames"])
     cell_width = int(cell["width"])
     cell_height = int(cell["height"])
@@ -2391,18 +2403,18 @@ def row_prompt(request: dict[str, Any], state: str, entry: dict[str, Any]) -> st
         else "The final runtime atlas will use this same left-to-right frame order."
     )
     state_requirements = [*directional_requirements(state)] if is_sprite else []
-    if is_sprite and is_locomotion_state(state, entry):
+    if is_sprite and is_temporal and is_locomotion_state(state, entry):
         state_requirements.extend(LOCOMOTION_REQUIREMENTS)
-    if is_sprite:
+    if is_sprite and is_temporal:
         state_requirements.extend(STATE_REQUIREMENTS.get(state, []))
-    pose_geometry = state_pose_geometry(state, entry) if is_sprite else None
+    pose_geometry = state_pose_geometry(state, entry) if is_sprite and is_temporal else None
     production_requirements = professional_requirements_for_row(request, state, entry, asset_kind)
     production_requirement_text = "\n\nProfessional production requirements:\n" + "\n".join(
         f"- {requirement}" for requirement in production_requirements
     )
     creature_motion_requirements = creature_motion_requirements_for_row(
         request, state, entry, asset_kind
-    )
+    ) if is_temporal else []
     creature_motion_text = ""
     if creature_motion_requirements:
         creature_motion_text = "\n\nCreature motion contract:\n" + "\n".join(
@@ -2449,7 +2461,7 @@ def row_prompt(request: dict[str, Any], state: str, entry: dict[str, Any]) -> st
             f"- {requirement}" for requirement in state_requirements
         )
     phase_prompt_text = ""
-    phases = state_motion_phases(state, frames, entry) if is_sprite and request.get("motion_phase_guides") else []
+    phases = state_motion_phases(state, frames, entry) if is_sprite and is_temporal and request.get("motion_phase_guides") else []
     if phases:
         phase_lines = [
             f"- frame {index + 1}: {phase['name']} - {phase['note']}"
@@ -2467,7 +2479,7 @@ def row_prompt(request: dict[str, Any], state: str, entry: dict[str, Any]) -> st
             + "\n".join(phase_lines)
         )
     frame_economy_text = ""
-    if is_sprite and frames <= 3:
+    if is_sprite and is_temporal and frames <= 3:
         frame_economy_text = (
             "\n\nLow-frame animation requirements:\n"
             "- Treat this as deliberate limited animation, not a failed full cycle.\n"
@@ -2475,7 +2487,7 @@ def row_prompt(request: dict[str, Any], state: str, entry: dict[str, Any]) -> st
             "- With 3 frames, use clear key poses: anticipation, action, recovery; or contact, passing, contact for tiny locomotion.\n"
             "- Do not add fake motion blur or detached streaks to compensate for low frame count."
         )
-    elif is_sprite and frames == 4:
+    elif is_sprite and is_temporal and frames == 4:
         frame_economy_text = (
             "\n\nCompact animation requirements:\n"
             "- Use four distinct key poses. Keep timing readable and loopable, but do not pretend this has the smoothness of a 6-8 frame cycle.\n"
@@ -2560,7 +2572,8 @@ def row_prompt(request: dict[str, Any], state: str, entry: dict[str, Any]) -> st
     runtime_size = f"{cell_width}x{cell_height}"
     if is_sprite:
         reference_contract = (
-            "Use the attached accepted idle/direction anchor as the canonical character design for this row. "
+            "If an accepted idle/direction anchor is supplied, use it as the canonical character design for this row. "
+            "If none exists, establish one consistent identity in this first sheet and obtain review before later identity-dependent action rows. "
             "If a state anchor is attached for a non-locomotion state, treat it as approved state vocabulary only. "
             "Use the attached layout guide image only for frame count, slot spacing, centering, scale, baseline/airborne placement, and safe padding; it is never an anatomy or motion-quality reference. "
             "For locomotion, the separately attached Image Gen neutral-mannequin reference is authoritative for gait phase and body mechanics only. "
@@ -2578,6 +2591,14 @@ def row_prompt(request: dict[str, Any], state: str, entry: dict[str, Any]) -> st
             "If this is a pre-idle/simple run, the attached base image may be used as the canonical character design. "
             "In direction-anchor mode, do not use base images for final action rows; accepted idle/direction anchors own row identity. "
             + reference_contract
+        )
+    static_set = request.get("frame_semantics") in {"variants", "still-assets"}
+    if is_sprite and static_set:
+        reference_contract = (
+            "Create the requested non-temporal character variants in the declared slot order. "
+            "Keep one identity, camera and apparent scale across all poses. Use a supplied accepted identity reference when available; "
+            "otherwise this first sheet establishes the identity for review. The layout guide defines only slots and safe padding. "
+            "Do not invent a cycle, chronological phases or interpolation between variants."
         )
     style_preset = request.get("style_preset", STYLE_DEFAULT_PRESET)
     style_notes = STYLE_PRESETS.get(style_preset, STYLE_PRESETS["custom"])
@@ -2621,6 +2642,16 @@ def row_prompt(request: dict[str, Any], state: str, entry: dict[str, Any]) -> st
 - This row owns variation only. Do not redesign the pack identity from slot to slot.
 - Each slot is one separate {frame_noun}; do not make a scene, collage, menu, catalog page, or labeled reference board.
 - For tiles/textures, preserve grid alignment and edge compatibility. For props/icons/VFX, preserve clean isolation and readable silhouette."""
+    elif static_set:
+        anchor_block = """Static identity lock:
+- Keep face, body proportions, palette, outline, clothing, props and asymmetric details consistent across variants.
+- Each slot is a separate requested pose or direction, not a timestamp. Preserve the declared inventory.
+- Review this set against the supplied identity reference, or approve the initial identity before later sheets."""
+    elif not character.get("base_image"):
+        anchor_block = """Identity establishment:
+- No accepted identity image is supplied in this request. Keep one consistent character design across this first sheet.
+- Review face, proportions, palette, outfit and asymmetric details before using it as an identity reference.
+- Missing accepted anchors remain a generation gate for later identity-dependent action rows."""
     slot_fill = "complete full-body pose" if is_sprite else f"complete {frame_noun}"
     clip_text = "No character body part should be clipped by the frame slot." if is_sprite else "No asset edge should be accidentally clipped unless the row is explicitly a full-cell tile or seamless texture."
     preserve_text = "Preserve the same silhouette, face, proportions, palette, material, and props across every frame." if is_sprite else "Preserve set-level palette, projection, material logic, scale, and edge treatment across every slot."
@@ -2662,8 +2693,8 @@ Layout requirements:
 - Treat the image as {frames} equal-width invisible {runtime_size} frame slots. Fill every slot: each requested slot must contain exactly one {slot_fill}.
 - Spread the {frames} items evenly across the declared layout. Do not leave any requested slot blank or create large empty gaps between slots.
 - Center one {slot_fill} in each slot. No item may cross into the neighboring slot.
-- {"Fill each runtime cell edge-to-edge. Self-repeat and adjacency tiles/textures must reach every required cell edge with no neutral gutter, safe padding, framed swatch, rounded card, or per-cell border; only catalog items with repeat_mode=overlay may retain the declared flat neutral background outside the artwork for later removal." if asset_kind in {"tileset", "texture"} else f'Use a perfectly flat pure neutral {generation_background["name"]} {generation_background["hex"]} background across the whole image, with no gradient, texture, vignette, floor, cast shadow, or lighting variation.'}
-- The neutral background is a removable source constraint only. Preserve legitimate black, white, and gray colors inside the artwork, outlines, highlights, props, and effects.
+- {"Fill each runtime cell edge-to-edge. Self-repeat and adjacency tiles/textures must reach every required cell edge with no neutral gutter, safe padding, framed swatch, rounded card, or per-cell border; only catalog items with repeat_mode=overlay may retain the declared flat neutral background outside the artwork for later removal." if asset_kind in {"tileset", "texture"} else ('Use a fully transparent background with clean native alpha, complete silhouettes and no floor, backdrop, cast shadow, halo, matte fringe or cross-slot bleed.' if request.get("background_removal", {}).get("method") == "alpha" else f'Use a perfectly flat pure neutral {generation_background["name"]} {generation_background["hex"]} background across the whole image, with no gradient, texture, vignette, floor, cast shadow, or lighting variation.')}
+- {"Preserve legitimate black, white, gray and semitransparent artwork pixels; transparent exterior is not a color key." if request.get("background_removal", {}).get("method") == "alpha" else "The neutral background is a removable source constraint only. Preserve legitimate black, white, and gray colors inside the artwork, outlines, highlights, props, and effects."}
 - {rendering_note}
 - {f'Keep every frame self-contained with at least {safe_margin_x} px horizontal and {safe_margin_y} px vertical safe padding. {clip_text}' if asset_kind not in {"tileset", "texture"} else 'For repeat_mode=self or adjacency, zero safe margin is intentional and the cell boundary is the runtime edge. For repeat_mode=overlay, preserve the intentional flat neutral outside space so background removal can produce alpha instead of cover-fitting the art.'}
 - Avoid motion blur. Use clear pose changes readable at {runtime_size}.
@@ -2808,7 +2839,7 @@ def main() -> int:
         if isinstance(raw_request.get("generation_background"), dict)
         else args.generation_background
     )
-    generation_background = choose_generation_background(
+    generation_background = {"family": "transparent", "name": "transparent", "hex": "#00000000", "rgb": [0, 0, 0], "selection": "auto"} if background_removal["method"] == "alpha" else choose_generation_background(
         base_source,
         requested_background,
         fallback=(

@@ -14,11 +14,15 @@ import argparse
 import json
 import shutil
 from pathlib import Path
+from statistics import median
 from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
 
 from runio import acquire_run_dir_lock, atomic_save_image, atomic_write_text
+from extract_sprite_row_frames import stable_feature_metrics, STABLE_FEATURE_KEYS
+from spritecore.paths import resolve_run_path
+from spritecore.item_delivery import digest_file
 from spritecore.image_ops import (
     ArtMode,
     ImagePolicyError,
@@ -193,6 +197,27 @@ def copy_optional_sidecars(run_dir: Path, out_dir: Path) -> None:
     references = run_dir / "references"
     if references.is_dir() and not (out_dir / "references").exists():
         shutil.copytree(references, out_dir / "references")
+    provenance = run_dir / "source-provenance.json"
+    if provenance.is_file():
+        from spritecore.contracts import load_provenance
+        document = load_provenance(provenance).to_dict()
+        for entry in document["accepted_sources"]:
+            source = resolve_run_path(run_dir, entry["path"])
+            if digest_file(source) != entry["sha256"]:
+                raise SystemExit("accepted source hash changed before registration")
+            destination = resolve_run_path(out_dir, entry["path"])
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+            if entry.get("upstream_report"):
+                report_source = resolve_run_path(run_dir, entry["upstream_report"])
+                report_target = resolve_run_path(out_dir, entry["upstream_report"])
+                report_target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(report_source, report_target)
+                for state in entry["states"]:
+                    selector = resolve_run_path(run_dir, f"qa/{state}-video-frame-selector")
+                    if selector.is_dir():
+                        shutil.copytree(selector, out_dir / f"qa/{state}-video-frame-selector", dirs_exist_ok=True)
+        shutil.copy2(provenance, out_dir / provenance.name)
 
 
 def make_overlay(out_dir: Path, rows: list[dict[str, Any]], cell: tuple[int, int], args: argparse.Namespace) -> Path:
@@ -393,15 +418,30 @@ def main() -> int:
             warnings.extend(f"{state} frame {index}: {warning}" for warning in frame_warnings)
             frame_reports.append({"frame": index, **metrics, "warnings": frame_warnings})
         row_errors = [error for error in errors if error.startswith(f"{state} ")]
-        manifest_rows.append({"state": state, "frames": len(files), "method": "registered", "files": files, "ok": not row_errors})
+        feature_records = []
+        for rel in files:
+            with Image.open(out_dir / rel) as opened:
+                feature_records.append(stable_feature_metrics(opened.convert("RGBA")))
+        manifest_rows.append({"state": state, "frames": len(files), "method": "registered", "files": files,
+            "labels": row.get("labels", request["states"][state].get("asset_labels", [])),
+            "pose_geometry": row.get("pose_geometry", request["states"][state].get("pose_geometry", {"kind": "upright"})),
+            "frame_records": feature_records, "ok": not row_errors})
         report_rows.append({"state": state, "frames": len(files), "frames_report": frame_reports})
 
+    reference_state = output_request.get("registration", {}).get("reference_state", "idle")
+    reference_row = next((row for row in manifest_rows if row["state"] == reference_state), manifest_rows[0] if manifest_rows else {})
+    reference_metrics = {key: median([record[key] for record in reference_row.get("frame_records", []) if record.get(key)])
+        for key in STABLE_FEATURE_KEYS if any(record.get(key) for record in reference_row.get("frame_records", []))}
+    for row in manifest_rows:
+        row["frame_records"] = [{"index": index, **record, **{f"{key}_vs_reference": round(record[key]/value, 4)
+            for key, value in reference_metrics.items() if record.get(key)}} for index, record in enumerate(row["frame_records"])]
     manifest = {
         "ok": not errors,
         "engine": "component-row",
         "run_dir": str(out_dir),
         "cell": output_request["cell"],
         "rows": manifest_rows,
+        "sprite_registration": {"reference_state": reference_row.get("state"), "reference_basis": "registered-row-median", **reference_metrics},
         "errors": errors,
         "warnings": warnings,
     }

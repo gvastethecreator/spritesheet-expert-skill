@@ -53,3 +53,26 @@ jobs:
 
       - name: Verify generated diff hygiene
         run: git diff --check
+
+  delivery-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install deterministic test and browser dependencies
+        run: python -m pip install -e ".[test]" playwright==1.57.0
+
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Exercise verified Delivery Lab in a real browser
+        run: python tests/browser/check_delivery_lab.py

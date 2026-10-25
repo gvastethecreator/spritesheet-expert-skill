@@ -74,7 +74,9 @@ Do not default every creature to a right-hand strike. Anticipation and contact m
 
 Black by default for creature grids. Gray or white when the creature loses contrast against black. White-eyed or shadow creatures often need neutral gray.
 
-Run Lucida before adaptive segmentation. Review variable source boxes before registration. A fixed `2x2` layout defines frame order, not one fixed crop size.
+Keep verified native alpha; run Lucida before adaptive segmentation only when the
+source requires matte removal. Review variable source boxes before registration.
+A fixed `2x2` layout defines frame order, not one fixed crop size.
 
 ## Registration
 

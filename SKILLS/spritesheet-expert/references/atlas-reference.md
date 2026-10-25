@@ -34,12 +34,15 @@ Local model stack:
 Install only when needed:
 
 ```bash
-pip install -r scripts/requirements-lucida.txt
+python scripts/setup_item_model_runtime.py --profile nvidia --capability lucida --capability ben2
 pip install "rembg[cpu]"
-pip install git+https://github.com/PramaLLC/BEN2.git
 ```
 
-Then enable it explicitly when final quality matters or when source sheets are irregular/non-flat:
+Lucida/BEN2 weights are a separate preparation step. Use the runtime Python and
+offline checkpoint instructions in `../model-runtime/README.md`. The rembg lane
+remains separate and is not covered by the locked Lucida/BEN2 runtime.
+
+Then enable removal explicitly for a source that needs it:
 
 ```bash
 python scripts/preset_to_request.py custom-atlas --background-removal lucida --grid-segmentation adaptive --out /abs/run/request.json --states-file /abs/run/states.json

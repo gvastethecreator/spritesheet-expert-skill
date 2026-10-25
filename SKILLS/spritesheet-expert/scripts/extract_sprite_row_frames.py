@@ -39,6 +39,7 @@ DEFAULT_LUCIDA_INPUT_SIZE = 1024
 DEFAULT_LUCIDA_HARD_ALPHA_THRESHOLD = 64
 DEFAULT_LUCIDA_EDGE_CLEANUP_THRESHOLD = 12.0
 BACKGROUND_REMOVAL_METHODS = {
+    "alpha",
     "none",
     "chroma",
     "matte",
@@ -455,7 +456,7 @@ def normalize_background_removal(request: dict[str, Any], args: argparse.Namespa
             raise SystemExit(
                 "background_removal.revision must be a 40-character lowercase commit SHA for Lucida"
             )
-    else:
+    elif method != "ben2":
         revision = None
     device = str(config.get("device", "auto"))
     if args.background_device:
@@ -478,9 +479,9 @@ def normalize_background_removal(request: dict[str, Any], args: argparse.Namespa
         else "legacy-chroma"
     )
     source_family = str(config.get("source_family", inferred_family))
-    if source_family not in {"neutral", "legacy-chroma", "unknown"}:
+    if source_family not in {"transparent", "neutral", "legacy-chroma", "unknown"}:
         raise SystemExit(
-            "background_removal.source_family must be neutral, legacy-chroma, or unknown"
+            "background_removal.source_family must be transparent, neutral, legacy-chroma, or unknown"
         )
     if post_rembg_chroma_cleanup and source_family != "legacy-chroma":
         raise SystemExit(
@@ -673,18 +674,21 @@ def remove_ben2_background(
 ) -> Image.Image:
     try:
         import torch
-        from ben2 import AutoModel
+        from ben2.modeling_ben2 import BEN_Base
     except ImportError as exc:
         raise RuntimeError(
             "background_removal=ben2 requires BEN2 and torch; install with: "
-            "pip install git+https://github.com/PramaLLC/BEN2.git"
+            "python scripts/setup_item_model_runtime.py --profile nvidia --capability ben2"
         ) from exc
 
     model = str(config.get("model") or DEFAULT_BEN2_MODEL)
+    from spritecore.model_checkpoints import checkpoint
+    prepared = checkpoint("ben2", "background", model=model, revision=config.get("revision"))
+    config["revision"] = prepared["revision"]
     device = resolve_torch_device(str(config.get("device") or "auto"), torch)
-    session_key = f"ben2:{model}:{device}"
+    session_key = f"ben2:{model}:{prepared['revision']}:{device}"
     if session_key not in sessions:
-        loaded = AutoModel.from_pretrained(model)
+        loaded = BEN_Base.from_pretrained(prepared["path"], local_files_only=True)
         loaded.to(device).eval()
         sessions[session_key] = loaded
     with torch.inference_mode():
@@ -704,19 +708,22 @@ def remove_lucida_background(
     except ImportError as exc:
         raise RuntimeError(
             "background_removal=lucida requires the Lucida dependencies; install with: "
-            "pip install -r scripts/requirements-lucida.txt"
+            "python scripts/setup_item_model_runtime.py --profile nvidia --capability lucida"
         ) from exc
 
     model = str(config.get("model") or DEFAULT_LUCIDA_MODEL)
     revision = str(config.get("revision") or DEFAULT_LUCIDA_REVISION)
+    from spritecore.model_checkpoints import checkpoint
+    prepared = checkpoint("lucida", "background", model=model, revision=revision)
     device = resolve_torch_device(str(config.get("device") or "auto"), torch)
     input_size = int(config.get("input_size") or DEFAULT_LUCIDA_INPUT_SIZE)
     session_key = f"lucida:{model}:{revision}:{device}:{input_size}"
     if session_key not in sessions:
         loaded = AutoModelForImageSegmentation.from_pretrained(
-            model,
+            prepared["path"],
             revision=revision,
             trust_remote_code=True,
+            local_files_only=True,
         )
         loaded.to(device).eval()
         sessions[session_key] = loaded
@@ -967,6 +974,10 @@ def remove_background(
 ) -> tuple[Image.Image, str]:
     source = image.convert("RGBA")
     method = str(config["method"])
+    if method == "alpha":
+        if transparent_edge_ratio(source) < 0.70 or source.getchannel("A").getbbox() is None:
+            raise RuntimeError("native alpha failed exterior validation; review the source before selecting neutral matte removal")
+        return source, "alpha"
     if method == "none":
         return source, "none"
     if method == "auto":

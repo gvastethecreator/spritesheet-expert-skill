@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "item-group-sample-set-v1",
+  "notes": "Selected source groups, reviewed by an agent. No human approval or whole-sheet semantic ground truth. Original images remain external.",
+  "samples": [
+    {
+      "id": "gothic-buildings",
+      "alphaThreshold": 64,
+      "schemaVersion": "item-group-annotations-v1",
+      "sourceSha256": "9440f82d0051a753bff1528e583c0ac7f8489be4c79e90e6478946d65ddcb2c3",
+      "reviewer": {"kind": "agent", "name": "Codex", "method": "Source image and selected group crops; not human acceptance"},
+      "correctionSeconds": null,
+      "groups": [
+        {"id": "fortified-garrison", "rects": [[674, 0, 974, 418]], "classification": {"family": "building", "canonicalTypes": ["castle", "building"]}},
+        {"id": "gothic-church", "rects": [[974, 0, 1254, 433]], "classification": {"family": "building", "canonicalTypes": ["church"]}},
+        {"id": "covered-well", "rects": [[442, 692, 652, 947]], "classification": {"family": "building", "canonicalTypes": ["well"]}},
+        {"id": "observatory", "rects": [[367, 999, 691, 1254], [435, 944, 623, 963], [402, 963, 650, 999]], "classification": {"family": "building", "canonicalTypes": ["observatory"]}}
+      ]
+    },
+    {
+      "id": "gothic-villagers",
+      "alphaThreshold": 64,
+      "schemaVersion": "item-group-annotations-v1",
+      "sourceSha256": "7ce690cf11740a585d4fe0832e1856f0a0768ad4ccb3cb9ae43aacdbf27fd4a6",
+      "reviewer": {"kind": "agent", "name": "Codex", "method": "Source image and selected group crops; not human acceptance"},
+      "correctionSeconds": null,
+      "groups": [
+        {"id": "merchant-front", "rects": [[13, 17, 117, 177]], "classification": {"family": "character", "canonicalTypes": ["merchant", "traveler", "villager"]}},
+        {"id": "merchant-back", "rects": [[119, 20, 203, 177]], "classification": {"family": "character", "canonicalTypes": ["merchant", "traveler", "villager"]}},
+        {"id": "merchant-side", "rects": [[203, 20, 284, 178]], "classification": {"family": "character", "canonicalTypes": ["merchant", "traveler", "villager"]}},
+        {"id": "market-stall", "rects": [[475, 21, 635, 177]], "classification": {"family": "object", "canonicalTypes": ["stall"]}},
+        {"id": "priest-front", "rects": [[709, 725, 817, 897]], "classification": {"family": "character", "canonicalTypes": ["priest"]}}
+      ]
+    },
+    {
+      "id": "raven-heraldry",
+      "alphaThreshold": 64,
+      "schemaVersion": "item-group-annotations-v1",
+      "sourceSha256": "942e5f9899d1d47856007006fac9e9a73a2520964d991a7a1b85637e523b95fd",
+      "reviewer": {"kind": "agent", "name": "Codex", "method": "Source image and selected group crops; not human acceptance"},
+      "correctionSeconds": null,
+      "groups": [
+        {"id": "gold-medallion", "rects": [[374, 1109, 476, 1200], [390, 1200, 476, 1219]], "classification": {"family": "heraldry", "canonicalTypes": ["medallion", "emblem"]}},
+        {"id": "skull-medallion", "rects": [[476, 1109, 575, 1219]], "classification": {"family": "heraldry", "canonicalTypes": ["medallion", "emblem"]}},
+        {"id": "star-medallion", "rects": [[575, 1109, 679, 1220]], "classification": {"family": "heraldry", "canonicalTypes": ["medallion", "emblem"]}},
+        {"id": "raven-medallion", "rects": [[679, 1109, 787, 1220]], "classification": {"family": "heraldry", "canonicalTypes": ["medallion", "emblem"]}}
+      ]
+    }
+  ]
+}

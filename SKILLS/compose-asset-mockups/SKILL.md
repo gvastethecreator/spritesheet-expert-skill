@@ -12,7 +12,7 @@ Derived presentations from validated assets. Do not mutate sources or present re
 1. Accept only pinned inputs.
    - Each asset and font must reference artifact, upstream manifest, validation report, SHA-256, license, provenance.
    - Unvalidated sources return to the owning skill. Do not repair or regenerate them here.
-   - Reject upstream reports with missing, stale, or non-representative production-media evidence. Fixture, placeholder, or reconstructed substitute cannot replace a rejected source.
+   - Reject upstream reports whose production-media evidence is missing, stale, or marked non-representative. Fixture, placeholder, or reconstructed substitute cannot replace a rejected source.
 
 2. Define the presentation contract.
    - Write `presentation.json` against `references/schemas/presentation.schema.json`.
@@ -30,12 +30,12 @@ Validates contract, writes canonical prepared/resolved JSON, verifies every pin,
 4. Build only derived outputs.
    - Compose from the resolved store with the project's existing image, HTML/canvas, or design tooling.
    - Respect canvas, safe zone, layer order, asset list, licensed fonts, approved copy, and resampling rules.
-   - Deterministic composition may arrange approved pixels — not invent missing character, prop, background, or UI art. Missing production media → `$imagegen`, explicit `$grok-imagine` still route, or owning asset skill.
+   - Deterministic composition may arrange approved pixels. It must not invent missing character, prop, background, or UI art. Missing production media → `$imagegen`, explicit `$grok-imagine` still route, or owning asset skill.
    - Outputs under `presentation/outputs/`. Never overwrite source assets, manifests, reports, fonts, or licenses.
 
 5. Capture and reconcile proof.
    - Inspect each output at delivery size: crop, readability, source fidelity, license/provenance coverage, truth label, hash.
-   - Contact board proves layout only. Runtime-captured claims need hash-backed capture evidence; reconstructed and illustrative outputs keep truth labels visible in the contract.
+   - Contact board proves layout only. Runtime-captured claims require hash-backed capture evidence; reconstructed and illustrative outputs keep truth labels visible in the contract.
    - Update presentation manifest and any runtime capture evidence. Revalidate before handoff to `$produce-2d-assets`.
 
 ## Completion Contract

@@ -31,6 +31,7 @@ Then: serve_curation.py --run-dir <out-dir>
 from __future__ import annotations
 
 import argparse
+from hashlib import sha256
 import json
 import re
 from pathlib import Path
@@ -541,6 +542,9 @@ def write_run(
         chroma_key = {"name": "magenta", "hex": "#FF00FF", "rgb": [255, 0, 255]}
 
     request_states = {}
+    semantics = provenance.get("frame_semantics") or ("variants" if any(state.get("labels") for state in states)
+        else "animation" if provenance.get("asset_kind", "sprite") == "sprite" else "still-assets")
+    temporal = semantics in {"animation", "effects"}
     manifest_rows = []
     for state in states:
         name = state["name"]
@@ -562,8 +566,8 @@ def write_run(
         m = meta.get(name, {})
         request_states[name] = {
             "frames": len(state["rects"]),
-            "fps": int(m.get("fps", 6)),
-            "loop": bool(m.get("loop", True)),
+            "fps": int(m.get("fps", 6)) if temporal else 1,
+            "loop": bool(m.get("loop", True)) if temporal else False,
             "action": "",
         }
         if labels:
@@ -578,6 +582,7 @@ def write_run(
         "kind": "sprite-gen-request",
         "engine": "component-row",
         "asset_kind": provenance.get("asset_kind", "sprite"),
+        "frame_semantics": semantics,
         "extraction_mode": provenance.get("extraction_mode", "components"),
         "character": {"id": out_dir.name, "description": f"unpacked from atlas ({layout_source})"},
         "cell": {"shape": "rect" if cell_w != cell_h else "square", "width": cell_w, "height": cell_h, "size": cell_w, "safe_margin": 0},
@@ -608,7 +613,7 @@ def write_run(
     return {"layout_source": layout_source, "states": [s["name"] for s in states], "cell": [cell_w, cell_h]}
 
 
-def import_pngs(out_dir: Path, png_paths: list[Path], state_name: str, labels: list[str], iso: dict[str, Any] | None = None) -> dict[str, Any]:
+def import_pngs(out_dir: Path, png_paths: list[Path], state_name: str, labels: list[str], iso: dict[str, Any] | None = None, source_type: str = "imported") -> dict[str, Any]:
     """Import a folder of separate PNGs as one state's frames (e.g. furniture set).
 
     Each PNG becomes one frame so they can be compared side by side and given a
@@ -637,11 +642,12 @@ def import_pngs(out_dir: Path, png_paths: list[Path], state_name: str, labels: l
         "kind": "sprite-gen-request",
         "engine": "component-row",
         "asset_kind": "asset",
+        "frame_semantics": "still-assets",
         "extraction_mode": "slots",
         "character": {"id": out_dir.name, "description": f"imported PNG set from {png_paths[0].parent}"},
         "cell": {"shape": "square" if cell_w == cell_h else "rect", "width": cell_w, "height": cell_h, "size": cell_w, "safe_margin": 0},
         "chroma_key": {"name": "magenta", "hex": "#FF00FF", "rgb": [255, 0, 255]},
-        "states": {state_name: {"frames": len(imgs), "fps": 2, "loop": False, "action": "imported still set", "asset_labels": labels}},
+        "states": {state_name: {"frames": len(imgs), "fps": 1, "loop": False, "action": "imported still set", "asset_labels": labels}},
     }
     if iso:
         request["iso"] = iso  # ground-grid geometry for the curator overlay
@@ -662,6 +668,16 @@ def import_pngs(out_dir: Path, png_paths: list[Path], state_name: str, labels: l
                     "cell": {"width": cell_w, "height": cell_h}, "source_dir": str(png_paths[0].parent),
                     "files": [p.name for p in png_paths], "labels": labels}, ensure_ascii=False, indent=2) + "\n",
     )
+    accepted = []
+    for index, path in enumerate(png_paths):
+        payload = path.read_bytes()
+        relative = f"source/imported-{index:04d}.png"
+        (out_dir / "source").mkdir(exist_ok=True)
+        (out_dir / relative).write_bytes(payload)
+        accepted.append({"path": relative, "sha256": sha256(payload).hexdigest(), "size_bytes": len(payload), "states": [state_name]})
+    atomic_write_text(out_dir / "source-provenance.json", json.dumps({"version": 2, "kind": "sprite-source-provenance",
+        "source_type": source_type, "art_engine": source_type, "fixture": source_type == "fixture",
+        "verification_status": "verified", "state_coverage": [state_name], "accepted_sources": accepted}, indent=2) + "\n")
     return {"layout_source": "imported-pngs", "states": [state_name], "cell": [cell_w, cell_h], "frames": len(imgs)}
 
 
@@ -707,6 +723,8 @@ def main() -> int:
     parser.add_argument("--direction", help="which direction to unpack from a multi-direction manifest")
     parser.add_argument("--states", help="comma-separated state names to override detected/row names")
     parser.add_argument("--asset-kind", choices=["sprite", "tileset", "texture", "asset", "prop", "props", "icon", "ui", "vfx"], help="asset kind for synthesized sprite-request.json")
+    parser.add_argument("--source-type", choices=["imported", "fixture"], default="imported", help="declare test fixtures explicitly; imported media is not provider-generated art")
+    parser.add_argument("--frame-semantics", choices=["animation", "effects", "variants", "still-assets", "tiles", "seamless-textures"], help="explicit temporal or static meaning of imported slots")
     parser.add_argument("--extraction-mode", choices=["components", "slots"], help="extraction mode for synthesized sprite-request.json")
     parser.add_argument("--asset-labels-file", type=Path, help="JSON object mapping state name to per-slot asset labels")
     parser.add_argument("--asset-catalog-file", type=Path, help="JSON asset_catalog with items metadata for runtime naming/pivots/categories")
@@ -821,7 +839,7 @@ def main() -> int:
                     "anchor_pixel": anchor.get("pixel", [128, 222]),
                     "canvas": meta.get("style", {}).get("canvas", [256, 256]),
                 }
-        result = import_pngs(out_dir, png_paths, args.state_name, labels, iso)
+        result = import_pngs(out_dir, png_paths, args.state_name, labels, iso, args.source_type)
         result["ok"] = True
         result["out_dir"] = str(out_dir)
         print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -938,7 +956,18 @@ def main() -> int:
     )
     provenance["segmentation_overlay"] = segmentation_overlay
     provenance["segmentation_warnings"] = segmentation_warnings
+    provenance["frame_semantics"] = args.frame_semantics or (manifest or {}).get("frame_semantics")
     result = write_run(out_dir, atlas, states, cell, meta, layout_source, provenance)
+    original_bytes = Path(atlas_path).read_bytes()
+    source_snapshot = out_dir / "source/imported-atlas.png"
+    source_snapshot.parent.mkdir(exist_ok=True)
+    source_snapshot.write_bytes(original_bytes)
+    covered_states = [state["name"] for state in states]
+    atomic_write_text(out_dir / "source-provenance.json", json.dumps({"version": 2,
+        "kind": "sprite-source-provenance", "source_type": args.source_type, "art_engine": args.source_type,
+        "fixture": args.source_type == "fixture", "verification_status": "verified", "state_coverage": covered_states,
+        "accepted_sources": [{"path": "source/imported-atlas.png", "sha256": sha256(original_bytes).hexdigest(),
+            "size_bytes": len(original_bytes), "states": covered_states}]}, indent=2) + "\n")
     result["ok"] = not segmentation_warnings
     result["segmentation_ok"] = not segmentation_warnings
     result["out_dir"] = str(out_dir)

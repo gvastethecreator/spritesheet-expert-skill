@@ -71,13 +71,14 @@ def test_production_policy_treats_grok_and_mixed_sources_as_generated(
     assert "generation-provenance" in policy.required_gate_ids
 
 
-def test_isometric_tileset_policy_uses_structured_projection_fact() -> None:
+@pytest.mark.parametrize("projection", ["isometric", "2:1 isometric"])
+def test_isometric_tileset_policy_uses_structured_projection_fact(projection: str) -> None:
     request = _normalized_request(
         asset_kind="tileset",
         frame_semantics="tiles",
         extraction_mode="slots",
         source_type="imported",
-        projection="isometric",
+        projection=projection,
         states={
             "terrain": {
                 "frames": 8,
@@ -95,7 +96,7 @@ def test_isometric_tileset_policy_uses_structured_projection_fact() -> None:
         "asset-slots",
         "isometric-tiles",
     )
-    assert "projection=isometric" in policy.applied_reasons["isometric-tiles"]
+    assert f"projection={projection}" in policy.applied_reasons["isometric-tiles"]
     assert "frame_semantics=tiles" in policy.skipped_reasons["animation-contracts"]
 
 
@@ -223,3 +224,19 @@ def test_policy_rejects_a_mapping_that_is_not_a_normalized_request() -> None:
 
     with pytest.raises(GatePolicyError, match="normalized.*frame_semantics"):
         derive_gate_policy(request, workflow="production")
+
+
+def test_final_dispatcher_rejects_conflicting_explicit_lane(tmp_path, monkeypatch, capsys) -> None:
+    import json
+    import check_workflow
+    (tmp_path / "workflow.json").write_text(json.dumps({"schemaVersion": "item-atlas-workflow-v1"}))
+    monkeypatch.setattr("sys.argv", ["check_workflow.py", "--run-dir", str(tmp_path), "--lane", "animation", "--describe"])
+    assert check_workflow.main() == 3
+    assert "conflicts with the static-items workflow" in json.loads(capsys.readouterr().out)["error"]
+
+
+def test_single_frame_effect_keeps_its_temporal_gate_lane() -> None:
+    from spritecore.workflow_lanes import select_lane
+    request = _normalized_request(asset_kind="vfx", frame_semantics="effects", states={"flash": {"frames": 1, "fps": 8}})
+    assert "animated" in derive_gate_policy(request, workflow="production").categories
+    assert select_lane(request) == "animation"
