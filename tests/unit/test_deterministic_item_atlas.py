@@ -380,6 +380,33 @@ def test_tag_correction_invalidates_only_semantic_approval(tmp_path: Path) -> No
     assert (approved / "manifest.json").read_bytes() == original
 
 
+def test_batched_approval_does_not_approve_repacked_placement(tmp_path: Path) -> None:
+    from spritecore.item_delivery import validate_delivery
+
+    source, root = tmp_path / "source.png", tmp_path / "parent"
+    _sheet().save(source)
+    manifest = build_item_atlas(source, root, provenance="imported")
+    discarded, *retained = manifest["items"]
+    output = tmp_path / "reviewed"
+    successor = apply_ownership_review(root / "manifest.json", {
+        "parentManifestSha256": digest_file(root / "manifest.json"),
+        "operations": [
+            {"kind": "approve", "itemIds": [item["id"] for item in retained]},
+            {"kind": "discard", "itemIds": [discarded["id"]]},
+        ],
+    }, output)
+    target = retained[-1]
+    changed = next(item for item in successor["items"] if item["id"] == target["id"])
+    assert changed["geometry"]["frame"] != target["geometry"]["frame"]
+    assert {scope: record["status"] for scope, record in changed["review"]["scopes"].items()} == {
+        "pixels": "approved", "semantics": "approved", "placement": "pending",
+    }
+    report = validate_delivery(output / "manifest.json")
+    assert report["status"] == "review-required"
+    assert not report["integrityErrors"]
+    assert f"{target['id']}: placement review missing or stale" in report["reviewBlockers"]
+
+
 def test_failed_directory_publication_restores_prior_bytes(tmp_path: Path, monkeypatch) -> None:
     from spritecore.publication import publish_directory
     old, stage = tmp_path / "published", tmp_path / "staged"

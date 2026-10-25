@@ -1,6 +1,6 @@
 ---
 name: build-game-ui-kits
-description: "Game UI kits: raster UI from imported art, Imagegen, or explicit Grok stills; neutral-background controls, icons, HUD parts, interaction states, density variants, nine-slice assets, provenance, state/stretch proof."
+description: "Game UI kits: raster UI from imported art, Imagegen, or explicit Grok stills; controls, icons, HUD parts, native alpha or reviewed cutouts, interaction states, density variants, nine-slice assets, provenance, state/stretch proof."
 ---
 
 # Build Game UI Kits

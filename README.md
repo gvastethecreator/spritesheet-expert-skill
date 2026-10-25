@@ -73,6 +73,16 @@ Validate the public skill package:
 pnpm run validate
 ```
 
+Open the bundled Studio with a local workspace:
+
+```powershell
+pnpm run studio
+```
+
+Studio supports deterministic alpha extraction, item review, portable workspaces,
+and verified draft/final exports. The optional model runtime is not required for
+these operations. See the [Studio guide](./SKILLS/spritesheet-expert/studio/README.md).
+
 Run the complete contract and integration suite, or the full release gate:
 
 ```powershell
@@ -86,9 +96,9 @@ pnpm run check
 - [`references/`](./SKILLS/spritesheet-expert/references): atlas, pixel art, animation, isometric, workflow, and QA notes.
 - [`scripts/`](./SKILLS/spritesheet-expert/scripts): extraction, curation, composition, preview, and validation helpers.
 - [`agents/openai.yaml`](./SKILLS/spritesheet-expert/agents/openai.yaml): optional agent metadata.
-
-Optional runtime extras are isolated by capability: install `SKILLS/spritesheet-expert/scripts/requirements-lucida.txt` for the preferred sprite cutout lane, `requirements-background.txt` for rembg/BiRefNet, and `requirements-video.txt` for video-frame ingestion.
 - [`SKILLS/`](./SKILLS/README.md): routing and commands for all six published skills.
+
+Optional runtime extras are isolated by capability. Use the [locked model runtime](./SKILLS/spritesheet-expert/model-runtime/README.md) with `--capability lucida` or `--capability ben2` for those cutout lanes. The pinned [background requirements](./SKILLS/spritesheet-expert/scripts/requirements-background.txt) cover rembg/BiRefNet; [video requirements](./SKILLS/spritesheet-expert/scripts/requirements-video.txt) cover video-frame ingestion.
 
 ## Status
 

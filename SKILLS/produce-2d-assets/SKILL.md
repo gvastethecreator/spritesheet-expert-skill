@@ -27,7 +27,7 @@ Delegate only when parallel ownership adds value, not because multiple skills ex
 2. Produce each family through its owner.
    - Real source provenance, licenses, portable paths, current hashes, leaf skill deterministic report/proof.
    - `evidence.production_media` on every production leaf: `representative: true`, `provenance_verified: true`, explicit `source_types`. Imagegen/Grok/imported stay distinct. Fixtures, placeholders, deterministic drawings, legacy-unverified media cannot satisfy a production family.
-   - Isolated sprites, props and UI follow their leaf owner's alpha policy: prefer and preserve valid native transparency. Use a neutral matte only when required, with reviewed model-backed removal when extraction is ambiguous. Full-bleed backgrounds keep authored scene pixels.
+   - Isolated sprites, props and UI follow their leaf owner's alpha policy: prefer and preserve valid native transparency. Use a neutral gray/black/white matte only when required, with reviewed model-backed removal when extraction is ambiguous. Full-bleed backgrounds keep authored scene pixels.
    - Block a dependency until its upstream report passes. No placeholder deliverables to green the aggregate.
    - Provider fails identity, anatomy, semantics, repeat behavior, or edge quality: retry that route. Deterministic code may extract, align, compose, preview, and validate; it may not replace the failed semantic art.
 

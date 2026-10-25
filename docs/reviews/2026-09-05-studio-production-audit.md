@@ -2,6 +2,12 @@
 
 Date: 2026-09-05. Scope: user-requested integration branch, portable agent-first Studio, usable spritesheets, mid-pipeline editing, quality and end-to-end delivery. This is a code/contract audit plus targeted implementation and regression tests, not a claim that real generated art has passed a production benchmark.
 
+This is the historical September 5 baseline. For subsequent fixes and current
+verification, read the [integration review](../architecture/local-item-workflow-review.md)
+and the [backlog progress table](../architecture/studio-production-backlog.md).
+The original findings and authorization statements below describe that audit,
+not the current merge decision. Remaining acceptance work stays in the backlog.
+
 ## Branch and review identity
 
 The supplied URL referred to `feat/integrate-studio-item-atlas-contracts`, initially at `2b14c16b01088608fe361690e9e2be3ea6bb2174`. The already open PR #2 used a different head: `feat/agent-studio-deterministic-item-atlas`, at `eca52d632ec9a9b717f31fbcf3a5ed22467c3254`. Both derive from `df70c6955e7c0d6a99bef5e1f3d02e903f92c4c4` and have divergent changes.

@@ -301,3 +301,63 @@ predecessor retention; it does not certify every crash boundary. Row snapshots
 retain their own final gates. Browser review drafts still require explicit export.
 The broader Studio backlog remains open where these five changes do not meet its
 full acceptance conditions. No commit or push was made.
+
+## Integration health review — 2026-10-25
+
+The review starts from integration head `8bf66bd` and main `df70c69`.
+All 23 commits in PR #2 are patch-equivalent to commits already in this branch.
+PR #1's production-marker fix (`ae39e56`) is also present as `1380567`.
+Its earlier history contains material removed from the public tree; integration
+must preserve the current published file set.
+
+The latest CI failure occurred before pytest. The aggregate skill had lost the
+required `neutral gray/black/white` marker. The correction restores that wording
+while preserving native-alpha-first behavior. The skill catalog, static/UI
+descriptions and installation prompts now use the same policy. The root README
+points to the locked optional runtime instead of the removed Lucida requirements
+file and documents the bundled Studio command.
+
+Current local verification:
+
+- `pnpm run check` passed on Windows with Python 3.13: 759 tests passed, no skips,
+  package/routing/Studio validation passed, and the deterministic smoke passed.
+- `tests/browser/check_delivery_lab.py` passed with the installed Chrome via
+  `CHROMIUM_EXECUTABLE`, at 1440 × 1000. It covered exact file identities, stale
+  receipts, corrupt atlas rejection, three atlas pages, asynchronous replacement
+  targets, workspace isolation, saved handoffs, review and export. Screenshots
+  were inspected. The bundled Playwright Chromium was absent locally.
+- Registry validation passed for all six skills without warnings. All local
+  Markdown link targets in the 35 tracked Markdown files existed.
+
+Independent native review found one further approval defect. A single ownership
+batch could approve an item, discard another item and approve the resulting new
+placement without a separate decision. Ownership approval now records the
+reviewed inputs before packing. The writer reconciles those fingerprints after
+packing and no longer accepts deferred approval instructions. Changed placement
+requires review; unchanged pixel and semantic approvals remain valid.
+
+After the repair, all 88 affected unit/integration cases passed, including the
+new batched-review regression. The browser smoke also passed again. An independent
+reproduction confirmed that the moved item blocks final delivery, and a later
+explicit placement approval restores a passing delivery without altering prior
+revisions. These affected checks supplement the earlier 759-case full run.
+
+The first restricted `pnpm` attempt could not reach the registry to resolve its
+pinned version. The retry used the same version and completed the gate. External
+Grok reviewers could not start because Git Bash exited with Windows error
+`0xC0000142`; no independent reviewer verdict is claimed from those attempts.
+The operator authorized native Codex reviewers and integration commits. PRs #1
+and #3 received PASS+NOTES; the PR #2 approval defect was repaired and independently
+verified. The ancestry-only reconciliation keeps the current published tree.
+It retains the original PR commits, including their historical removed files;
+it does not claim to purge those objects from Git history.
+
+STUDIO-108 remains open for shell-specific command quoting and typed execution
+arguments. Prepared command strings are presentation text, not validated argv.
+Review shell quoting before executing a copied command, especially for paths
+containing quotes or shell syntax. Studio does not execute those strings.
+
+This is repository and browser verification. It adds no provider generation,
+model benchmark, target-engine rendering or human art approval. Five existing
+motion templates still report `needs-imagegen` and `ready=false`. The remaining
+production acceptance items in the backlog retain their scope.

@@ -1,6 +1,6 @@
 ---
 name: build-static-game-assets
-description: "Static game assets: non-animated raster from imported art, Imagegen, or explicit Grok stills; props, pickups, decals, item icons, neutral-background cutouts, pivots, sizing, provenance, hashes, contact-sheet proof."
+description: "Static game assets: non-animated raster from imported art, Imagegen, or explicit Grok stills; props, pickups, decals, item icons, native alpha or reviewed cutouts, pivots, sizing, provenance, hashes, contact-sheet proof."
 ---
 
 # Build Static Game Assets

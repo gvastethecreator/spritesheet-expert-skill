@@ -907,7 +907,6 @@ def write_item_atlas_run(
                 "classification",
                 "review",
                 "qaFlags",
-                "approveScopes",
             }
             if len(pages) > 1:
                 item_record["geometry"]["pageId"] = page_for[item.item_id]
@@ -915,7 +914,7 @@ def write_item_atlas_run(
                 if key not in controlled:
                     item_record[key] = deepcopy(value)
             item_record["review"] = reconcile_review(item_record, source_record["sha256"],
-                item_record["review"], approve=override.get("approveScopes", ()))
+                item_record["review"])
             item_records.append(item_record)
         item_records.sort(key=lambda record: (page_for[record["id"]], record["geometry"]["cellRect"][1], record["geometry"]["cellRect"][0]))
 
