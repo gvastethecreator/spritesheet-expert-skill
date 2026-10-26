@@ -1,138 +1,142 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/header/document.svg?title=Spritesheet+Expert&subtitle=Generated+art+in.+Game-ready+sprites+out.&logo=grid3x3&theme=blue&align=center&mode=dark" />
-    <img alt="Spritesheet Expert — generated art in, game-ready sprites out" src="https://shieldcn.dev/header/document.svg?title=Spritesheet+Expert&subtitle=Generated+art+in.+Game-ready+sprites+out.&logo=grid3x3&theme=blue&align=center&mode=light" />
-  </picture>
+  <img alt="Two soft 3D vinyl-toy fighters trade a jab and an overhead hammer fist. Built by sprite.py from two generated sheets." src="docs/assets/v2/matchup.webp" width="760" />
 </p>
+
+<h1 align="center">Spritesheet Expert</h1>
+
+<p align="center"><strong>Generated art in. Game-ready sprites out.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/gvastethecreator/spritesheet-expert-skill/actions/workflows/ci.yml"><img alt="CI status" src="https://shieldcn.dev/github/ci/gvastethecreator/spritesheet-expert-skill.svg?workflow=CI&branch=main&variant=secondary&size=xs" /></a>
-  <a href="https://gvastethecreator.github.io/spritesheet-expert-skill/"><img alt="Project site" src="https://shieldcn.dev/badge/site-live%20workbench-2f5bd3.svg?logo=githubpages&variant=branded&size=xs" /></a>
-  <a href="https://www.python.org/"><img alt="Python 3.11 or newer" src="https://shieldcn.dev/badge/Python-3.11%2B-3776ab.svg?logo=python&variant=secondary&size=xs" /></a>
-  <a href="LICENSE"><img alt="MIT license" src="https://shieldcn.dev/github/license/gvastethecreator/spritesheet-expert-skill.svg?variant=secondary&size=xs" /></a>
+  <a href="https://gvastethecreator.github.io/spritesheet-expert-skill/">Live demo</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#lanes">Lanes</a> ·
+  <a href="#healthy-sheets">Healthy sheets</a> ·
+  <a href="v2/spritesheet-expert/SKILL.md">Skill</a>
 </p>
 
-<p align="center">
-  <img alt="Grandma Oyone lands a palm strike on Dock-Crane Barros. Presentation board composed from validated runtime frames." src="docs/assets/worlds/fight/fight-matchup.gif" width="760" />
-</p>
+An agent skill with one Python CLI. The image model draws the sheet; `sprite.py`
+plans the prompt and layout guide, cuts out and registers every frame, packs the
+atlas, writes a review page, and names every frame that needs a redraw.
 
-Agent skills that turn generated 2D game art into **game-ready, verified assets**: exact pixels, registered frames, packed atlases, runtime manifests, and a pass/fail receipt for every file.
+- Works with any image model. The agent calls the provider; the CLI never does and holds no keys.
+- Style follows the request. The demos use a soft vinyl-toy look; nothing forces it.
+- Every source is stored with its SHA-256, so a changed file fails the build.
 
-An image model draws. These skills do everything after that.
+## Quick start
 
-[Live workbench](https://gvastethecreator.github.io/spritesheet-expert-skill/) · [Install](#install) · [Lanes](#lanes) · [Review tools](#review-tools) · [Skills](./SKILLS/README.md)
+```bash
+git clone https://github.com/gvastethecreator/spritesheet-expert-skill
+cd spritesheet-expert-skill/v2/spritesheet-expert
+pip install pillow numpy scipy
 
-## Why
+python sprite.py plan --out runs/hero --subject "a vinyl-toy fighter" \
+  --anchor hero.png --view "side view, facing right" \
+  --state idle:4 --state punch:6:attack:12
+# generate prompts/<state>.txt with the anchor and guides/<state>.png attached, then:
+python sprite.py build runs/hero --source idle=idle.png --source punch=punch.png --provider "my model"
+python sprite.py check runs/hero --strict
+```
 
-Image models paint convincing sprites, but not usable ones. The grid is irregular, the alpha is soft, each frame has its own scale, and nothing proves the result is the same character. This pack fixes that with deterministic tools and explicit gates, and it never paints replacement art.
+Open `runs/hero/review.html` to play, step, onion-skin and read every check.
 
-| Provider output | After the pipeline |
+## Workflow
+
+| Command | What it does |
 | --- | --- |
-| <img src="docs/assets/worlds/fight/oyone-strike-px-source.png" alt="Provider pixel-style strike sheet on an irregular grid" width="380" /> | <img src="docs/assets/worlds/fight/oyone-strike-px.gif" alt="Converted pixel strike: exact grid, 24 colors, hard alpha, one baseline" width="300" /> |
-| Pixel-looking art on an irregular grid, soft alpha | Exact grid, 24-color palette, hard alpha, one baseline |
+| `plan` | Writes `run.json`, a prompt and a layout guide per state or set (pose mannequins for animation) |
+| *(your agent)* | Generates the sheet with the anchor and guide attached |
+| `build` | Cutout, frames on one baseline and one size, atlas, previews, `review.html` |
+| `repair` | A kit per bad frame: its nearest healthy neighbors, the pose guide and a prompt |
+| `check` | Source hashes, outputs and every open check; `--strict` exits 1 while anything is open |
+
+Draw the whole sheet first, then redraw only what broke. Frames drawn together
+share light, color and scale; a lone redraw is scaled back to its row on build.
 
 ## Lanes
 
-Every example below is real output from three demo worlds: a **sci-fi** maintenance drone, a **fighting game** inspired by grotesque martial-arts manga, and a **dungeon** run as a bureaucracy. The art was generated with Cozy Studio, then processed by the scripts in this repo.
+### Animation
 
-### Animation grid → runtime row
+Walk, run, idle, attack, jump, hurt, cast and VFX rows. A pose mannequin per cell
+sets each pose and the ground line. Build puts every frame on one baseline at one
+body size, times frames by phase (anticipation and impact hold longer), and checks
+scale, color, motion and the loop.
 
-A compact grid drifts less than a long strip. Frames are segmented, registered to one baseline at one scale, and checked against a motion contract.
+| Generated sheet | Built rows |
+| --- | --- |
+| <img src="docs/assets/v2/anim-source.webp" alt="Generated idle and punch rows of the red fighter" width="420" /> | <img src="docs/assets/v2/anim-red-punch.webp" alt="Punch animation" width="180" /> <img src="docs/assets/v2/anim-blue-smash.webp" alt="Overhead smash animation" width="180" /> |
 
-| Sci-fi walk · pixel | Sci-fi walk · HD | Dungeon idle · HD |
+Recipe: [recipes/animation.md](v2/spritesheet-expert/recipes/animation.md)
+
+### Slots
+
+Named cells without time: a character's poses and gestures, icons, UI states and
+stretchable panels. `--set NAME[:FIT]=a,b,c` picks how each set is placed.
+
+| Fit | For | Placement |
 | --- | --- | --- |
-| <img src="docs/assets/worlds/scifi/walk-pixel.gif" alt="KELP-9 pixel walk cycle" width="200" /> | <img src="docs/assets/worlds/scifi/walk-hd.gif" alt="KELP-9 hand-painted walk cycle" width="200" /> | <img src="docs/assets/worlds/dungeon/mimic-idle-hd.gif" alt="Mimic accountant breathing idle" width="200" /> |
+| `ground` | Poses and gestures | One scale, feet on the baseline |
+| `center` | UI states | One size, centered |
+| `fill` | Icons and items | Each fills its cell |
+| `nine` | Panels | Centered, plus nine-slice margins in `atlas.json` |
 
-Gates: provenance, frame alignment, identity, locomotion or idle contract, motion variation, runtime playback, `validate_run`.
+<p>
+  <img src="docs/assets/v2/gesture-wave.webp" alt="Gesture: wave" width="96" />
+  <img src="docs/assets/v2/gesture-point.webp" alt="Gesture: point" width="96" />
+  <img src="docs/assets/v2/gesture-thumbs-up.webp" alt="Gesture: thumbs up" width="96" />
+  <img src="docs/assets/v2/gesture-cheer.webp" alt="Gesture: cheer" width="96" />
+  <img src="docs/assets/v2/ui-icons-heart.webp" alt="Heart icon" width="72" />
+  <img src="docs/assets/v2/ui-icons-coin.webp" alt="Coin icon" width="72" />
+  <img src="docs/assets/v2/ui-icons-gem.webp" alt="Gem icon" width="72" />
+  <img src="docs/assets/v2/ui-button-normal.webp" alt="Button, normal state" width="120" />
+</p>
 
-```powershell
-python SKILLS/spritesheet-expert/scripts/extract_sprite_row_frames.py --run-dir run --background-removal alpha --alpha-mode hard
-python SKILLS/spritesheet-expert/scripts/compose_sprite_atlas.py --run-dir run
-python SKILLS/spritesheet-expert/scripts/validate_run.py --run-dir run --stage post-extract
+Recipe: [recipes/slots.md](v2/spritesheet-expert/recipes/slots.md)
+
+### Atlas
+
+Loose items with no grid. Build finds each item by its shape, keeps detached parts
+with their owner (a bottle and its cap), drops specks, names items in reading order
+and packs them tightly at one shared scale. If two items touch, the `items` check
+fails instead of guessing.
+
+| Generated: loose items | Built: separated and packed |
+| --- | --- |
+| <img src="docs/assets/v2/atlas-source.webp" alt="Ten loose gym props on one sheet" width="420" /> | <img src="docs/assets/v2/atlas-packed.png" alt="The ten props packed into one atlas" width="300" /> |
+
+Recipe: [recipes/atlas.md](v2/spritesheet-expert/recipes/atlas.md)
+
+## Healthy sheets
+
+Checks name the frames to redraw: missing frames, size jumps, light shifts,
+cut-off poses, matte halos, and states that drift apart in color. In this demo,
+four faults were injected into a real generated sheet; the repairs are real
+generations from `repair` kits.
+
+| Before repair | After repair |
+| --- | --- |
+| <img src="docs/assets/v2/healthy-before-strip.webp" alt="Punch row with a missing frame, a small frame, a dark frame and a cut-off frame" width="420" /> | <img src="docs/assets/v2/healthy-after-strip.webp" alt="Punch row after repair: six matching frames" width="420" /> |
+| 1 fail, 4 warnings | all checks pass |
+
+```bash
+python sprite.py repair runs/hero --state punch --frame 2 --frame 3
+# generate each kit's in-between, then:
+python sprite.py build runs/hero --patch punch:2=f2.png --patch punch:3=f3.png
 ```
 
-### Loose items → packed atlas
+## Outputs
 
-Items anywhere on a transparent sheet. Each one keeps its exact pixels, owns its pixels exclusively, and gets its own atlas rect.
-
-| Provider sheet | Packed atlas |
+| File | What it is |
 | --- | --- |
-| <img src="docs/assets/worlds/dungeon/loot-hd-source.png" alt="Twelve dungeon office items on a transparent sheet" width="400" /> | <img src="docs/assets/worlds/dungeon/loot-hd-atlas.png" alt="The twelve items packed into a size-ordered atlas" width="300" /> |
+| `atlas.png`, `atlas.json` | Cells or packed items, pivot, frame durations or slot names, nine-slice margins |
+| `frames/<state>/NN.png` | Each runtime frame or item |
+| `previews/<state>.webp` | Animated preview with alpha |
+| `review.html` | Self-contained review page: play, step, onion skin, backgrounds, checks, source |
+| `run.json` | Plan, sources with hashes, build report and checks |
 
-```powershell
-python SKILLS/spritesheet-expert/scripts/run_item_atlas_workflow.py loot.png --output-dir run
-```
+## Requirements and status
 
-### VFX and pose sets
+- Python 3.11+, Pillow, numpy, scipy. Optional `rembg[cpu]` for BiRefNet cutouts on busy backgrounds.
+- Lanes ready: animation, slots, atlas. Tiles and backgrounds come next; until then the v1 pack under [SKILLS/](SKILLS/) covers them.
+- Demo art was generated with Cozy Studio; everything after generation is `sprite.py`.
 
-| Hit spark · build-up, peak, decay | Intern · four facings |
-| --- | --- |
-| <img src="docs/assets/worlds/fight/hit-spark-px.gif" alt="Pixel hit spark effect" width="180" /> | <img src="docs/assets/worlds/dungeon/intern-directions-atlas.png" alt="Intern adventurer facing down, left, right, and up" width="400" /> |
-
-### Backgrounds, UI kits, tiles
-
-| Parallax pack (`build-game-backgrounds`) | UI kit (`build-game-ui-kits`) |
-| --- | --- |
-| <img src="docs/assets/worlds/scifi/bg-scroll.gif" alt="Flooded laundromat parallax scroll proof" width="400" /> | <img src="docs/assets/worlds/dungeon/ui-state-board.png" alt="Stamp buttons, form panel, and slots on four mattes" width="320" /> |
-| Layers checked for horizontal repeat, then shown as a composite and a scroll proof | Every state and density on checker, black, gray, and white, plus a nine-slice stretch proof |
-
-Tiles get a numeric edge check and a 3×3 repeat proof before they reach a map.
-
-## Review tools
-
-Every run builds its own single-file review tools: no server, no network. They share one visual system, so a workbench, a playground, and Studio all read the same way.
-
-| Preview workbench | Item playground |
-| --- | --- |
-| <img src="docs/assets/tools/workbench.png" alt="Preview workbench with gate status chips" width="420" /> | <img src="docs/assets/tools/item-playground.png" alt="Item playground with approve and reject decisions" width="420" /> |
-| **Studio** | **Motion workbench** |
-| <img src="docs/assets/tools/studio.png" alt="Studio Atlas Lab reviewing dungeon items" width="420" /> | <img src="docs/assets/tools/motion-workbench.png" alt="Motion workbench light table with guides" width="420" /> |
-
-The system lives in [`spritecore/tool_theme.py`](./SKILLS/spritesheet-expert/scripts/spritecore/tool_theme.py). See [docs/architecture/tool-ui-system.md](./docs/architecture/tool-ui-system.md).
-
-## Install
-
-```powershell
-npx skills add gvastethecreator/spritesheet-expert-skill
-```
-
-| Skill | Use it for |
-| --- | --- |
-| [`spritesheet-expert`](./SKILLS/spritesheet-expert/SKILL.md) | Item atlases, animation rows, pose sets, VFX, tilesets, video frames |
-| [`build-static-game-assets`](./SKILLS/build-static-game-assets/SKILL.md) | Props, pickups, decals, item packs |
-| [`build-game-backgrounds`](./SKILLS/build-game-backgrounds/SKILL.md) | Layered, scrolling, parallax backgrounds |
-| [`build-game-ui-kits`](./SKILLS/build-game-ui-kits/SKILL.md) | UI states, densities, nine-slice assets |
-| [`compose-asset-mockups`](./SKILLS/compose-asset-mockups/SKILL.md) | Labeled presentation boards from validated assets |
-| [`produce-2d-assets`](./SKILLS/produce-2d-assets/SKILL.md) | Deliveries that span several families |
-
-Use the narrowest skill that owns the asset. Image generation uses `$imagegen` by default; `$grok-imagine` is an optional route that starts with a dry run.
-
-## Rules the pipeline keeps
-
-- **Models draw, code processes.** Scripts cut, register, pack, and check. They never paint replacement art.
-- **Native alpha first.** Isolated sprites, props, and UI ask the provider for transparency. Flat gray, black, or white is the fallback.
-- **Pixel art stays pixel art.** Exact grid, nearest-neighbour scaling, hard alpha, fixed palette.
-- **Every source has a receipt.** Provider, job id, hashes, and license go into `source-provenance.json`.
-- **Fixtures never count as art.** Smoke tests can pass on fixtures, but only real sources count as representative media.
-
-## Commands
-
-```powershell
-pnpm run setup:test      # install the pinned Python environment
-pnpm run doctor:test     # check it
-pnpm run smoke           # deterministic smoke test on fixtures
-pnpm run studio          # open Studio on a local workspace
-pnpm run validate        # validate the skill pack, evals, Studio, and theme sync
-pnpm test                # contract and integration suite
-pnpm run check           # full release gate
-```
-
-Optional cutout models are isolated by capability: the [locked model runtime](./SKILLS/spritesheet-expert/model-runtime/README.md) covers Lucida and BEN2, the [background requirements](./SKILLS/spritesheet-expert/scripts/requirements-background.txt) cover rembg/BiRefNet, and the [video requirements](./SKILLS/spritesheet-expert/scripts/requirements-video.txt) cover video-frame ingestion. None are bundled.
-
-## Support
-
-If this toolkit helps your pipeline, you can [sponsor its maintenance](https://github.com/sponsors/gvastethecreator) or [support it on Ko-fi](https://ko-fi.com/gvaste). Bug reports and focused improvements are welcome through [GitHub Issues](https://github.com/gvastethecreator/spritesheet-expert-skill/issues) and [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## License
-
-MIT. Some bundled sprite pipeline files keep their original Apache-2.0 notice files inside the skill package. The demo art in `docs/assets/worlds/` was generated for this project and ships under the same license.
+MIT license.

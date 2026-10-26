@@ -72,6 +72,12 @@ def frame_poses(motion: str, frames: int) -> list[dict] | None:
     return [keys[round(i * (len(keys) - 1) / max(frames - 1, 1))] for i in range(frames)]
 
 
+def pose_height(pose: dict) -> int:
+    """Expected body height of a pose in guide pixels: top of the head to the lowest foot point."""
+    feet = [y for _, y in pose["rear_leg"] + pose["lead_leg"]]
+    return round(max(feet) + 13 - (pose["head"][1] - 32))
+
+
 def faces_left(view: str) -> bool:
     return "left" in view.lower()
 

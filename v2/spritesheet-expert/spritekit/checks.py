@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 from PIL import Image
 
-from .imaging import ALPHA_SOLID, Frame, frame_body_height
+from .imaging import ALPHA_SOLID, Frame, nine_slice, size_offsets
 
 
 def result(check_id: str, status: str, detail: str, frames: list[int] | None = None) -> dict:
@@ -33,6 +33,29 @@ def palette_distance(a: Image.Image, b: Image.Image) -> float:
     return float(np.sqrt(max(0.0, 1.0 - coeff)))
 
 
+def mean_lab(img: Image.Image) -> np.ndarray:
+    """Average CIELAB color of the solid pixels."""
+    raw = np.asarray(img.convert("RGB").convert("LAB"))
+    lab = raw.astype(np.float64)
+    lab[..., 0] *= 100 / 255  # Pillow stores L as 0..255
+    lab[..., 1:] = raw[..., 1:].view(np.int8)  # numpy sees Pillow's a and b as signed bytes
+    solid = np.asarray(img.getchannel("A")) >= 200
+    return lab[solid].mean(axis=0) if solid.any() else np.zeros(3)
+
+
+def state_match(rows: dict[str, list[Image.Image]]) -> dict[str, dict]:
+    """One character keeps one palette and light across states: each row against the first."""
+    typical = {name: np.median([mean_lab(i) for i in imgs if i.getchannel("A").getbbox()], axis=0) for name, imgs in rows.items()}
+    first = next(iter(typical))
+    out = {}
+    for name, lab in list(typical.items())[1:]:
+        d = float(np.linalg.norm(lab - typical[first]))
+        out[name] = result("match", "warn" if d > 8 else "pass",
+                           f"color and light differ from {first} by {d:.1f}; regenerate this state with {first}'s frames attached"
+                           if d > 8 else f"color and light match {first} (difference {d:.1f})")
+    return out
+
+
 def frame_diff(a: Image.Image, b: Image.Image) -> float:
     x = np.asarray(a).astype(np.float32) / 255
     y = np.asarray(b).astype(np.float32) / 255
@@ -46,6 +69,13 @@ def run_checks(st: dict, frames: list[Frame | None], placed: list[Image.Image],
     out.append(result("frames", "fail" if missing else "pass",
                       f"missing frame(s) {missing}" if missing else f"{len(frames)} of {len(frames)} frames found", missing))
     found = [f for f in frames if f is not None]
+    if st["motion"] == "atlas":
+        n, seen = len(frames), cutout_info.get("found", len(found))
+        out.append(result("items", "pass" if seen == n else "fail",
+                          f"{seen} items found, {n} planned" + ("" if seen == n else
+                          "; items that touch merge into one, so ask for wider gaps" if seen < n else
+                          "; stray pieces count as items, so ask for fewer details or remove extras"),
+                          [] if seen >= n else list(range(seen + 1, n + 1))))
     if not found:
         return out
 
@@ -57,31 +87,53 @@ def run_checks(st: dict, frames: list[Frame | None], placed: list[Image.Image],
     specks = sum(f.specks_dropped for f in found)
     out.append(result("specks", "pass", f"{specks} tiny detached speck(s) dropped" if specks else "no stray specks"))
 
-    if st["ground"] == "ground":
-        heights = [frame_body_height(f.crop) for f in found]
-        ratio = max(heights) / max(1, min(heights))
-        # A model that redraws one frame smaller or larger shows up as a jump against both neighbors.
-        drift = []
-        typical = float(np.median(heights))
-        for i, f in enumerate(found):
-            near = [heights[j] for j in (i - 1, i + 1) if 0 <= j < len(found)]
-            off_row = abs(heights[i] / typical - 1) > 0.12
-            if near and off_row and all(abs(heights[i] / n - 1) > 0.10 for n in near):
-                drift.append(f.index + 1)
-        if drift:
-            out.append(result("scale", "warn", f"frame(s) {drift} are drawn at a different size than their neighbors; regenerate them", drift))
-        else:
-            out.append(result("scale", "pass", f"body heights vary {ratio:.2f}x across the row and no frame jumps against its neighbors"))
+    animation = st["motion"] not in ("slots", "atlas")
+    # Frames of one character share palette and light; icon sets and UI states change them on purpose.
+    one_look = animation or st["ground"] == "ground"
+    if st["ground"] in ("ground", "center") and len(found) > 2:
+        offsets = size_offsets([f.crop for f in found])
+        drift = [f.index + 1 for f, o in zip(found, offsets) if abs(o) > 0.06]
+        detail = ", ".join(f"{f.index + 1}: {o:+.0%}" for f, o in zip(found, offsets) if abs(o) > 0.06)
+        worst = max(abs(o) for o in offsets)
+        out.append(result("scale", "warn" if drift else "pass",
+                          f"frame(s) drawn at another size than the row ({detail}); repair them" if drift
+                          else f"every frame within {worst:.1%} of the row's size", drift))
 
-    ref = reference or found[0].crop
-    dists = [(f.index + 1, palette_distance(ref, f.crop)) for f in found]
-    drift = [i for i, d in dists if d > 0.35]
-    worst = max(d for _, d in dists)
-    out.append(result("identity", "warn" if drift else "pass",
-                      f"palette differs from the {'anchor' if reference else 'first frame'} in frame(s) {drift} (max distance {worst:.2f})"
-                      if drift else f"palette matches the {'anchor' if reference else 'first frame'} (max distance {worst:.2f})", drift))
+    factors = cutout_info.get("size_factors")
+    if factors:
+        clamped = [i + 1 for i, f in enumerate(factors) if abs(f - 1) >= 0.249]
+        detail = ", ".join(f"{i + 1}: {f:.2f}x" for i, f in enumerate(factors))
+        out.append(result("size", "warn" if clamped else "pass",
+                          f"frame(s) {clamped} needed the maximum size correction; regenerate them ({detail})" if clamped
+                          else f"body size matched to the pose guides ({detail})", clamped))
 
-    if len(placed) > 1:
+    if one_look and len(found) > 2:
+        # Lighting or color shifts show up as a frame whose average Lab color sits away from the row's.
+        means = [mean_lab(f.crop) for f in found]
+        typical = np.median(means, axis=0)
+        delta = [float(np.linalg.norm(m - typical)) for m in means]
+        off = [f.index + 1 for f, d in zip(found, delta) if d > 8]
+        worst = max(delta)
+        out.append(result("color", "warn" if off else "pass",
+                          f"frame(s) {off} differ in color or lighting from the rest (max difference {worst:.1f}); repair them" if off
+                          else f"color and lighting match across frames (max difference {worst:.1f})", off))
+
+    if one_look:
+        ref = reference or found[0].crop
+        dists = [(f.index + 1, palette_distance(ref, f.crop)) for f in found]
+        drift = [i for i, d in dists if d > 0.35]
+        worst = max(d for _, d in dists)
+        out.append(result("identity", "warn" if drift else "pass",
+                          f"palette differs from the {'anchor' if reference else 'first frame'} in frame(s) {drift} (max distance {worst:.2f})"
+                          if drift else f"palette matches the {'anchor' if reference else 'first frame'} (max distance {worst:.2f})", drift))
+
+    if st["ground"] == "nine":
+        flat = [f.index + 1 for f, img in zip(found, placed) if nine_slice(img) is None]
+        out.append(result("stretch", "warn" if flat else "pass",
+                          f"frame(s) {flat} have no plain middle band to stretch; ask for an even fill between the borders"
+                          if flat else "every panel has a plain middle band for nine-slice stretching", flat))
+
+    if animation and len(placed) > 1:
         diffs = [frame_diff(placed[i], placed[i + 1]) for i in range(len(placed) - 1)]
         dupes = [i + 2 for i, d in enumerate(diffs) if d < 0.002]
         mean = float(np.mean(diffs))
@@ -97,13 +149,14 @@ def run_checks(st: dict, frames: list[Frame | None], placed: list[Image.Image],
                               f"last-to-first change {closing:.3f} is much larger than the typical {np.median(diffs):.3f}; the loop may pop"
                               if jump else "the loop closes smoothly", [len(placed), 1] if jump else None))
 
-    touching = []
-    for i, img in enumerate(placed):
-        a = np.asarray(img.getchannel("A"))
-        if (a[0] >= ALPHA_SOLID).any() or (a[-1] >= ALPHA_SOLID).any() or (a[:, 0] >= ALPHA_SOLID).any() or (a[:, -1] >= ALPHA_SOLID).any():
-            touching.append(i + 1)
-    out.append(result("cell-edge", "warn" if touching else "pass",
-                      f"frame(s) {touching} touch the runtime cell edge" if touching else "every frame fits inside its cell", touching))
+    if st["motion"] != "atlas":  # packed items are tight crops, not cells
+        touching = []
+        for i, img in enumerate(placed):
+            a = np.asarray(img.getchannel("A"))
+            if (a[0] >= ALPHA_SOLID).any() or (a[-1] >= ALPHA_SOLID).any() or (a[:, 0] >= ALPHA_SOLID).any() or (a[:, -1] >= ALPHA_SOLID).any():
+                touching.append(i + 1)
+        out.append(result("cell-edge", "warn" if touching else "pass",
+                          f"frame(s) {touching} touch the runtime cell edge" if touching else "every frame fits inside its cell", touching))
 
     if cutout_info.get("method") == "matte":
         matte = np.array(cutout_info["matte_rgb"], dtype=np.float32)

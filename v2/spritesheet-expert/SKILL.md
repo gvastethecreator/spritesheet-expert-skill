@@ -5,12 +5,13 @@ description: "Make game sprites from generated art: animation sheets, icon and i
 
 # Spritesheet Expert
 
-One CLI, three steps. The image model draws; `sprite.py` does everything else.
+One CLI, four commands. The image model draws; `sprite.py` does everything else.
 
 ```text
-plan   → run.json, a prompt and a pose guide per frame, a one-sheet draft prompt
-(you)  → generate frame by frame: anchor + previous frame + pose guide
+plan   → run.json, one sheet prompt + layout guide (all states or sets of a run in one image)
+(you)  → generate that sheet with the anchor + guide attached
 build  → cutout, frames on one baseline and one body size, atlas, previews, review.html
+repair → in-between kit for each bad frame; regenerate it and rebuild with --patch
 check  → report problems; --strict blocks delivery
 ```
 
@@ -22,9 +23,10 @@ Requires Python 3.11+, Pillow, numpy and scipy.
 | Lane | Use for | Recipe |
 | --- | --- | --- |
 | `animation` | Walk, run, idle, attack, jump, hurt, cast, VFX rows | [recipes/animation.md](recipes/animation.md) |
+| `slots` | Named cells without time: character poses and gestures, icons and items, UI states, nine-slice panels | [recipes/slots.md](recipes/slots.md) |
+| `atlas` | Loose items without a grid: separated by shape, named, packed tightly | [recipes/atlas.md](recipes/atlas.md) |
 
-More lanes (atlas, slots, tiles, background, ui) come next. Until then, use
-the v1 skill for them.
+Tiles and backgrounds come next. Until then, use the v1 skill for them.
 
 ## Rules
 
@@ -35,9 +37,11 @@ the v1 skill for them.
 - **Anchor first for characters.** Get one approved image of the character,
   pass it as `--anchor`, and attach it to every generation. Identity drift is
   the most common failure.
-- **Chain the frames.** Generate frame `k` by editing frame `k-1`, with the
-  anchor and `poses/<state>/kk.png` attached. Only the pose changes, so details
-  do not flicker. A whole sheet in one image is a draft, not a delivery.
+- **One image first, then repair.** Generate all states of a character in one
+  sheet (`prompts/_all.txt` + `guides/_all.png`): frames drawn together share
+  color, light and motion. Build, review, then fix only the bad frames with
+  `repair` (neighbors + pose) and `build --patch`. Separate images per frame
+  or per state drift in color and light.
 - **Native alpha first.** Ask for a transparent background. When the provider
   cannot, a flat `#808080` gray works: `build --cutout auto` removes it,
   including enclosed holes, and un-mixes edge colors.
@@ -52,9 +56,9 @@ the v1 skill for them.
 
 | File | What it is |
 | --- | --- |
-| `atlas.png`, `atlas.json` | One row per state, fixed cells, pivot, frame durations |
+| `atlas.png`, `atlas.json` | One row per state or set, fixed cells, pivot; frame durations (animation) or slot names and nine-slice margins (slots) |
 | `frames/<state>/NN.png` | Each runtime frame |
-| `previews/<state>.webp` | Animated preview with alpha |
+| `previews/<state>.webp` | Animated preview with alpha (animation only) |
 | `review.html` | Self-contained review page: play, step, onion skin, mattes, checks, source |
 | `run.json` | Plan, sources with hashes, build report and checks |
 

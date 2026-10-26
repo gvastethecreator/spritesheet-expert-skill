@@ -75,10 +75,33 @@ def test_plan_writes_frame_prompts_and_mirrored_pose_guides(tmp_path: Path) -> N
                      "--pose-guide", "openpose", "--state", "smash:6:attack-overhead"]) == 0
     assert len(list((run / "prompts" / "smash").glob("*.txt"))) == 6
     frame2 = (run / "prompts" / "smash" / "02.txt").read_text()
-    assert "previous animation frame" in frame2 and "OpenPose skeleton" in frame2
+    assert "frame 1 of this same animation" in frame2 and "OpenPose skeleton" in frame2
+    assert "pose_height" in json.loads((run / "run.json").read_text())["states"][0]["phases"][0]
     keypoints = json.loads((run / "poses" / "smash" / "04.openpose.json").read_text())["people"][0]["pose_keypoints_2d"]
     nose_x, neck_x = keypoints[0], keypoints[3]
     assert len(keypoints) == 18 * 3 and nose_x < neck_x  # facing left: the nose is left of the neck
+
+
+def test_pose_guided_frames_get_the_size_their_pose_asks_for(tmp_path: Path) -> None:
+    run = tmp_path / "run"
+    assert cli.main(["plan", "--out", str(run), "--subject", "a test figure", "--cell", "128",
+                     "--state", "idle:4"]) == 0
+    full = sheet(frames=4, transparent=True)
+    folder = tmp_path / "frames"
+    folder.mkdir()
+    for i in range(4):
+        cell = full.crop((i * CELL, 0, (i + 1) * CELL, CELL))
+        if i == 2:  # the model drew this frame 30% too small
+            cell = cell.resize((round(CELL * 0.7), round(CELL * 0.7)), Image.Resampling.LANCZOS)
+        cell.save(folder / f"{i + 1:02d}.png")
+    assert cli.main(["build", str(run), "--source", f"idle={folder}"]) == 0
+    built = json.loads((run / "run.json").read_text())["build"]["states"]["idle"]
+    assert built["cutout"]["size_factors"][2] > 1.2
+    heights = []
+    for png in sorted((run / "frames" / "idle").glob("*.png")):
+        rows = np.nonzero((np.asarray(Image.open(png).getchannel("A")) >= 16).any(axis=1))[0]
+        heights.append(rows.max() - rows.min())
+    assert max(heights) / min(heights) < 1.15
 
 
 @pytest.mark.parametrize("frames,grid", [(4, (4, 1)), (5, (3, 2)), (6, (3, 2)), (8, (4, 2)), (12, (4, 3))])
@@ -148,6 +171,47 @@ def test_folder_of_frames_is_laid_into_the_grid(tmp_path: Path) -> None:
     assert data["build"]["states"]["walk"]["checks"][0]["status"] == "pass"
 
 
+def test_repair_kit_and_patch_replace_one_frame_at_the_sheet_scale(tmp_path: Path) -> None:
+    run = plan_run(tmp_path)
+    src = tmp_path / "walk.png"
+    sheet(drop=5).save(src)
+    assert cli.main(["build", str(run), "--source", f"walk={src}"]) == 0
+    assert cli.main(["repair", str(run), "--state", "walk", "--frame", "6"]) == 0
+    kit = run / "repair" / "walk" / "06"
+    assert {p.name for p in kit.iterdir()} >= {"frame-05.png", "frame-07.png", "prompt.txt"}
+
+    # The repaired frame comes back from another generation at twice the size.
+    full = sheet(transparent=True)
+    fix = full.crop((1 * CELL, CELL, 2 * CELL, 2 * CELL))
+    fix = fix.resize((CELL * 2, CELL * 2), Image.Resampling.LANCZOS)
+    fix.save(tmp_path / "fix.png")
+    assert cli.main(["build", str(run), "--patch", f"walk:6={tmp_path / 'fix.png'}"]) == 0
+    built = json.loads((run / "run.json").read_text())["build"]["states"]["walk"]
+    assert built["cutout"]["patched_frames"] == [6]
+    assert next(c for c in built["checks"] if c["id"] == "frames")["status"] == "pass"
+    heights = []
+    for png in sorted((run / "frames" / "walk").glob("*.png")):
+        rows = np.nonzero((np.asarray(Image.open(png).getchannel("A")) >= 16).any(axis=1))[0]
+        heights.append(rows.max() - rows.min())
+    assert max(heights) / min(heights) < 1.25
+
+
+def test_one_sheet_with_all_states_is_split_by_row(tmp_path: Path) -> None:
+    run = plan_run(tmp_path, ["--state", "idle:4"])
+    assert (run / "prompts" / "_all.txt").exists() and (run / "guides" / "_all.png").exists()
+    walk, idle = sheet(transparent=True), sheet(frames=4, transparent=True)
+    combined = Image.new("RGBA", (8 * CELL, 2 * CELL), (0, 0, 0, 0))
+    for i in range(8):
+        combined.paste(walk.crop(((i % 4) * CELL, (i // 4) * CELL, (i % 4 + 1) * CELL, (i // 4 + 1) * CELL)), (i * CELL, 0))
+    combined.paste(idle, (0, CELL))
+    combined.save(tmp_path / "all.png")
+    assert cli.main(["build", str(run), "--source", f"all={tmp_path / 'all.png'}"]) == 0
+    data = json.loads((run / "run.json").read_text())
+    assert data["sources"]["idle"]["grid"] == [4, 1] and data["sources"]["walk"]["from"]["row"] == 1
+    for name in ("walk", "idle"):
+        assert next(c for c in data["build"]["states"][name]["checks"] if c["id"] == "frames")["status"] == "pass"
+
+
 def test_missing_frame_fails_and_strict_blocks(tmp_path: Path) -> None:
     run = plan_run(tmp_path)
     src = tmp_path / "walk.png"
@@ -169,3 +233,17 @@ def test_changed_source_is_rejected(tmp_path: Path) -> None:
     with pytest.raises(SystemExit, match="changed after ingest"):
         cli.main(["build", str(run)])
     assert cli.main(["check", str(run), "--strict"]) == 1
+
+
+def test_a_frame_drawn_larger_is_evened_and_a_pose_change_is_not() -> None:
+    from spritekit import imaging
+    disc = Image.new("RGBA", (200, 200), (0, 0, 0, 0))
+    ImageDraw.Draw(disc).ellipse([20, 20, 180, 180], fill=(200, 80, 60, 255))
+    wide = Image.new("RGBA", (300, 200), (0, 0, 0, 0))  # same disc plus a raised arm: more area, same thickest part
+    wide.paste(disc, (0, 0))
+    ImageDraw.Draw(wide).rectangle([170, 90, 290, 110], fill=(200, 80, 60, 255))
+    big = disc.resize((220, 220), Image.Resampling.LANCZOS)
+    frames = [imaging.Frame(i, c, (0, 0, *c.size), (0, 0, *c.size), False, 0) for i, c in enumerate([disc, disc, wide, big, disc])]
+    factors = imaging.even_sizes(frames)
+    assert factors[2] == 1.0 and abs(factors[3] - 1 / 1.1) < 0.02
+    assert abs(imaging.size_signals(frames[3].crop)[0] / imaging.size_signals(disc)[0] - 1) < 0.02

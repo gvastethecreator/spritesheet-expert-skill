@@ -7,7 +7,7 @@ from pathlib import Path
 
 from . import builder, planner, runfile
 
-LANES = ("animation",)
+LANES = ("animation", "slots", "atlas")
 
 
 def check(args) -> int:
@@ -16,7 +16,8 @@ def check(args) -> int:
     if not run.get("build"):
         raise SystemExit("nothing built yet. Run `sprite.py build` first.")
     problems: list[str] = []
-    for name, src in run["sources"].items():
+    entries = list(run["sources"].values()) + [e for p in run.get("patches", {}).values() for e in p.values()]
+    for src in entries:
         path = run_dir / src["file"]
         if not path.is_file() or runfile.sha256(path) != src["sha256"]:
             problems.append(f"FAIL provenance: {src['file']} is missing or changed since ingest")
@@ -55,8 +56,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--style", default="", help="art style in plain words; omit to leave it to the subject")
     p.add_argument("--view", default="", help="camera, e.g. side, top-down, three-quarter")
     p.add_argument("--notes", default="", help="extra direction added to every prompt")
-    p.add_argument("--state", action="append", required=True, metavar="NAME:FRAMES[:MOTION[:FPS]]",
-                   help="repeatable, e.g. walk:8 or strike:6:attack:12")
+    p.add_argument("--state", action="append", metavar="NAME:FRAMES[:MOTION[:FPS]]",
+                   help="animation lane, repeatable, e.g. walk:8 or strike:6:attack:12")
+    p.add_argument("--set", action="append", metavar="NAME[:FIT]=SLOT,SLOT,...",
+                   help="slots and atlas lanes, repeatable; in slots, FIT is ground (poses), center (UI states, default), "
+                        "fill (icons, items) or nine (stretchable panels), e.g. icons:fill=sword,shield")
     p.add_argument("--anchor", help="approved identity image, attached to every prompt")
     p.add_argument("--cell", type=size, default=(256, 256), help="runtime cell, e.g. 256 or 384x288")
     p.add_argument("--baseline", type=float, default=0.9, help="ground line as a fraction of cell height")
@@ -70,7 +74,15 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--source", action="append", metavar="STATE=IMAGE", help="repeatable")
     b.add_argument("--provider", default="", help="who generated the source, recorded with its hash")
     b.add_argument("--cutout", choices=("auto", "alpha", "matte", "birefnet"), default="auto")
+    b.add_argument("--patch", action="append", metavar="STATE:FRAME=IMAGE",
+                   help="repeatable: replace one frame of a state's sheet with a repaired image")
     b.set_defaults(func=builder.build)
+
+    r = sub.add_parser("repair", help="write an in-between repair kit (neighbors, pose, prompt) for bad frames")
+    r.add_argument("run")
+    r.add_argument("--state", required=True)
+    r.add_argument("--frame", type=int, action="append", required=True, help="repeatable, 1-based")
+    r.set_defaults(func=builder.repair)
 
     c = sub.add_parser("check", help="report problems; --strict exits 1 when any remain")
     c.add_argument("run")

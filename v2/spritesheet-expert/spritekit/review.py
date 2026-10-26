@@ -30,6 +30,7 @@ def payload(run_dir: Path, run: dict) -> dict:
             src = src.resize((SOURCE_PREVIEW_WIDTH, round(src.height * SOURCE_PREVIEW_WIDTH / src.width)), Image.Resampling.LANCZOS)
         states.append({
             "name": st["name"], "motion": st["motion"], "fps": st["fps"], "loop": st["loop"],
+            "slots": st["motion"] in ("slots", "atlas"), "fit": "packed" if st["motion"] == "atlas" else st["ground"],
             "phases": [p["label"] for p in st["phases"]],
             "frames": build["atlas"]["states"][st["name"]]["frames"],
             "checks": build["states"][st["name"]]["checks"],
@@ -133,7 +134,7 @@ kbd { padding:1px 5px; border:1px solid var(--line2); border-bottom-width:2px; b
   <button class="btn" id="theme" type="button" aria-label="Switch theme">◐</button>
 </header>
 <div class="layout">
-  <aside aria-label="States"><p class="title">States</p><div class="list" id="states"></div></aside>
+  <aside aria-label="States and sets"><p class="title">Rows</p><div class="list" id="states"></div></aside>
   <main>
     <div class="stage" id="stage" data-bg="checker" tabindex="0" aria-label="Frame preview. Space plays, arrows step, O toggles onion skin, B changes background.">
       <canvas id="canvas" aria-label="Animation frame"></canvas>
@@ -155,6 +156,7 @@ kbd { padding:1px 5px; border:1px solid var(--line2); border-bottom-width:2px; b
       </div>
       <button class="btn" id="onion" type="button" aria-pressed="false">Onion skin</button>
       <button class="btn" id="guides" type="button" aria-pressed="true">Pivot</button>
+      <button class="btn" id="stretch" type="button" aria-pressed="false" hidden>Stretch</button>
       <div class="seg" role="group" aria-label="Background">
         <button class="btn" type="button" data-bg="checker" aria-pressed="true">Checker</button>
         <button class="btn" type="button" data-bg="black" aria-pressed="false">Black</button>
@@ -182,7 +184,7 @@ kbd { padding:1px 5px; border:1px solid var(--line2); border-bottom-width:2px; b
   const $ = (id) => document.getElementById(id);
   const [CW, CH] = D.cell;
   const atlas = new Image();
-  const S = { st: 0, f: 0, playing: false, timer: 0, onion: false, guides: true, view: 'frames', bg: 'checker' };
+  const S = { st: 0, f: 0, playing: false, timer: 0, onion: false, guides: true, stretch: false, view: 'frames', bg: 'checker' };
   const canvas = $('canvas'), ctx = canvas.getContext('2d');
   const el = (tag, props = {}, text) => { const e = document.createElement(tag); Object.assign(e, props); if (text !== undefined) e.textContent = text; return e; };
   const cur = () => D.states[S.st];
@@ -194,26 +196,40 @@ kbd { padding:1px 5px; border:1px solid var(--line2); border-bottom-width:2px; b
     const box = $('stage');
     return Math.max(0.25, Math.min((box.clientWidth - 24) / CW, (box.clientHeight - 24) / CH, 3));
   }
+  // Nine-slice proof: corners stay, edges and middle stretch to 2x width and 1.5x height.
+  function drawNine(fr) {
+    const [x0, y0, x1, y1] = fr.nine_slice.box, [l, t, r, b] = fr.nine_slice.slice;
+    const sw = x1 - x0, sh = y1 - y0, W = Math.round(sw * 2), H = Math.round(sh * 1.5);
+    canvas.width = W; canvas.height = H;
+    canvas.style.width = `${Math.min(W * zoom(), $('stage').clientWidth - 24)}px`;
+    const sx = [0, l, sw - r, sw], dx = [0, l, W - r, W], sy = [0, t, sh - b, sh], dy = [0, t, H - b, H];
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+      if (sx[i + 1] > sx[i] && sy[j + 1] > sy[j]) ctx.drawImage(atlas, fr.x + x0 + sx[i], fr.y + y0 + sy[j], sx[i + 1] - sx[i],
+        sy[j + 1] - sy[j], dx[i], dy[j], dx[i + 1] - dx[i], dy[j + 1] - dy[j]);
+    }
+  }
   function draw() {
     const st = cur(), n = st.frames.length, fr = st.frames[S.f];
     const z = zoom();
     canvas.width = CW; canvas.height = CH;
     canvas.style.width = `${CW * z}px`;
     ctx.clearRect(0, 0, CW, CH);
+    $('stretch').hidden = !fr.nine_slice;
+    $('scrub').max = String(n - 1); $('scrub').value = String(S.f);
+    $('readout').textContent = `${S.f + 1} / ${n}`;
+    $('status').textContent = st.slots ? `${st.name} · ${fr.name}` : `${st.name} · ${S.f + 1} ${st.phases[S.f] || ''} · ${fr.duration_ms} ms`;
+    document.querySelectorAll('#film button').forEach((b, i) => b.setAttribute('aria-current', String(i === S.f)));
+    if (S.stretch && fr.nine_slice) { drawNine(fr); return; }
     if (S.onion && n > 1) {
       const p = st.frames[(S.f - 1 + n) % n];
-      ctx.globalAlpha = 0.35; ctx.drawImage(atlas, p.x, p.y, p.w, p.h, 0, 0, CW, CH); ctx.globalAlpha = 1;
+      ctx.globalAlpha = 0.35; ctx.drawImage(atlas, p.x, p.y, p.w, p.h, (CW - p.w) / 2, (CH - p.h) / 2, p.w, p.h); ctx.globalAlpha = 1;
     }
-    ctx.drawImage(atlas, fr.x, fr.y, fr.w, fr.h, 0, 0, CW, CH);
+    ctx.drawImage(atlas, fr.x, fr.y, fr.w, fr.h, (CW - fr.w) / 2, (CH - fr.h) / 2, fr.w, fr.h);
     if (S.guides) {
       ctx.strokeStyle = 'rgba(239,106,95,.85)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(0, D.pivot[1] + .5); ctx.lineTo(CW, D.pivot[1] + .5);
       ctx.moveTo(D.pivot[0] + .5, D.pivot[1] - 8); ctx.lineTo(D.pivot[0] + .5, D.pivot[1] + 8); ctx.stroke();
     }
-    $('scrub').max = String(n - 1); $('scrub').value = String(S.f);
-    $('readout').textContent = `${S.f + 1} / ${n}`;
-    $('status').textContent = `${st.name} · ${S.f + 1} ${st.phases[S.f] || ''} · ${fr.duration_ms} ms`;
-    document.querySelectorAll('#film button').forEach((b, i) => b.setAttribute('aria-current', String(i === S.f)));
   }
   function setView(v) {
     S.view = v; pressed('[data-view]', 'view', v);
@@ -223,7 +239,7 @@ kbd { padding:1px 5px; border:1px solid var(--line2); border-bottom-width:2px; b
   }
   function stop() { S.playing = false; clearTimeout(S.timer); $('play').textContent = 'Play'; $('play').setAttribute('aria-label', 'Play animation'); }
   function play() {
-    stop(); if (cur().frames.length < 2) return;
+    stop(); if (cur().frames.length < 2 || cur().slots) return;
     S.playing = true; $('play').textContent = 'Pause'; $('play').setAttribute('aria-label', 'Pause animation');
     const tick = () => { S.timer = setTimeout(() => { S.f = (S.f + 1) % cur().frames.length; draw(); tick(); }, cur().frames[S.f].duration_ms); };
     tick();
@@ -238,8 +254,8 @@ kbd { padding:1px 5px; border:1px solid var(--line2); border-bottom-width:2px; b
       const b = el('button', { type: 'button', title: st.phases[i] || '' });
       if (flagged.has(i + 1)) b.className = 'flag';
       const c = el('canvas'); c.width = CW; c.height = CH;
-      c.getContext('2d').drawImage(atlas, fr.x, fr.y, fr.w, fr.h, 0, 0, CW, CH);
-      b.append(c, el('span', {}, `${String(i + 1).padStart(2, '0')}`));
+      c.getContext('2d').drawImage(atlas, fr.x, fr.y, fr.w, fr.h, (CW - fr.w) / 2, (CH - fr.h) / 2, fr.w, fr.h);
+      b.append(c, el('span', {}, st.slots ? fr.name : `${String(i + 1).padStart(2, '0')}`));
       b.addEventListener('click', () => go(i));
       return b;
     }));
@@ -250,8 +266,10 @@ kbd { padding:1px 5px; border:1px solid var(--line2); border-bottom-width:2px; b
       if (c.frames.length) { const b = el('button', { type: 'button' }, `Show frame ${c.frames[0]}`); b.addEventListener('click', () => go(c.frames[0] - 1)); d.append(b); }
       return d;
     }));
-    const facts = [['Motion', st.motion], ['Frames', st.frames.length], ['FPS', st.fps], ['Loop', st.loop ? 'yes' : 'no'],
-      ['Cell', `${CW} × ${CH}`], ['Pivot', D.pivot.join(', ')], ['Cutout', st.cutout], ['Scale', st.scale]];
+    const facts = [...(st.slots ? [['Fit', st.fit], ['Slots', st.frames.length]]
+      : [['Motion', st.motion], ['Frames', st.frames.length], ['FPS', st.fps], ['Loop', st.loop ? 'yes' : 'no']]),
+      ['Cell', `${CW} × ${CH}`], ['Pivot', D.pivot.join(', ')], ['Cutout', st.cutout], ['Scale', st.scale || 'per slot']];
+    $('play').disabled = st.slots;
     $('facts').replaceChildren(...facts.flatMap(([k, v]) => [el('dt', {}, k), el('dd', {}, String(v))]));
     const p = st.provenance;
     $('prov').replaceChildren(...[['File', p.file], ['SHA-256', p.sha256.slice(0, 16) + '…'], ['Provider', p.provider || 'not stated'], ['Ingested', p.ingested]]
@@ -263,7 +281,7 @@ kbd { padding:1px 5px; border:1px solid var(--line2); border-bottom-width:2px; b
   $('states').replaceChildren(...D.states.map((st, i) => {
     const fails = st.checks.filter((c) => c.status !== 'pass').length;
     const b = el('button', { type: 'button', className: 'row' });
-    b.append(el('span', {}, st.name), el('span', { className: 'meta' }, fails ? `${fails} to review` : `${st.frames.length} fr`));
+    b.append(el('span', {}, st.name), el('span', { className: 'meta' }, fails ? `${fails} to review` : `${st.frames.length} ${st.slots ? 'slots' : 'fr'}`));
     b.addEventListener('click', () => { stop(); S.st = i; renderState(); });
     return b;
   }));
@@ -274,6 +292,7 @@ kbd { padding:1px 5px; border:1px solid var(--line2); border-bottom-width:2px; b
   $('zoom').addEventListener('change', draw);
   $('onion').addEventListener('click', () => { S.onion = !S.onion; $('onion').setAttribute('aria-pressed', String(S.onion)); draw(); });
   $('guides').addEventListener('click', () => { S.guides = !S.guides; $('guides').setAttribute('aria-pressed', String(S.guides)); draw(); });
+  $('stretch').addEventListener('click', () => { S.stretch = !S.stretch; $('stretch').setAttribute('aria-pressed', String(S.stretch)); draw(); });
   document.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
   const setBg = (bg) => { S.bg = bg; $('stage').dataset.bg = bg; pressed('[data-bg]', 'bg', bg); };
   document.querySelectorAll('[data-bg]').forEach((b) => b.addEventListener('click', () => setBg(b.dataset.bg)));

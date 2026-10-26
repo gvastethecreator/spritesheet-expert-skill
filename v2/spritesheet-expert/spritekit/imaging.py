@@ -162,6 +162,8 @@ def feet_center_x(crop: Image.Image) -> float:
 
 
 def anchor_x(crop: Image.Image, align_x: str) -> float:
+    if align_x == "center":
+        return crop.width / 2
     return feet_center_x(crop) if align_x == "feet" else mass_center_x(crop)
 
 
@@ -178,6 +180,26 @@ def frame_body_height(crop: Image.Image) -> int:
     return int(solid.max() - top + 1)
 
 
+def match_pose_sizes(frames: list[Frame], expected: list[float], limit: float = 0.25) -> list[float]:
+    """Rescale each frame so its body size follows the pose guides, relative to the run of frames.
+
+    `expected[i]` is the pose guide's body height for frame i. A frame the model drew
+    larger or smaller than its pose asks for is brought back; height changes the pose
+    itself asks for (a crouch, raised arms) stay. Corrections are clamped to ±limit.
+    Returns the factor applied to each frame.
+    """
+    measured = [frame_body_height(f.crop) for f in frames]
+    reference = float(np.median([m / e for m, e in zip(measured, expected)]))
+    factors = []
+    for f, m, e in zip(frames, measured, expected):
+        factor = float(np.clip(reference * e / max(m, 1), 1 - limit, 1 + limit))
+        if abs(factor - 1) > 0.01:
+            size = (max(1, round(f.crop.width * factor)), max(1, round(f.crop.height * factor)))
+            f.crop = f.crop.resize(size, Image.Resampling.LANCZOS)
+        factors.append(round(factor, 3))
+    return factors
+
+
 def body_height(frames: list[Frame]) -> float:
     """Typical body height in source pixels: the median over frames."""
     return float(np.median([frame_body_height(f.crop) for f in frames]))
@@ -189,9 +211,10 @@ def fit_frames(frames: list[Frame], cell: tuple[int, int], baseline: float, grou
 
     ``ground="ground"`` puts each frame's bottom on the baseline. ``"keep"``
     keeps vertical motion relative to the source cells (lowest frame lands on
-    the baseline). ``align_x="feet"`` pins the ground-contact band to the
-    pivot; ``"mass"`` centers the alpha mass; ``"keep"``
-    keeps horizontal motion relative to the source cell centers.
+    the baseline). ``"center"`` centers each frame in the cell. ``align_x="feet"``
+    pins the ground-contact band to the pivot; ``"mass"`` centers the alpha mass;
+    ``"center"`` centers the bounding box; ``"keep"`` keeps horizontal motion
+    relative to the source cell centers.
     """
     cw, chh = cell
     base_y = round(chh * baseline)
@@ -208,7 +231,8 @@ def fit_frames(frames: list[Frame], cell: tuple[int, int], baseline: float, grou
         span_w = 2 * max(max(abs(v) for v in lefts), max(abs(v) for v in rights))
     else:
         span_w = 2 * max(max(anchor_x(f.crop, align_x), f.crop.width - anchor_x(f.crop, align_x)) for f in frames)
-    fit = min((cw - 2 * pad_x) / span_w, (base_y - pad_top) / span_h)
+    room_h = chh - 2 * pad_top if ground == "center" else base_y - pad_top
+    fit = min((cw - 2 * pad_x) / span_w, room_h / span_h)
     scale = fit if scale is None else min(scale, fit)
     lowest = max((f.box[3] - f.cell_box[1]) for f in frames) if ground == "keep" else 0
     placed = []
@@ -221,9 +245,151 @@ def fit_frames(frames: list[Frame], cell: tuple[int, int], baseline: float, grou
             x = cw / 2 - anchor_x(f.crop, align_x) * scale
         if ground == "keep":
             y = base_y - (lowest - (f.box[3] - f.cell_box[1])) * scale - size[1]
+        elif ground == "center":
+            y = (chh - size[1]) / 2
         else:
             y = base_y - size[1]
         canvas = Image.new("RGBA", (cw, chh), (0, 0, 0, 0))
         canvas.paste(sprite, (round(x), round(y)))  # empty canvas: plain copy keeps exact RGBA
         placed.append(canvas)
     return placed, scale
+
+
+def nine_slice(img: Image.Image, tol: float = 10.0, min_share: float = 0.15) -> dict | None:
+    """Find the plain middle band a panel can stretch along.
+
+    Every column (row) is compared with the middle one; the run of near-identical
+    lines around the middle is the stretchable part. Returns the subject box in
+    cell pixels and the fixed margins [left, top, right, bottom] inside it, or
+    None when either middle band is under ``min_share`` of the size.
+    """
+    box = img.getchannel("A").getbbox()
+    if not box:
+        return None
+    px = np.asarray(img.crop(box)).astype(np.float32)
+
+    def band(lines: np.ndarray) -> tuple[int, int]:
+        n = len(lines)
+        diff = np.abs(lines - lines[n // 2]).mean(axis=(1, 2))
+        lo = hi = n // 2
+        while lo > 0 and diff[lo - 1] < tol:
+            lo -= 1
+        while hi < n - 1 and diff[hi + 1] < tol:
+            hi += 1
+        return lo, hi
+
+    left, right = band(px.transpose(1, 0, 2))
+    top, bottom = band(px)
+    w, h = px.shape[1], px.shape[0]
+    if (right - left + 1) < min_share * w or (bottom - top + 1) < min_share * h:
+        return None
+    return {"box": list(box), "slice": [left, top, w - 1 - right, h - 1 - bottom]}
+
+
+def row_bands(img: Image.Image, rows: int) -> list[int]:
+    """Cut lines for ``rows`` stacked rows: the middles of the gaps between them, else equal bands.
+
+    Generated sheets rarely keep rows of equal height, so the empty gaps are a
+    better guide than the planned grid. Small gaps inside one row are merged first.
+    """
+    occupied = (np.asarray(img.getchannel("A")) >= 128).sum(axis=1) > max(2, img.width * 0.002)
+    runs, y = [], 0
+    while y < img.height:
+        if occupied[y]:
+            start = y
+            while y < img.height and occupied[y]:
+                y += 1
+            runs.append([start, y])
+        else:
+            y += 1
+    while len(runs) > rows:
+        i = min(range(len(runs) - 1), key=lambda i: runs[i + 1][0] - runs[i][1])
+        runs[i:i + 2] = [[runs[i][0], runs[i + 1][1]]]
+    if len(runs) != rows:
+        return [round(img.height * r / rows) for r in range(rows + 1)]
+    return [0, *[(a[1] + b[0]) // 2 for a, b in zip(runs, runs[1:])], img.height]
+
+
+def separate_items(img: Image.Image, gap_share: float = 0.015) -> tuple[list[Frame], int]:
+    """Find loose items on a sheet without a grid.
+
+    Pieces closer than ``gap_share`` of the sheet's short side belong to one
+    item (a bottle and its cork, a sword and its glint); groups under 2% of the
+    median item area are specks. Items come back in reading order: rows by
+    vertical center, then left to right. Returns the items and the speck count.
+    """
+    solid = np.asarray(img.getchannel("A")) >= ALPHA_SOLID
+    h, w = solid.shape
+    reach = max(1, round(min(h, w) * gap_share / 2))  # both pieces grow by reach, so they meet across 2 * reach
+    groups, count = ndimage.label(ndimage.distance_transform_edt(~solid) <= reach)
+    if count == 0:
+        return [], 0
+    owner = np.where(solid, groups, 0)
+    idx = np.arange(1, count + 1)
+    areas = ndimage.sum_labels(solid, owner, idx)
+    keep = [int(i) for i, a in zip(idx, areas) if a >= 0.02 * np.median(areas[areas > 0])]
+    slices = ndimage.find_objects(owner)
+    boxes = {i: (slices[i - 1][1].start, slices[i - 1][0].start, slices[i - 1][1].stop, slices[i - 1][0].stop)
+             for i in keep if slices[i - 1] is not None}
+    tol = 0.5 * float(np.median([b[3] - b[1] for b in boxes.values()]))
+    rows: list[list[int]] = []
+    for i in sorted(boxes, key=lambda i: (boxes[i][1] + boxes[i][3]) / 2):
+        cy = (boxes[i][1] + boxes[i][3]) / 2
+        if rows and cy - (boxes[rows[-1][0]][1] + boxes[rows[-1][0]][3]) / 2 <= tol:
+            rows[-1].append(i)
+        else:
+            rows.append([i])
+    order = [i for row in rows for i in sorted(row, key=lambda i: boxes[i][0])]
+    items = []
+    for k, i in enumerate(order):
+        box = boxes[i]
+        crop = np.asarray(img.crop(box)).copy()
+        crop[..., 3] = np.where(owner[box[1]:box[3], box[0]:box[2]] == i, crop[..., 3], 0)
+        items.append(Frame(index=k, crop=Image.fromarray(crop, "RGBA"), box=box, cell_box=box,
+                           touches_source_edge=box[0] == 0 or box[1] == 0 or box[2] == w or box[3] == h,
+                           specks_dropped=0))
+    return items, count - len(boxes)
+
+
+def shelf_pack(sizes: list[tuple[int, int]], pad: int = 2) -> tuple[list[tuple[int, int]], tuple[int, int]]:
+    """Pack rectangles in shelves, tallest first, about as wide as a square of their total area."""
+    width = max(max(w for w, _ in sizes) + pad, round(np.sqrt(sum((w + pad) * (h + pad) for w, h in sizes)) * 1.15))
+    pos: list[tuple[int, int]] = [(0, 0)] * len(sizes)
+    x = y = shelf = used_w = 0
+    for i in sorted(range(len(sizes)), key=lambda i: -sizes[i][1]):
+        w, h = sizes[i]
+        if x and x + w > width:
+            x, y, shelf = 0, y + shelf + pad, 0
+        pos[i] = (x, y)
+        x += w + pad
+        shelf, used_w = max(shelf, h), max(used_w, x - pad)
+    return pos, (used_w, y + shelf)
+
+
+def size_signals(crop: Image.Image) -> tuple[float, float]:
+    """Two pose-tolerant size measures: the square root of the opaque area and the radius of the thickest part."""
+    solid = np.asarray(crop.getchannel("A")) >= 128
+    return float(np.sqrt(solid.sum())), float(ndimage.distance_transform_edt(solid).max())
+
+
+def size_offsets(crops: list[Image.Image]) -> list[float]:
+    """How much larger (+) or smaller (-) each crop is drawn than the row.
+
+    A pose changes area (arms overlap, a bow hides the chest) but not the head or
+    torso, and the reverse for a raised fist near the head. Only when both
+    measures move the same way is it drawing scale: the smaller move counts.
+    """
+    sig = np.array([size_signals(c) for c in crops])
+    rel = sig / np.median(sig, axis=0) - 1
+    return [float(np.sign(a) * min(abs(a), abs(b))) if np.sign(a) == np.sign(b) else 0.0 for a, b in rel]
+
+
+def even_sizes(frames: list[Frame], limit: float = 0.15) -> list[float]:
+    """Rescale frames drawn a little larger or smaller than the row; larger jumps are left for repair."""
+    factors = []
+    for f, off in zip(frames, size_offsets([f.crop for f in frames])):
+        k = 1 / (1 + off) if 0.02 < abs(off) <= limit else 1.0
+        if k != 1.0:
+            f.crop = f.crop.resize((max(1, round(f.crop.width * k)), max(1, round(f.crop.height * k))), Image.Resampling.LANCZOS)
+        factors.append(round(k, 3))
+    return factors
