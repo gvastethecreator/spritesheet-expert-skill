@@ -138,7 +138,7 @@ def _composite(records: list[dict[str, Any]], size: tuple[int, int], offsets: Ma
                 # Non-repeating layers still need to move in the scroll proof.
                 # Clip the translated layer at the canvas edge instead of
                 # wrapping it; wrapping is reserved for explicitly tiled art.
-                shifted.alpha_composite(layer, (shift, 0))
+                shifted.alpha_composite(layer, (-shift, 0))
             layer = shifted
         _blend(canvas, layer, record["blend_mode"])
     return canvas
@@ -187,6 +187,12 @@ def validate_background_pack(
         if current["parallax_x"] < prior["parallax_x"] or current["parallax_y"] < prior["parallax_y"]:
             issues.append(f"parallax inversion between {prior['id']} and {current['id']}")
     size = (document["canvas"]["width"], document["canvas"]["height"])
+    camera = document["camera"]
+    if any(not part.strip("0") for part in camera["aspect_ratio"].split(":")):
+        issues.append("camera aspect_ratio components must be positive")
+    safe_zone = camera["focal_safe_zone"]
+    if safe_zone["x"] + safe_zone["width"] > 1 or safe_zone["y"] + safe_zone["height"] > 1:
+        issues.append("camera focal_safe_zone must stay inside the normalized canvas")
     root = Path(root).expanduser().resolve()
     composite_target = (
         _proof_path(root, composite_path, "composite")

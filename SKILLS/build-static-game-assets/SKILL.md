@@ -1,49 +1,37 @@
 ---
 name: build-static-game-assets
+license: MIT
 description: "Static game assets: non-animated raster from imported art, Imagegen, or explicit Grok stills; props, pickups, decals, item icons, native alpha or reviewed cutouts, pivots, sizing, provenance, hashes, contact-sheet proof."
 ---
 
 # Build Static Game Assets
 
-Portable static-asset pack: explicit roles, dimensions, pivots, crop policy, licensing, provenance, proof.
+Create a portable non-animated raster pack with explicit roles, sizes, pivots, crop policy, source rights, provenance and proof. Use `spritesheet-expert` for requested sequences/atlases, `build-game-backgrounds` for backgrounds and `build-game-ui-kits` for raster controls.
 
 ## Workflow
 
-1. Define the asset inventory.
-   - Each id, role, target size, pivot, transparency rule, crop policy, scale class, license, shared style fingerprint.
-   - This skill: non-animated assets. Frame sequences and atlases → `$spritesheet-expert`; backgrounds → `$build-game-backgrounds`; raster controls → `$build-game-ui-kits`.
+1. Define the inventory and intended use. Record each id, role, target size, pivot, transparency/crop policy, scale class, license reference and shared style fingerprint. Done when the required assets and their contracts are explicit.
+2. Import approved source art or use Imagegen for new bitmap art. Load `grok-imagine` only for explicitly selected Grok stills. Review its dry run and require current-task consent for `--ack-run`; never call paid inference from tests. Deterministic tools may crop, cut out, resize and assemble proof, not draw replacement production art. Done when each source path/hash and real provenance is recorded below the pack root.
+3. Preserve accepted identity, transparent margins and valid native alpha. If a matte is needed, use neutral gray/black/white, not new green/blue/cyan/magenta chroma. Use a reviewed cutout where subject neutrals make removal ambiguous. BiRefNet/BEN2 are scoped comparison options, not permission to replace valid alpha. Regenerate semantic/anatomical failures through the selected provider rather than procedurally repainting them. Done when preparation preserves the intended silhouette, crop and pivot instead of hiding defects by scaling a proof.
+4. Write `static-pack.json` against [the schema](references/schemas/static-asset-pack-v1.schema.json), then run the installed CLI from any working directory:
 
-2. Generate or import real source art.
-   - `$imagegen` default for new user-facing bitmap art. Load `$grok-imagine` only for explicit Grok stills. Provider creates semantic pixels; local scripts may crop, remove backgrounds, resize, compose proof, validate, but must not draw replacement production art.
-   - Prefer native alpha for isolated sources when the provider supports it. Preserve valid transparency. If a matte is necessary, use flat gray, black, or white, never green, blue, cyan, or magenta chroma. Preserve subject neutrals with a reviewed model-backed cutout when matte removal is ambiguous. BiRefNet/BEN2 are explicit comparison options, not permission to replace valid native alpha or accept an unreviewed matte.
-   - Grok: review `--dry-run` first; `--ack-run` only with explicit current-task consent. Never call paid inference from tests.
-   - Sources below one pack root with portable relative paths and SHA-256 pins.
-   - Declare `source.provenance` per asset. Generated sources identify Imagegen or Grok; imported art and fixtures stay explicit. Fixture can test the pipeline; never representative production media.
-   - Keep transparent margins; do not hide crop or pivot defects by resizing proof.
-   - Identity, anatomy, edge quality, or requested semantics fail: regenerate via selected provider. Do not procedurally repaint the failed asset and present it as generated.
+   ```powershell
+   python "<skill-root>/scripts/validate_static_pack.py" --pack "<pack-root>/static-pack.json" --root "<pack-root>"
+   ```
 
-3. Write `static-pack.json` against `references/schemas/static-asset-pack-v1.schema.json`.
-   - Require `schema_version`, `kind`, `pack_id`, `style_fingerprint`, `licenses`, and `assets`.
-   - Reject unknown licenses, duplicate ids, stale hashes, unsafe paths, invalid pivots, cyclic references, dimension mismatch, or unsupported crop/transparency policies.
+   Use the existing Python runtime and [requirements](requirements-runtime.txt). Installing missing packages needs the task's authority. Done when current schema, paths, hashes, declared license references, dimensions, lineage and transparency checks pass or the actual failure is recorded.
+5. Inspect the contact sheet and assets at intended render size. Check silhouette, relative scale, alpha edges, crop, palette/style and readability. Inspect pivot behavior in its actual coordinate/engine context when that claim is required; the contact sheet does not draw or exercise every pivot. Done when requested visual/use claims have appropriate proof and remaining gaps are explicit.
 
-4. Validate and render the contact proof.
+## Validator and proof scope
 
-```powershell
-python scripts/validate_static_pack.py --pack <pack-root>/static-pack.json --root <pack-root>
-```
+The CLI writes `qa/static-pack-report.json` and `qa/static-pack-contact.png`. File replacements are atomic individually, not together. Path-preflight errors emit stdout JSON without a report write. Other contract failures can write a failure report while preserving old proof images; old images do not establish a successful current result. Operational failure can leave mixed generations, so verify report/proof hashes before accepting delivery.
 
-Writes `qa/static-pack-report.json` and `qa/static-pack-contact.png` atomically. Installed skill directory: `python -m pip install -r requirements-runtime.txt` when needed.
+The contact sheet is a resized comparison on checker/black/gray/white backgrounds, not a one-to-one render, animation, interaction or authorship test. Read actual source bytes and metadata for the requested claim. Validator occupancy/edge checks are contract gates, not universal measures of good art; do not alter approved pixels merely to obtain green output.
 
-5. Inspect the contact sheet.
-   - Silhouette, consistent scale, pivot intent, alpha edges on checker/black/gray/white, cropping, role coverage, palette/style continuity, readability at target size.
-   - Contact sheet proves pack comparison, not animation, runtime interaction, or provenance. Read the owner report and hash-bound provenance.
+`representative` is derived from the supplied non-fixture provenance. Hash checks bind those bytes and records, not independent authorship or legal clearance. Keep generated, imported and fixture sources explicit; license references must describe the actual art rights. A fixture can validate the pipeline but cannot close production-art delivery.
 
-## Completion Contract
+## Completion
 
-Done: validator exit 0; current source/license/provenance pins; `representative` true; portable paths; contact-sheet hash matches report; sheet inspected. Failed validation must preserve previous proof. Fixture reports may pass technical checks, not production completion.
+Require a successful current report, matching source/proof hashes, portable paths, valid provenance/license records and inspected applicable visual proof. Keep any missing target-size, pivot or runtime claim unverified. Preserve accepted media and useful evidence; cleanup follows project authority.
 
-## Resources
-
-- `scripts/validate_static_pack.py`: validation and contact-proof CLI.
-- `scripts/static_assets/`: schema and semantic validation.
-- `references/schemas/static-asset-pack-v1.schema.json`: pack contract.
+[validation module](scripts/static_assets/validation.py) owns validation and contact rendering. The bundled MIT [LICENSE](LICENSE) covers the skill code separately from pack artwork.

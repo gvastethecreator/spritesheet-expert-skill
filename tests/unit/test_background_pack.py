@@ -83,21 +83,61 @@ def test_scroll_proof_moves_non_repeating_layers(tmp_path: Path) -> None:
     pack = _pack(tmp_path)
     for layer in pack["layers"]:
         layer["repeat_x"] = False
-
     validate_background_pack(
-        pack,
-        root=tmp_path,
-        scroll_path=tmp_path / "qa" / "background-scroll.gif",
+        pack, root=tmp_path, scroll_path=tmp_path / "qa" / "background-scroll.gif"
     )
-
     with Image.open(tmp_path / "qa" / "background-scroll.gif") as scroll:
-        frames = [scroll.convert("RGBA").copy()]
-        for index in range(1, getattr(scroll, "n_frames", 1)):
+        frames = []
+        for index in range(scroll.n_frames):
             scroll.seek(index)
             frames.append(scroll.convert("RGBA").copy())
-
     assert len(frames) == 4
     assert any(frames[0].tobytes() != frame.tobytes() for frame in frames[1:])
+
+    layer = pack["layers"][1]
+    source = tmp_path / layer["path"]
+    marker = Image.new("RGBA", (64, 32), (0, 0, 0, 0))
+    ImageDraw.Draw(marker).rectangle((24, 12, 28, 16), fill=(255, 255, 255, 255))
+    marker.save(source)
+    layer.update(order=0, parallax_x=1, parallax_y=0, sha256=sha256(source.read_bytes()).hexdigest())
+    layer["provenance"] = {"source_type": "fixture", "art_engine": "fixture", "fixture": True, "verification_status": "verified"}
+    pack["layers"] = [layer]
+
+    for repeating in (True, False):
+        layer["repeat_x"] = repeating
+        target = tmp_path / "qa" / f"scroll-{repeating}.gif"
+        validate_background_pack(pack, root=tmp_path, scroll_path=target)
+        positions = []
+        with Image.open(target) as scroll:
+            assert scroll.n_frames == 4
+            for index in range(scroll.n_frames):
+                scroll.seek(index)
+                frame = scroll.convert("RGBA")
+                positions.append(min(
+                    x for y in range(frame.height) for x in range(frame.width)
+                    if frame.getpixel((x, y)) == (255, 255, 255, 255)
+                ))
+        assert positions == [24, 16, 8, 0]
+
+
+@pytest.mark.parametrize(
+    "camera_update",
+    [
+        {"aspect_ratio": "0:1"},
+        {"aspect_ratio": "1:0"},
+        {"focal_safe_zone": {"x": 0.8, "y": 0.2, "width": 0.5, "height": 0.5}},
+    ],
+    ids=["zero-width", "zero-height", "safe-zone-overflow"],
+)
+def test_background_pack_rejects_invalid_camera(
+    tmp_path: Path, camera_update: dict[str, Any]
+) -> None:
+    from background_pack import BackgroundPackError, validate_background_pack
+
+    pack = _pack(tmp_path)
+    pack["camera"].update(camera_update)
+    with pytest.raises(BackgroundPackError, match="camera"):
+        validate_background_pack(pack, root=tmp_path)
 
 
 def test_background_pack_rejects_stale_hash_and_wrong_dimensions(tmp_path: Path) -> None:

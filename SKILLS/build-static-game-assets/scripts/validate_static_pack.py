@@ -141,7 +141,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if pack_path in {report_path, contact_path}:
             raise StaticAssetPackError(["output paths must not overwrite the pack document"])
     except StaticAssetPackError as exc:
-        return _write_report(report_path, _failure("; ".join(exc.issues)), 1)
+        return _write_report(None, _failure("; ".join(exc.issues)), 1)
 
     try:
         raw_document = pack_path.read_text(encoding="utf-8-sig")

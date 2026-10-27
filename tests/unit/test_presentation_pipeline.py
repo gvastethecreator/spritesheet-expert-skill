@@ -362,12 +362,20 @@ def test_prepare_presentation_cli_help_needs_no_site_packages() -> None:
     assert "--presentation" in result.stdout
 
 
-def test_prepare_presentation_cli_rejects_output_escape(tmp_path: Path) -> None:
+@pytest.mark.parametrize("prepared", ["../escaped-prepared.json", "licenses/project-owned.txt"])
+def test_prepare_presentation_cli_rejects_unsafe_outputs(
+    tmp_path: Path, prepared: str
+) -> None:
     document = phase4_presentation()
+    license_path = tmp_path / "licenses" / "project-owned.txt"
+    license_path.parent.mkdir()
+    license_bytes = b"License evidence must remain unchanged.\n"
+    license_path.write_bytes(license_bytes)
+    document["licenses"][0]["evidence"]["sha256"] = sha256(license_bytes).hexdigest()
     presentation_path = tmp_path / "presentation.json"
     presentation_path.write_text(json.dumps(document), encoding="utf-8")
     escaped = tmp_path.parent / "escaped-prepared.json"
-    escaped.unlink(missing_ok=True)
+    assert not escaped.exists()
 
     result = subprocess.run(
         [
@@ -378,7 +386,8 @@ def test_prepare_presentation_cli_rejects_output_escape(tmp_path: Path) -> None:
             "--root",
             str(tmp_path),
             "--prepared",
-            "../escaped-prepared.json",
+            prepared,
+            "--validate-only",
         ],
         capture_output=True,
         text=True,
@@ -387,3 +396,6 @@ def test_prepare_presentation_cli_rejects_output_escape(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     assert not escaped.exists()
+    assert license_path.read_bytes() == license_bytes
+    if prepared == "licenses/project-owned.txt":
+        assert json.loads(result.stdout)["message"] == "outputs must not overwrite pinned inputs"
