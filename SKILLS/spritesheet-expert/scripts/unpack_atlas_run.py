@@ -485,7 +485,11 @@ def manifest_layout(
         anim = manifest.get("animation", {}).get("rows", {})
         for state, rects in fl["rows"].items():
             states.append({"name": state, "rects": [(r["x"], r["y"], r["w"], r["h"]) for r in rects]})
-            meta[state] = {"fps": anim.get(state, {}).get("fps", 6), "loop": anim.get(state, {}).get("loop", True)}
+            row_anim = anim.get(state, {})
+            meta[state] = {"fps": row_anim.get("fps", 6), "loop": row_anim.get("loop", True)}
+            for key in ("action", "animation_workflows"):
+                if key in row_anim:
+                    meta[state][key] = row_anim[key]
         atlas_file = manifest.get("game_input") or manifest.get("sprite_sheet_alpha")
         return states, (cell_w, cell_h), atlas_file, meta
 
@@ -568,8 +572,10 @@ def write_run(
             "frames": len(state["rects"]),
             "fps": int(m.get("fps", 6)) if temporal else 1,
             "loop": bool(m.get("loop", True)) if temporal else False,
-            "action": "",
+            "action": str(m.get("action", "")),
         }
+        if temporal and m.get("animation_workflows"):
+            request_states[name]["animation_workflows"] = list(m["animation_workflows"])
         if labels:
             request_states[name]["asset_labels"] = labels
         row_record = {"state": name, "frames": len(state["rects"]), "method": "unpacked", "files": files, "ok": True}

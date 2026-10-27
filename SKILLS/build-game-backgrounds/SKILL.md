@@ -1,50 +1,37 @@
 ---
 name: build-game-backgrounds
+license: MIT
 description: "Game backgrounds: layered raster packs from imported art, Imagegen, or explicit Grok stills; full-bleed parallax, scrolling panoramas, environment layers, horizon-safe composition, provenance, manifests, visual proof."
 ---
 
 # Build Game Backgrounds
 
-Portable layered-background pack: sources, camera contract, hashes, composite, and scrolling proof agree.
+Create a portable layered pack whose sources, declared camera contract and proof agree. Background planes belong here; animated sprites/atlases use `spritesheet-expert`, and isolated props use `build-static-game-assets` only when those capabilities are needed.
 
 ## Workflow
 
-1. Define the scene contract before generating art.
-   - Canvas size, aspect ratio, horizon, focal safe zone, layer order, depth, parallax factors, repeat behavior, style fingerprint.
-   - This skill: background planes. Animated sprites/atlases → `$spritesheet-expert`; isolated props → `$build-static-game-assets`.
+1. Define the requested scene before generating art. Record canvas/aspect, horizon, focal safe zone, layer order/depth, parallax, repeat behavior and style fingerprint. Keep the pack's supported schema roles rather than inventing aliases. Done when the requested view and layer responsibilities are explicit.
+2. Import approved art or generate it through the selected provider. Use Imagegen by default for new bitmap art; load `grok-imagine` only for explicitly selected Grok stills. Review Grok's dry run and require explicit current-task consent for `--ack-run`. Deterministic code may assemble, measure seams and render proof, not paint replacement production scenery. Done when each source, path, hash and provenance is recorded below one pack root.
+3. Preserve full-bleed authored pixels and valid alpha. For an isolated overlay, prefer native transparency. If a matte is necessary, use neutral gray/black/white and a reviewed cutout when subject colors are at risk; do not request new green/blue/cyan/magenta chroma. A composition or semantic failure needs the affected provider layer regenerated. Narrow repeat-edge harmonization must preserve the original source/hash and identify the derivative. Done when required media is actual approved/provider/imported art, with fixtures explicitly separated.
+4. Write `background-pack.json` against [the schema](references/schemas/background-pack-v1.schema.json). Validate through this skill's CLI from any working directory, resolving the installed skill root:
 
-2. Generate or import the layers.
-   - `$imagegen` default for new user-facing bitmap art. Load `$grok-imagine` only when Grok stills are selected explicitly. Provider creates semantic pixels; deterministic code may assemble, scroll, measure seams, and render proof, but must not paint replacement production scenery.
-   - Full-bleed scene layers keep authored pixels. For isolated overlays, prefer native alpha and preserve valid transparency. If a matte is necessary, use flat gray, black, or white and a reviewed cutout when removal threatens subject colors. Never request new green, blue, cyan, or magenta chroma.
-   - Grok: review `--dry-run` first; `--ack-run` only with explicit current-task consent. Video animation → `$spritesheet-expert`; this skill accepts still layers.
-   - Every source below one pack root. Portable relative paths; SHA-256 per layer.
-   - Declare provenance for every layer as Imagegen, Grok still, imported, or fixture. Fixtures may exercise composition and seam gates but are not representative art.
-   - Keep sky, far, mid, near, foreground, overlay, and effects roles explicit. Do not bake gameplay-critical objects into a background without naming the tradeoff.
-   - Composition, continuity, depth, or requested semantics fail: regenerate the affected provider layer. Edge harmonization may touch only a narrow provider-derived repeat band and must retain the original hash — not become procedural replacement art.
+   ```powershell
+   python "<skill-root>/scripts/validate_background_pack.py" --pack "<pack-root>/background-pack.json" --root "<pack-root>"
+   ```
 
-3. Write `background-pack.json` against `references/schemas/background-pack-v1.schema.json`.
-   - Require `schema_version`, `kind`, `pack_id`, `style_fingerprint`, `canvas`, `camera`, and `layers`.
-   - Reject duplicate order/depth ambiguity, hash drift, missing sources, unsafe paths, invalid safe zones, or incompatible dimensions.
+   Use the existing Python runtime and [requirements](requirements-runtime.txt). Install missing requirements only within the task's authority. Do not change the project toolchain to run a proof. Done when validation passes for the current bytes or the actual failure is retained.
+5. Inspect the composite and scroll sample. Judge continuity, readability behind gameplay, depth, blend order and framing. The GIF samples horizontal offsets; it does not prove vertical parallax, every camera crop, horizon behavior or a game's runtime integration. Add the actual requested view/interaction proof when needed. Done when all applicable visual claims are observed and missing proof stays explicit.
 
-4. Validate and generate deterministic proof.
+## Validator and proof scope
 
-```powershell
-python scripts/validate_background_pack.py --pack <pack-root>/background-pack.json --root <pack-root>
-```
+The CLI writes `qa/background-pack-report.json`, `qa/background-composite.png` and `qa/background-scroll.gif`. Replacement is atomic per file, not a transaction across the set. Output-path preflight errors print JSON to stdout without writing a report. Other contract failures can write a failure report while preserving existing proof images; old images alone are not a current successful result. An I/O failure can leave a mixed generation, so check final report/proof hashes before accepting it.
 
-Writes `qa/background-pack-report.json`, `qa/background-composite.png`, and `qa/background-scroll.gif` atomically. Installed skill directory: `python -m pip install -r requirements-runtime.txt` when preflight reports a missing module.
+Schema, path, ordering, dimension, source-hash and declared-provenance checks do not establish artistic quality or authenticity. The repeat-edge metric is a technical gate, not proof of seamless scrolling at every view. Keep the gate; resolve a real contract problem rather than repainting approved art to make a metric pass.
 
-5. Inspect the actual composite and scrolling preview.
-   - Seams, focal readability, horizon stability, parallax order, crop behavior, contrast behind gameplay, repeated-edge continuity.
-   - The composite proves layer order and framing. Scrolling GIF proves declared offset/repeat behavior. Inspect both; one cannot substitute for the other.
-   - Fix source or contract; rerun. Do not approve from JSON alone.
+`representative` means the supplied provenance is not marked fixture. It does not independently verify authorship, licenses or resemblance to the requested art. Fixture reports can exercise technical behavior but cannot close production-art delivery.
 
-## Completion Contract
+## Completion
 
-Done: validator exit 0; current input/provenance hashes; `representative` true; portable paths; report cites current proof hashes; both proof images inspected. Fixture reports may pass technical checks, not production completion. Keep prior proof if contract validation fails.
+Require a successful current report, matching source/proof hashes, portable paths, valid provenance and all requested visual proof. Keep both composite and scroll sample inspection; neither substitutes for the other. State any runtime/camera coverage still missing. Preserve useful failed or prior evidence and follow project authority for cleanup.
 
-## Resources
-
-- `scripts/validate_background_pack.py`: validation and proof CLI.
-- `scripts/background_pack/`: schema and semantic validation.
-- `references/schemas/background-pack-v1.schema.json`: pack contract.
+[validation module](scripts/background_pack/validation.py) owns validation and proof rendering. The bundled MIT [LICENSE](LICENSE) covers this skill's code; source-art rights and provider records remain a separate responsibility.

@@ -4,25 +4,43 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>sprite-gen curation</title>
+    <link rel="icon" href="data:," />
+    <title>Frame curation</title>
     <link rel="stylesheet" href="/curator.css" />
   </head>
   <body>
-    <header class="topbar">
-      <div class="title">
-        <strong>sprite-gen</strong> <span id="t-title"></span>
-        <span id="character" class="muted"></span>
-      </div>
-      <div class="actions">
-        <span id="status" class="status"></span>
-        <button id="lang-toggle" type="button" class="ghost"></button>
-        <button id="grid-toggle" type="button" class="ghost" hidden></button>
-        <button id="export" type="button"></button>
-        <button id="compose" type="button"></button>
-      </div>
-    </header>
-    <main id="states"></main>
-    <footer class="hintbar" id="hintbar"></footer>
+    <div class="tool">
+      <header class="tool-header">
+        <div class="brand">
+          <span class="brand-mark">Frame curation</span>
+          <h1 id="character">Loading run…</h1>
+        </div>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+        <div class="header-actions">
+          <div class="seg" role="group" aria-label="Review background">
+            <button class="btn" type="button" data-matte="checker" aria-pressed="true"><span class="swatch" data-swatch="checker"></span>Checker</button>
+            <button class="btn" type="button" data-matte="black" aria-pressed="false"><span class="swatch" data-swatch="black"></span>Black</button>
+            <button class="btn" type="button" data-matte="gray" aria-pressed="false"><span class="swatch" data-swatch="gray"></span>Gray</button>
+            <button class="btn" type="button" data-matte="white" aria-pressed="false"><span class="swatch" data-swatch="white"></span>White</button>
+          </div>
+          <button id="grid-toggle" class="btn" type="button" aria-pressed="false" hidden>Ground grid</button>
+          <button id="export" class="btn" type="button">Export PNGs</button>
+          <button id="compose" class="btn btn-primary" type="button">Bake atlas</button>
+          <button id="theme-toggle" class="btn btn-icon" type="button" aria-label="Switch theme">◐</button>
+        </div>
+      </header>
+      <main id="states" data-matte="checker"></main>
+    </div>
+    <footer class="keys-bar">
+      <dl class="keys">
+        <dt>Drag</dt><dd>Move</dd>
+        <dt>Wheel</dt><dd>Scale</dd>
+        <dt><span class="handle-key handle-rotate" aria-hidden="true"></span>Top handle</dt><dd>Rotate</dd>
+        <dt><span class="handle-key handle-shear" aria-hidden="true"></span>Corner handle</dt><dd>Shear</dd>
+        <dt>Click</dt><dd>Select or exclude</dd>
+      </dl>
+      <span class="autosave">Edits save to curation.json automatically. Source PNGs never change.</span>
+    </footer>
     <script src="/curator.js"></script>
   </body>
 </html>

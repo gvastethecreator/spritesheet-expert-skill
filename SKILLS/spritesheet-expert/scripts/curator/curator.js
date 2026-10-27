@@ -33,40 +33,18 @@ function matrixOf(t) {
   return { m00, m01, m10, m11 };
 }
 
-// --- i18n (en / ko; initial language from server --lang, toggle reloads) ----
+// --- UI copy (English) -------------------------------------------------------
 const STR = {
-  en: {
-    title: "curation", compose: "Bake atlas", export: "Export PNGs",
-    groundGrid: "Ground grid", langOther: "한국어",
-    frames: "frames", loop: "loop", nonLoop: "non-loop", preview: "Preview",
-    excluded: "✗ exclude", selected: "✓ selected", extractFail: "⚠ extraction incomplete",
-    editing: "editing…", saved: "saved", saveFail: "save failed: ",
-    baking: "baking…", composeDone: "atlas baked", composeFail: "bake failed: ",
-    exporting: "exporting…", exportFail: "export failed: ",
-    ready: "ready", loaded: "loaded existing curation", runLoadFail: "failed to load run:",
-    tRotate: "rotate", tShear: "shear — horizontal = shx, vertical = shy", tReset: "reset transform", tFlipX: "flip horizontally",
-    hints: ["drag = move", "wheel = scale", "top handle = rotate", "bottom-left = shear", "click card = select/deselect", "saved automatically"],
-    exportDone: (n) => `${n} PNGs → curated/`,
-  },
-  ko: {
-    title: "큐레이션", compose: "아틀라스 굽기", export: "PNG 내보내기",
-    groundGrid: "바닥 그리드", langOther: "EN",
-    frames: "프레임", loop: "루프", nonLoop: "비루프", preview: "프리뷰",
-    excluded: "✗ 제외", selected: "✓ 선택됨", extractFail: "⚠ 추출 미완료",
-    editing: "편집 중…", saved: "저장됨", saveFail: "저장 실패: ",
-    baking: "굽는 중…", composeDone: "아틀라스 완료", composeFail: "굽기 실패: ",
-    exporting: "내보내는 중…", exportFail: "내보내기 실패: ",
-    ready: "준비됨", loaded: "기존 큐레이션 로드됨", runLoadFail: "run 로드 실패:",
-    tRotate: "회전", tShear: "기울이기 — 가로=shx, 세로=shy", tReset: "보정 초기화", tFlipX: "좌우 반전",
-    hints: ["드래그 = 이동", "휠 = 확대/축소", "상단 핸들 = 회전", "좌하단 = 기울이기", "카드 클릭 = 선택/해제", "자동 저장"],
-    exportDone: (n) => `PNG ${n}장 → curated/`,
-  },
+  frames: "frames", loop: "loop", nonLoop: "one-shot", preview: "Preview",
+  excluded: "Excluded", selected: "Selected", extractFail: "Extraction incomplete",
+  editing: "Editing…", saved: "Saved", saveFail: "Save failed: ",
+  baking: "Baking atlas…", composeDone: "Atlas baked", composeFail: "Bake failed: ",
+  exporting: "Exporting…", exportFail: "Export failed: ",
+  ready: "Ready", loaded: "Loaded existing curation", runLoadFail: "Could not load the run:",
+  tRotate: "Drag to rotate", tShear: "Drag to shear (horizontal = shx, vertical = shy)", tReset: "Reset transform", tFlipX: "Flip horizontally",
+  exportDone: (n) => `Exported ${n} PNGs to curated/`,
 };
-let lang = "en";
-function t(key) {
-  const v = (STR[lang] && STR[lang][key]) ?? STR.en[key];
-  return v;
-}
+const t = (key) => STR[key];
 
 let run = null; // /api/run snapshot
 let entries = {}; // { stateName: { selected: [idx], transforms: { idx: {..} } } }
@@ -157,11 +135,13 @@ function applyCardTransform(stage, stateName, idx) {
     `translate(${t.dx * ds}px, ${t.dy * ds}px) matrix(${m.m00}, ${m.m10}, ${m.m01}, ${m.m11}, 0, 0)`;
   const sh = t.shx || t.shy ? ` sh${(t.shx || 0).toFixed(2)},${(t.shy || 0).toFixed(2)}` : "";
   const flip = t.flipX ? " ↔" : "";
-  const card = stage.closest(".card");
-  card.querySelector(".tvals").textContent =
+  const card = stage.closest(".frame-card");
+  const tvals = card.querySelector(".tvals");
+  tvals.textContent =
     `r${t.rotate.toFixed(0)}° ×${t.scale.toFixed(2)} ${t.dx >= 0 ? "+" : ""}${t.dx.toFixed(0)},${t.dy >= 0 ? "+" : ""}${t.dy.toFixed(0)}${sh}${flip}`;
+  tvals.title = tvals.textContent;
   const flipBtn = card.querySelector(".flip-btn");
-  if (flipBtn) flipBtn.classList.toggle("active", !!t.flipX);
+  if (flipBtn) flipBtn.setAttribute("aria-pressed", String(!!t.flipX));
 }
 
 // --- interactions ----------------------------------------------------------
@@ -278,34 +258,50 @@ function resetTransform(stateName, idx, stage) {
 // --- rendering -------------------------------------------------------------
 
 function renderSelectionState(stateName) {
-  document.querySelectorAll(`.card[data-state="${cssEscape(stateName)}"]`).forEach((card) => {
+  document.querySelectorAll(`.frame-card[data-state="${cssEscape(stateName)}"]`).forEach((card) => {
     const idx = Number(card.dataset.idx);
     const sel = isSelected(stateName, idx);
     card.classList.toggle("selected", sel);
     card.classList.toggle("rejected", !sel);
     const btn = card.querySelector(".sel-btn");
-    if (btn) btn.textContent = sel ? t("selected") : t("excluded");
+    if (btn) {
+      btn.textContent = sel ? t("selected") : t("excluded");
+      btn.setAttribute("aria-pressed", String(sel));
+    }
   });
   const state = run.states.find((s) => s.name === stateName);
+  const count = `${entries[stateName].selected.length}/${state.requestFrames} ${t("frames")}`;
   const countEl = document.querySelector(`.preview[data-state="${cssEscape(stateName)}"] .count`);
-  if (countEl) countEl.textContent = `${entries[stateName].selected.length}/${state.requestFrames} ${t("frames")}`;
+  if (countEl) countEl.textContent = count;
+  const chip = document.querySelector(`.state[data-state="${cssEscape(stateName)}"] .chip`);
+  if (chip) {
+    chip.textContent = count;
+    chip.dataset.status = entries[stateName].selected.length === state.requestFrames ? "approved" : "pending";
+  }
 }
 
 function cssEscape(s) {
   return s.replace(/"/g, '\\"');
 }
 
+// Run data (state names, actions, labels, paths) is untrusted text inside markup.
+function esc(value) {
+  return String(value).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+}
+
 function renderState(state) {
   const wrap = document.createElement("section");
-  wrap.className = "state";
+  wrap.className = "state card";
+  wrap.dataset.state = state.name;
 
   const head = document.createElement("div");
   head.className = "state-head";
   head.innerHTML =
-    `<span class="name">${state.name}</span>` +
-    `<span class="meta">${state.requestFrames} ${t("frames")} · ${state.fps}fps · ${state.loop ? t("loop") : t("nonLoop")}</span>` +
-    (state.action ? `<span class="action">${state.action}</span>` : "") +
-    (state.extractOk ? "" : `<span class="state-warn">${t("extractFail")}</span>`);
+    `<h2 class="name">${esc(state.name)}</h2>` +
+    `<span class="meta">${state.requestFrames} ${t("frames")} · ${state.fps} fps · ${state.loop ? t("loop") : t("nonLoop")}</span>` +
+    (state.action ? `<span class="action">${esc(state.action)}</span>` : "") +
+    (state.extractOk ? "" : `<span class="chip" data-status="rejected">${t("extractFail")}</span>`) +
+    `<span class="chip" data-status="pending"></span>`;
   wrap.appendChild(head);
 
   const body = document.createElement("div");
@@ -325,7 +321,7 @@ function renderState(state) {
   // wire stages after they are in the DOM (need clientWidth)
   for (const frame of state.frames) {
     if (!frame.present) continue;
-    const stage = wrap.querySelector(`.card[data-idx="${frame.index}"] .stage`);
+    const stage = wrap.querySelector(`.frame-card[data-idx="${frame.index}"] .cell`);
     wireStage(stage, state.name, frame.index);
     applyCardTransform(stage, state.name, frame.index);
     if (run.iso) drawGroundGrid(stage);
@@ -336,7 +332,7 @@ function renderState(state) {
 
 function renderCard(state, frame) {
   const card = document.createElement("div");
-  card.className = "card";
+  card.className = "frame-card";
   card.dataset.state = state.name;
   card.dataset.idx = frame.index;
   if (!frame.present) card.classList.add("missing");
@@ -344,22 +340,24 @@ function renderCard(state, frame) {
 
   const stageInner = frame.present
     ? (run.iso ? `<canvas class="grid-overlay"></canvas>` : "") +
-      `<img src="${frame.url}" alt="frame ${frame.index}" draggable="false" />` +
+      `<img src="${esc(frame.url)}" alt="Frame ${frame.index}" draggable="false" />` +
       `<div class="rotate-handle" title="${t("tRotate")}"></div>` +
       `<div class="shear-handle" title="${t("tShear")}"></div>`
-    : `<div class="missing-label">missing</div>`;
+    : `<div class="missing-label">Missing</div>`;
 
-  const label = frame.label ? `${frame.label}` : `#${frame.index}`;
+  const label = esc(frame.label ? frame.label : `#${frame.index}`);
   card.innerHTML =
     `<div class="card-top">` +
-    `<span class="idx" title="frame ${frame.index}">${label}</span>` +
-    `<button type="button" class="ghost sel-btn">${t("excluded")}</button>` +
+    `<span class="idx" title="Frame ${frame.index}">${label}</span>` +
+    `<button type="button" class="btn sel-btn" aria-pressed="false">${t("excluded")}</button>` +
     `</div>` +
-    `<div class="stage">${stageInner}</div>` +
+    `<div class="cell">${stageInner}</div>` +
     `<div class="card-controls">` +
     `<span class="tvals"></span>` +
-    `<button type="button" class="ghost flip-btn" title="${t("tFlipX")}" aria-label="flip-x">↔</button>` +
-    `<button type="button" class="ghost reset-btn" title="${t("tReset")}">↺</button>` +
+    `<span class="group">` +
+    `<button type="button" class="btn btn-icon flip-btn" title="${t("tFlipX")}" aria-label="${t("tFlipX")}" aria-pressed="false">↔</button>` +
+    `<button type="button" class="btn btn-icon reset-btn" title="${t("tReset")}" aria-label="${t("tReset")}">↺</button>` +
+    `</span>` +
     `</div>`;
 
   card.querySelector(".sel-btn").addEventListener("click", () => {
@@ -369,11 +367,13 @@ function renderCard(state, frame) {
   });
   if (frame.present) {
     card.querySelector(".reset-btn").addEventListener("click", () =>
-      resetTransform(state.name, frame.index, card.querySelector(".stage"))
+      resetTransform(state.name, frame.index, card.querySelector(".cell"))
     );
     card.querySelector(".flip-btn").addEventListener("click", () =>
-      toggleFlipX(state.name, frame.index, card.querySelector(".stage"))
+      toggleFlipX(state.name, frame.index, card.querySelector(".cell"))
     );
+  } else {
+    card.querySelectorAll(".flip-btn, .reset-btn").forEach((btn) => (btn.disabled = true));
   }
   return card;
 }
@@ -395,8 +395,8 @@ function renderPreview(state) {
   box.dataset.state = state.name;
   const aspect = run.cell.height / run.cell.width;
   box.innerHTML =
-    `<h4>${t("preview")}</h4>` +
-    `<canvas width="${run.cell.width}" height="${run.cell.height}" style="height:${(160 * aspect).toFixed(0)}px"></canvas>` +
+    `<h3 class="rail-title">${t("preview")}</h3>` +
+    `<canvas width="${run.cell.width}" height="${run.cell.height}" style="height:${(160 * aspect).toFixed(0)}px" aria-label="${esc(state.name)} playback preview"></canvas>` +
     `<div class="count"></div>`;
   return box;
 }
@@ -470,18 +470,20 @@ function drawGroundGrid(stage) {
   };
 
   const R = 4;
+  const token = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   ctx.lineWidth = 1;
+  ctx.strokeStyle = token("--accent");
   for (let gx = -R; gx <= R; gx++) {
     for (let gy = -R; gy <= R; gy++) {
       const [cx, cy] = center(gx, gy);
       diamond(cx, cy);
-      const anchorTile = gx === 0 && gy === 0;
-      ctx.strokeStyle = anchorTile ? "rgba(93,176,255,0.95)" : "rgba(93,176,255,0.28)";
+      ctx.globalAlpha = gx === 0 && gy === 0 ? 0.95 : 0.3;
       ctx.stroke();
     }
   }
   // axis guide lines through the anchor (the true 2:1 slopes)
-  ctx.strokeStyle = "rgba(255,180,80,0.85)";
+  ctx.globalAlpha = 0.85;
+  ctx.strokeStyle = token("--warn");
   ctx.lineWidth = 1.5;
   for (const [sx, sy] of [[1, 1], [1, -1]]) {
     ctx.beginPath();
@@ -492,29 +494,23 @@ function drawGroundGrid(stage) {
 }
 
 const gridToggle = document.getElementById("grid-toggle");
-const langToggle = document.getElementById("lang-toggle");
 gridToggle.addEventListener("click", () => {
   const on = document.body.classList.toggle("show-grid");
-  gridToggle.textContent = `${t("groundGrid")} ${on ? "▣" : "▢"}`;
-  if (on) document.querySelectorAll(".stage").forEach(drawGroundGrid);
+  gridToggle.setAttribute("aria-pressed", String(on));
+  if (on) document.querySelectorAll(".cell").forEach(drawGroundGrid);
 });
 
-// language toggle reloads with ?lang= so preview rAF loops are not duplicated
-langToggle.addEventListener("click", () => {
-  const next = lang === "en" ? "ko" : "en";
-  const u = new URL(location.href);
-  u.searchParams.set("lang", next);
-  location.href = u.toString();
+document.querySelectorAll("[data-matte]").forEach((button) => {
+  if (button.tagName !== "BUTTON") return;
+  button.addEventListener("click", () => {
+    document.getElementById("states").dataset.matte = button.dataset.matte;
+    document.querySelectorAll("button[data-matte]").forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
+  });
 });
 
-function applyStaticLang() {
-  document.getElementById("t-title").textContent = t("title");
-  document.getElementById("compose").textContent = t("compose");
-  document.getElementById("export").textContent = t("export");
-  gridToggle.textContent = `${t("groundGrid")} ${document.body.classList.contains("show-grid") ? "▣" : "▢"}`;
-  langToggle.textContent = t("langOther");
-  document.getElementById("hintbar").innerHTML = t("hints").map((h) => `<span>${h}</span>`).join("");
-}
+document.getElementById("theme-toggle").addEventListener("click", () => {
+  if (document.body.classList.contains("show-grid")) requestAnimationFrame(() => document.querySelectorAll(".cell").forEach(drawGroundGrid));
+});
 
 // --- compose ---------------------------------------------------------------
 
@@ -547,7 +543,7 @@ document.getElementById("export").addEventListener("click", async (ev) => {
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error((data.stderr || data.error || "export failed").trim());
     const out = data.export || {};
-    setStatus(STR[lang].exportDone(out.count || 0), "ok");
+    setStatus(STR.exportDone(out.count || 0), "ok");
     console.log("exported to:", out.out_dir, out.files);
   } catch (e) {
     setStatus(t("exportFail") + e.message, "err");
@@ -587,18 +583,32 @@ async function boot() {
     if (run.error) throw new Error(run.error);
   } catch (e) {
     document.getElementById("states").innerHTML =
-      `<div class="fatal">${t("runLoadFail")}\n${e.message}</div>`;
+      `<div class="fatal">${t("runLoadFail")}\n${esc(e.message)}</div>`;
     return;
   }
-  // initial language: ?lang= (set by the toggle) overrides the server --lang
-  lang = new URLSearchParams(location.search).get("lang") || run.lang || "en";
-  document.documentElement.lang = lang;
-  applyStaticLang();
   document.getElementById("character").textContent = `${run.characterId} · ${run.cell.width}×${run.cell.height}`;
+  document.title = `Frame curation · ${run.characterId}`;
   if (run.iso) gridToggle.hidden = false;
   seedEntries();
   for (const state of run.states) renderState(state);
   setStatus(run.curation && Object.keys(run.curation.states || {}).length ? t("loaded") : t("ready"));
 }
+
+// tool-theme:start (generated from spritecore/tool_theme.py by sync_tool_theme.py; do not edit)
+(() => {
+  const root = document.documentElement;
+  const button = document.getElementById('theme-toggle');
+  const key = 'sprite-tools-theme';
+  const effective = () => root.dataset.theme || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  const label = () => { if (button) button.setAttribute('aria-label', `Switch to ${effective() === 'dark' ? 'light' : 'dark'} theme`); };
+  try { const saved = localStorage.getItem(key); if (saved === 'light' || saved === 'dark') root.dataset.theme = saved; } catch (_error) {}
+  label();
+  if (button) button.addEventListener('click', () => {
+    root.dataset.theme = effective() === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem(key, root.dataset.theme); } catch (_error) {}
+    label();
+  });
+})();
+// tool-theme:end
 
 boot();

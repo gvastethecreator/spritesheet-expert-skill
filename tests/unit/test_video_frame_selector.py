@@ -42,10 +42,10 @@ def test_selector_labels_creature_type_and_locomotion_slots(tmp_path: Path) -> N
     assert contract["creatureType"] == "multi-legged / crawl"
     assert contract["motionSource"] == "alternating diagonal leg groups"
     assert contract["slotLabels"] == [
-        "Idle exacto",
-        "Fase A",
-        "Idle exacto",
-        "Fase B",
+        "Exact idle",
+        "Phase A",
+        "Exact idle",
+        "Phase B",
     ]
     assert len(contract["checks"]) == 5
 
@@ -57,10 +57,10 @@ def test_selector_labels_attack_intent_and_contact_slot(tmp_path: Path) -> None:
 
     assert contract["motionSource"] == "paired front claws"
     assert contract["slotLabels"] == [
-        "Idle exacto",
-        "Anticipación",
-        "Contacto",
-        "Idle exacto",
+        "Exact idle",
+        "Anticipation",
+        "Contact",
+        "Exact idle",
     ]
 
 

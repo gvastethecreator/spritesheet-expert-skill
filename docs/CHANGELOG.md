@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-25 (v1 final)
+
+- Added one shared visual system for every review tool (`spritecore/tool_theme.py`), synced into Studio, curator, motion review, and the docs site with `pnpm run sync:theme`. All tool UIs are English.
+- Rebuilt the project site as an interactive workbench and replaced the README examples with three demo worlds produced through the real lanes.
+- Fixed pipeline bugs: native alpha now honors `--alpha-mode hard`, VFX runs keep their `vfx` contract, sparse VFX frames pass occupancy, conversion keeps row metadata, the palette keeps small saturated accents, registration writes `baseline_y` and copies matte reviews, row frames share one scale, and several HTML injection paths are escaped.
+- This is the last release of the v1 architecture. v2 is a rewrite on a separate branch.
+
 ## 2026-09-08
 
 - Added an opt-in, project-owned pixel-art converter for explicit conversion requests. It uses one scale and shared RGB palette, preserves sampled alpha and frame placement, and writes a separate source snapshot, manifest, frames, and comparison player.

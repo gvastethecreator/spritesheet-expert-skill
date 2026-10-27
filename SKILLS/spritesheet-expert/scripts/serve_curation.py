@@ -104,7 +104,6 @@ def build_run_state(run_dir: Path) -> dict:
         "states": states,
         "curation": curation,
         "iso": request.get("iso"),
-        "lang": CurationHandler.lang,
         "hasAtlas": (run_dir / "sprite-sheet-alpha.png").is_file(),
     }
 
@@ -158,7 +157,6 @@ def run_export(run_dir: Path) -> dict:
 
 class CurationHandler(BaseHTTPRequestHandler):
     run_dir: Path = Path(".")
-    lang: str = "en"
 
     def log_message(self, *_args):  # quieter console
         pass
@@ -267,7 +265,6 @@ def main() -> int:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=0, help="0 picks a free port")
     parser.add_argument("--no-open", action="store_true", help="do not auto-open the browser")
-    parser.add_argument("--lang", choices=["en", "ko"], default="en", help="initial UI language (toggleable in the webview)")
     args = parser.parse_args()
 
     run_dir = args.run_dir.expanduser().resolve()
@@ -278,7 +275,6 @@ def main() -> int:
 
     handler = partial(CurationHandler)
     CurationHandler.run_dir = run_dir
-    CurationHandler.lang = args.lang
     server = ThreadingHTTPServer((args.host, args.port), handler)
     host, port = server.server_address
     url = f"http://{host}:{port}/"

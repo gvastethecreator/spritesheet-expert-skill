@@ -208,6 +208,11 @@ def test_blank_edge_escape_and_extreme_occupancy_are_hard_failures() -> None:
     tiny_report = validate_frame(implausibly_tiny)
     assert any("extreme opaque occupancy" in failure for failure in tiny_report.failures)
 
+    vfx_mote = validate_frame(implausibly_tiny, allow_sparse=True)
+    assert vfx_mote.failures == ()
+    assert any("extreme opaque occupancy" in warning for warning in vfx_mote.warnings)
+    assert validate_frame(blank, allow_sparse=True).failures == ("blank frame",)
+
 
 def test_fragmentation_is_reported_as_a_warning_not_an_extra_hard_gate() -> None:
     from spritecore.image_ops import validate_frame

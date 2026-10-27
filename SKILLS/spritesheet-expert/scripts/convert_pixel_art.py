@@ -12,6 +12,7 @@ import re
 
 from PIL import Image, __version__ as pillow_version
 from runio import atomic_save_image, atomic_write_text
+from spritecore.tool_theme import THEME_SCRIPT, TOOL_CSS
 
 MAX_PIXELS = 4_194_304
 
@@ -34,8 +35,64 @@ def size(value, label):
     return tuple(value)
 
 
+def median_cut(colors, budget):
+    samples = Image.new('RGB', (len(colors), 1))
+    samples.putdata(colors)
+    indexed = samples.quantize(colors=budget, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+    raw = indexed.getpalette()
+    return sorted({tuple(raw[index*3:index*3+3]) for _, index in indexed.getcolors()})
+
+
+def hue_bucket(rgb):
+    """12 hue buckets for clearly saturated colors, else None."""
+    high, low = max(rgb), min(rgb)
+    if high < 60 or high - low < 0.35 * high:
+        return None
+    r, g, b = rgb
+    if high == r:
+        hue = ((g - b) / (high - low)) % 6
+    elif high == g:
+        hue = (b - r) / (high - low) + 2
+    else:
+        hue = (r - g) / (high - low) + 4
+    return int(hue * 2) % 12
+
+
+def accent_preserving_palette(colors, budget):
+    """Median cut, plus reserved slots for small saturated hues it would erase.
+
+    Median cut splits by pixel count, so a purple tongue or green eyes collapse
+    into the dominant browns. Hue buckets that no palette color represents get
+    up to a quarter of the budget, each as the median of the bucket's more
+    saturated half, so the accent keeps its punch.
+    """
+    if not colors:
+        return []
+    palette = median_cut(colors, budget)
+    if budget < 4:
+        return palette
+    covered = {hue_bucket(color) for color in palette}
+    lost = {}
+    for color in colors:
+        bucket = hue_bucket(color)
+        if bucket is not None and bucket not in covered:
+            lost.setdefault(bucket, []).append(color)
+    floor = max(4, len(colors) // 2000)
+    accents = sorted(((len(group), bucket) for bucket, group in lost.items() if len(group) >= floor), reverse=True)
+    accents = accents[:budget // 4]
+    if not accents:
+        return palette
+    reserved = []
+    for _count, bucket in accents:
+        group = sorted(lost[bucket], key=lambda c: (max(c) - min(c), c), reverse=True)
+        group = group[:max(1, len(group) // 2)]
+        reserved.append(tuple(sorted(channel)[len(channel) // 2] for channel in zip(*group)))
+    return sorted(set(median_cut(colors, budget - len(reserved))) | set(reserved))
+
+
 def compile_conversion(request, source):
-    allowed = {'operation', 'source', 'grid', 'cell', 'palette_size', 'semantics', 'state', 'fps', 'loop', 'pivot'}
+    allowed = {'operation', 'source', 'grid', 'cell', 'palette_size', 'semantics', 'state', 'fps', 'loop', 'pivot',
+               'action', 'animation_workflows'}
     if set(request) - allowed:
         raise ValueError('Unknown request fields: ' + ', '.join(sorted(set(request) - allowed)))
     if request.get('operation') != 'convert-to-pixel-art':
@@ -59,8 +116,14 @@ def compile_conversion(request, source):
     if temporal:
         if type(fps) is not int or not 1 <= fps <= 240 or type(loop) is not bool:
             raise ValueError('Temporal input requires explicit integer fps (1..240) and boolean loop')
-    elif fps is not None or loop is not None:
-        raise ValueError('Static variants must not declare animation timing')
+    elif fps is not None or loop is not None or 'animation_workflows' in request:
+        raise ValueError('Static variants must not declare animation timing or workflows')
+    action, workflows = request.get('action'), request.get('animation_workflows')
+    if action is not None and not isinstance(action, str):
+        raise ValueError('action must be a string')
+    if workflows is not None and (not isinstance(workflows, list) or not all(isinstance(w, str) and w for w in workflows)):
+        raise ValueError('animation_workflows must be a list of workflow ids')
+    row_meta = {key: value for key, value in (('action', action), ('animation_workflows', workflows)) if value is not None}
     with Image.open(source) as opened:
         if opened.width * opened.height > MAX_PIXELS or getattr(opened, 'n_frames', 1) != 1:
             raise ValueError('Use one still sheet of at most 4194304 pixels; extract animated containers first')
@@ -84,13 +147,7 @@ def compile_conversion(request, source):
         frame = source_image.crop((x, y, x + sw, y + sh)).resize((width, height), Image.Resampling.NEAREST)
         frames.append(frame)
         visible.extend(rgb[:3] for rgb in frame.get_flattened_data() if rgb[3])
-    palette = []
-    if visible:
-        samples = Image.new('RGB', (len(visible), 1))
-        samples.putdata(visible)
-        indexed = samples.quantize(colors=budget, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
-        raw = indexed.getpalette()
-        palette = sorted({tuple(raw[index*3:index*3+3]) for _, index in indexed.getcolors()})
+    palette = accent_preserving_palette(visible, budget)
     palette_image = Image.new('P', (1, 1))
     palette_image.putpalette([v for color in (palette or [(0, 0, 0)]) for v in color] + list((palette or [(0, 0, 0)])[0]) * (256 - max(1, len(palette))))
     converted, metrics = [], []
@@ -109,7 +166,7 @@ def compile_conversion(request, source):
                 'frame_semantics': semantics, 'cell': {'width': width, 'height': height},
                 'game_input': 'converted.png', 'frame_layout': {'cellWidth': width, 'cellHeight': height,
                 'rows': {state: [{'x': i % columns * width, 'y': i // columns * height, 'w': width, 'h': height} for i in range(count)]}},
-                'animation': {'rows': {state: {'fps': fps, 'loop': loop}}} if temporal else {'rows': {}},
+                'animation': {'rows': {state: {'fps': fps, 'loop': loop, **row_meta}}} if temporal else {'rows': {}},
                 'conversion': {'source_cell': [sw, sh], 'scale': scale, 'source_pivot': pivot,
                 'output_pivot': [v * scale for v in pivot] if pivot is not None else None,
                 'pivot_convention': 'continuous cell-edge coordinates; no rounding or frame recentering',
@@ -133,7 +190,8 @@ def viewer(baseline, converted, manifest):
     payload = {'manifest': manifest, 'baseline': [list(im.get_flattened_data()) for im in baseline],
                'converted': [list(im.get_flattened_data()) for im in converted]}
     template = Path(__file__).resolve().parents[1] / 'assets' / 'pixel-conversion-viewer.html'
-    return template.read_text(encoding='utf-8').replace('__CONVERSION__', json.dumps(payload, ensure_ascii=False).replace('<', '\\u003c'))
+    page = template.read_text(encoding='utf-8').replace('__THEME_CSS__', TOOL_CSS).replace('__THEME_SCRIPT__', THEME_SCRIPT)
+    return page.replace('__CONVERSION__', json.dumps(payload, ensure_ascii=False).replace('<', '\\u003c'))
 
 
 def validate(output):

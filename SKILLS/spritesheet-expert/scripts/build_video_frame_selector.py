@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+from html import escape
 from hashlib import sha256
 from io import BytesIO
 import json
@@ -13,6 +14,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from runio import atomic_write_text
+from spritecore.tool_theme import THEME_SCRIPT, TOOL_CSS
 
 
 def digest(path: Path) -> str:
@@ -156,27 +158,27 @@ def selector_review_contract(
     anatomy = str(motion.get("anatomy") or "unspecified")
     locomotion = str(motion.get("locomotion") or "unspecified")
     if "front-fps-creature-locomotion" in workflows and slot_count == 4:
-        slot_labels = ["Idle exacto", "Fase A", "Idle exacto", "Fase B"]
-        motion_source = str(motion.get("movement_source") or "movimiento declarado")
+        slot_labels = ["Exact idle", "Phase A", "Exact idle", "Phase B"]
+        motion_source = str(motion.get("movement_source") or "declared movement")
     elif "front-fps-creature-attack" in workflows and slot_count == 4:
-        slot_labels = ["Idle exacto", "Anticipación", "Contacto", "Idle exacto"]
-        motion_source = str(motion.get("attack_source") or "ataque declarado")
+        slot_labels = ["Exact idle", "Anticipation", "Contact", "Exact idle"]
+        motion_source = str(motion.get("attack_source") or "declared attack")
     else:
         slot_labels = [
-            "Idle exacto" if index in exact_idle_slots else f"Pose {index + 1}"
+            "Exact idle" if index in exact_idle_slots else f"Pose {index + 1}"
             for index in range(slot_count)
         ]
-        motion_source = "movimiento declarado"
+        motion_source = "declared movement"
     return {
         "creatureType": f"{anatomy} / {locomotion}",
         "motionSource": motion_source,
         "slotLabels": slot_labels,
         "checks": [
-            "Tipo de criatura, anatomía y orientación frontal correctos",
-            "Cada slot cumple su pose y usa el movimiento declarado",
-            "Identidad, rostro, volumen y cantidad de miembros estables",
-            "Cámara, escala, centro, suelo y fondo permanecen fijos",
-            "Ninguna parte toca el borde ni queda cortada",
+            "Creature type, anatomy and front orientation are correct",
+            "Each slot holds its pose and uses the declared movement",
+            "Identity, face, volume and limb count stay stable",
+            "Camera, scale, center, ground and background stay fixed",
+            "No part touches the edge or is cropped",
         ],
     }
 
@@ -258,28 +260,76 @@ def build_selector(
 
 
     html = """<!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Selector de frames · __STATE__</title>
-<style>
-:root{color-scheme:dark;font-family:Inter,system-ui,sans-serif;background:#09090b;color:#f4f4f5}*{box-sizing:border-box}
-body{margin:0}header{position:sticky;top:0;z-index:5;background:#09090bf2;border-bottom:1px solid #27272a;padding:14px 18px}
-h1{font-size:18px;margin:0 0 10px}.layout{display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:18px;padding:18px}
-.panel{background:#111113;border:1px solid #27272a;border-radius:12px;padding:14px}video{display:block;width:100%;aspect-ratio:1;background:#000}
-.slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:8px;margin:12px 0}.slot{padding:5px;border:1px solid #3f3f46;background:#18181b;color:#fafafa;border-radius:8px;cursor:pointer}.slot img{display:block;width:100%;border-radius:5px}.slot.active{border-color:#f59e0b;color:#fbbf24}.slot.locked{cursor:default}.cycle{display:block;width:190px;max-width:100%;margin:10px auto;border:1px solid #3f3f46;border-radius:8px}
-.candidate{display:flex;flex-wrap:wrap;max-width:340px;gap:3px;align-items:center}.candidate img{width:54px;display:block}.candidate strong{flex-basis:100%;text-align:left}.candidate.unsafe{border-color:#ef4444;color:#fecaca}
-.actions{display:flex;gap:8px;flex-wrap:wrap}button{border:1px solid #3f3f46;background:#27272a;color:#fafafa;padding:8px 10px;border-radius:8px;cursor:pointer}.status{font-size:13px;color:#a1a1aa;margin-top:10px;word-break:break-all}
-.review{margin:12px 0;padding:10px;border:1px solid #3f3f46;border-radius:8px;background:#18181b}.review strong{display:block;margin-bottom:4px}.review small{display:block;color:#a1a1aa;margin-bottom:8px}.review label{display:block;font-size:12px;line-height:1.35;margin:6px 0}.review input{margin-right:7px}button:disabled{opacity:.38;cursor:not-allowed}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(116px,1fr));gap:8px}.frame{border:2px solid transparent;background:#111113;padding:0;position:relative}.frame img{width:100%;display:block}.frame.selected{border-color:#f59e0b}.frame.active{outline:2px solid #38bdf8}.frame.unsafe::after{content:'BORDE';position:absolute;top:5px;right:5px;background:#b91c1c;color:#fff;padding:2px 5px;border-radius:4px;font-weight:700;font-size:10px}.frame.scale-unsafe::before{content:'ESCALA';position:absolute;top:25px;right:5px;background:#7c3aed;color:#fff;padding:2px 5px;border-radius:4px;font-weight:700;font-size:10px}.badge{position:absolute;top:5px;left:5px;background:#f59e0b;color:#111;padding:2px 5px;border-radius:4px;font-weight:700;font-size:11px}
-@media(max-width:850px){.layout{grid-template-columns:1fr}header{position:static}}
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark light">
+<title>Frame selector · __STATE__</title>
+<style>__THEME_CSS__
+.sel-main{display:grid;grid-template-columns:minmax(300px,400px) minmax(0,1fr);min-height:0}
+.sel-side{display:grid;gap:12px;align-content:start;padding:12px;border-right:1px solid var(--line);background:var(--surface)}
+.sel-side video{display:block;width:100%;aspect-ratio:1;border-radius:var(--radius-lg);background:var(--matte-black)}
+.sel-intro{padding:8px 16px;border-bottom:1px solid var(--line);color:var(--muted);font-size:12px}
+.slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:6px}
+.slot{display:grid;gap:4px;padding:4px;border:1px solid var(--line);border-radius:var(--radius);background:var(--raised);color:var(--muted);font:11px/1.3 var(--font-mono);text-align:left;cursor:pointer}
+.slot img{display:block;width:100%;border-radius:2px}
+.slot.active{border-color:var(--accent);color:var(--ink);box-shadow:inset 0 0 0 1px var(--accent)}
+.slot.locked{cursor:default}
+.cycle{display:block;width:160px;max-width:100%;margin:0 auto;border:1px solid var(--line);border-radius:var(--radius)}
+.review{padding:10px;border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--raised)}
+.review strong{display:block}.review small{display:block;margin:2px 0 8px;color:var(--muted)}
+.review label{display:flex;gap:8px;align-items:flex-start;margin:6px 0;font-size:12px;line-height:1.35}
+.review input{accent-color:var(--accent);margin-top:2px}
+.candidates{display:grid;gap:6px}
+.candidate{display:flex;flex-wrap:wrap;gap:3px;align-items:center;padding:6px;border:1px solid var(--line);border-radius:var(--radius);background:var(--raised);color:var(--ink);cursor:pointer;text-align:left}
+.candidate img{width:44px;display:block;border-radius:2px}
+.candidate strong{flex-basis:100%;font:600 11px var(--font-mono)}
+.candidate.unsafe{border-color:var(--bad)}
+.candidate.unsafe strong{color:var(--bad)}
+.actions{display:flex;gap:6px;flex-wrap:wrap}
+.sel-status{color:var(--muted);font:11px/1.5 var(--font-mono);word-break:break-all}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:6px;padding:12px;align-content:start}
+.frame{position:relative;padding:0;border:2px solid transparent;border-radius:var(--radius);background:var(--surface);cursor:pointer;overflow:hidden}
+.frame img{display:block;width:100%}
+.frame.selected{border-color:var(--accent)}
+.frame.active{outline:2px solid var(--ok);outline-offset:1px}
+.frame.unsafe::after,.frame.scale-unsafe::before{position:absolute;right:4px;padding:1px 5px;border-radius:3px;color:#fff;font:700 10px var(--font-mono)}
+.frame.unsafe::after{content:'EDGE';top:4px;background:var(--bad)}
+.frame.scale-unsafe::before{content:'SCALE';top:22px;background:var(--warn)}
+.badge{position:absolute;top:4px;left:4px;padding:1px 5px;border-radius:3px;background:var(--accent);color:var(--accent-ink);font:700 11px var(--font-mono)}
+h2.rail-title{margin:0}
+@media(max-width:850px){.sel-main{grid-template-columns:minmax(0,1fr)}.sel-side{border-right:0;border-bottom:1px solid var(--line)}}
 </style></head><body>
-<header><h1>Selector de frames · __STATE__</h1><div>Video completo a <b id="fps"></b> FPS. Frame 0 queda bloqueado; cambia los otros frames sin regenerar.</div></header>
-<main class="layout"><section class="panel"><video id="video" controls muted loop></video><img id="cycle" class="cycle" alt="Preview del ciclo"><div id="slots" class="slots"></div><div id="review" class="review"></div><h2 style="font-size:14px">Ciclos candidatos</h2><div id="candidates" class="actions"></div><div class="actions" style="margin-top:12px"><button id="copy">Copiar comando revisado</button><button id="download">Descargar selección JSON</button><button id="reset">Restaurar automática</button></div><div id="status" class="status"></div></section><section><div id="grid" class="grid"></div></section></main>
-<script>const data=__DATA__;let selected=[...data.selected];let active=1,cycleFrame=0;const video=document.querySelector('#video'),grid=document.querySelector('#grid'),slots=document.querySelector('#slots'),status=document.querySelector('#status'),cycle=document.querySelector('#cycle'),review=document.querySelector('#review'),copy=document.querySelector('#copy'),download=document.querySelector('#download');video.src=data.videoUrl;document.querySelector('#fps').textContent=data.fps.toFixed(3);review.innerHTML=`<strong>Contrato: ${data.reviewContract.creatureType}</strong><small>Movimiento: ${data.reviewContract.motionSource}</small>`+data.reviewContract.checks.map((label,index)=>`<label><input type="checkbox" data-review="${index}">${label}</label>`).join('');
+<div class="tool">
+<header class="tool-header"><div class="brand"><span class="brand-mark">Video frames</span><h1>Frame selector · __STATE__</h1></div><div class="status" id="headline" aria-live="polite"></div><button type="button" class="btn btn-icon" id="theme-toggle" aria-label="Switch theme"><span aria-hidden="true">&#9680;</span></button></header>
+<div>
+<p class="sel-intro">Full video at <b id="fps"></b> FPS. Frame 0 is locked. Change the other frames without regenerating.</p>
+<main class="sel-main">
+<section class="sel-side" aria-label="Selection">
+<video id="video" controls muted loop></video>
+<img id="cycle" class="cycle" alt="Cycle preview">
+<div id="slots" class="slots"></div>
+<div id="review" class="review"></div>
+<h2 class="rail-title">Candidate cycles</h2>
+<div id="candidates" class="candidates"></div>
+<div class="actions"><button type="button" class="btn btn-primary" id="copy">Copy reviewed command</button><button type="button" class="btn" id="download">Download selection JSON</button><button type="button" class="btn" id="reset">Restore automatic</button></div>
+<div id="status" class="sel-status" aria-live="polite"></div>
+</section>
+<section aria-label="All decoded frames"><div id="grid" class="grid"></div></section>
+</main>
+</div>
+</div>
+<script>__THEME_SCRIPT__</script>
+<script>const data=__DATA__;let selected=[...data.selected];let active=1,cycleFrame=0;const video=document.querySelector('#video'),grid=document.querySelector('#grid'),slots=document.querySelector('#slots'),status=document.querySelector('#status'),headline=document.querySelector('#headline'),cycle=document.querySelector('#cycle'),review=document.querySelector('#review'),copy=document.querySelector('#copy'),download=document.querySelector('#download');video.src=data.videoUrl;document.querySelector('#fps').textContent=data.fps.toFixed(3);
+(()=>{const title=document.createElement('strong');title.textContent='Contract: '+data.reviewContract.creatureType;const source=document.createElement('small');source.textContent='Motion: '+data.reviewContract.motionSource;review.append(title,source);data.reviewContract.checks.forEach((label,index)=>{const row=document.createElement('label');const input=document.createElement('input');input.type='checkbox';input.dataset.review=String(index);row.append(input,document.createTextNode(label));review.append(row)})})();
 function seek(i){video.currentTime=i/data.fps;video.pause()}
-function isEdgeUnsafe(frame,slot){return data.unsafeFrames.includes(frame)&&!(data.exactFirstFramePreserved&&data.exactIdleSlots.includes(slot))}function isScaleUnsafe(frame,slot){return data.scaleUnsafeFrames.includes(frame)&&!(data.exactFirstFramePreserved&&data.exactIdleSlots.includes(slot))}function isUnsafe(frame,slot){return isEdgeUnsafe(frame,slot)||isScaleUnsafe(frame,slot)}function reviewInputs(){return [...review.querySelectorAll('input')]}function resetReview(){reviewInputs().forEach(input=>input.checked=false)}function render(){slots.innerHTML='';selected.forEach((frame,i)=>{const b=document.createElement('button');b.className='slot '+(i===active?'active ':'')+(i===0?'locked':'');const shown=data.exactIdleSlots.includes(i)?0:frame;b.innerHTML=`<img src="${data.thumbnails[shown]}"><span>${i+1}: ${data.reviewContract.slotLabels[i]||'Pose'} · #${frame}${isEdgeUnsafe(frame,i)?' · TOCA BORDE':''}${isScaleUnsafe(frame,i)?' · ESCALA INESTABLE':''}</span>`;if(i>0)b.onclick=()=>{active=i;seek(frame);render()};slots.append(b)});document.querySelectorAll('.frame').forEach((el,i)=>{el.classList.toggle('selected',selected.includes(i));el.classList.toggle('active',selected[active]===i);const badge=el.querySelector('.badge');if(badge)badge.remove();const slot=selected.indexOf(i);if(slot>=0){const x=document.createElement('span');x.className='badge';x.textContent=slot+1;el.append(x)}});const edgeUnsafe=selected.filter((frame,slot)=>isEdgeUnsafe(frame,slot)),scaleUnsafe=selected.filter((frame,slot)=>isScaleUnsafe(frame,slot)),reviewed=reviewInputs().every(input=>input.checked);copy.disabled=download.disabled=edgeUnsafe.length>0||scaleUnsafe.length>0||!reviewed;status.textContent='Índices: '+selected.join(', ')+(edgeUnsafe.length?' · ADVERTENCIA borde: '+edgeUnsafe.join(', '):' · márgenes fuente seguros')+(scaleUnsafe.length?' · ADVERTENCIA escala: '+scaleUnsafe.join(', '):' · escala estable')+(reviewed?' · revisión completa':' · confirma 5 checks')+' · '+data.commandPrefix+'"'+selected.join(',')+'" --force'}
-review.addEventListener('change',render);data.candidates.forEach(c=>{const unsafe=c.indices.filter((frame,slot)=>isUnsafe(frame,slot));const b=document.createElement('button');b.className='candidate'+(unsafe.length?' unsafe':'');b.innerHTML=`<strong>#${c.rank} · score ${c.score}${unsafe.length?' · revisar '+unsafe.join(', '):' · seguro'}</strong>`+c.indices.map((i,slot)=>`<img src="${data.thumbnails[data.exactIdleSlots.includes(slot)?0:i]}" alt="Frame ${i}">`).join('');b.onclick=()=>{selected=[...c.indices];active=1;resetReview();seek(selected[1]);render()};document.querySelector('#candidates').append(b)});data.thumbnails.forEach((src,i)=>{const b=document.createElement('button');b.className='frame'+(data.unsafeFrames.includes(i)?' unsafe':'')+(data.scaleUnsafeFrames.includes(i)?' scale-unsafe':'');b.innerHTML=`<img loading="lazy" src="${src}" alt="Frame ${i}">`;b.onclick=()=>{seek(i);if(i===0){active=0}else if(selected.includes(i)){active=selected.indexOf(i)}else{selected[active]=i;selected=[selected[0],...selected.slice(1).sort((a,b)=>a-b)];active=selected.indexOf(i);resetReview()}render()};grid.append(b)});setInterval(()=>{const slot=cycleFrame++%selected.length;const index=data.exactIdleSlots.includes(slot)?0:selected[slot];cycle.src=data.thumbnails[index]},125);
-copy.onclick=async()=>{await navigator.clipboard.writeText(data.commandPrefix+'"'+selected.join(',')+'" --force');status.textContent='Comando revisado copiado.'};download.onclick=()=>{const blob=new Blob([JSON.stringify({state:data.state,sample_indices:selected,fps:data.fps,review_contract:data.reviewContract,reviewed_checks:data.reviewContract.checks},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${data.state}-frame-selection.json`;a.click();URL.revokeObjectURL(a.href)};document.querySelector('#reset').onclick=()=>{selected=[...data.selected];active=1;resetReview();render()};render();</script></body></html>"""
-    html = html.replace("__STATE__", state).replace("__STATE__", state).replace("__DATA__", encoded)
+function isEdgeUnsafe(frame,slot){return data.unsafeFrames.includes(frame)&&!(data.exactFirstFramePreserved&&data.exactIdleSlots.includes(slot))}function isScaleUnsafe(frame,slot){return data.scaleUnsafeFrames.includes(frame)&&!(data.exactFirstFramePreserved&&data.exactIdleSlots.includes(slot))}function isUnsafe(frame,slot){return isEdgeUnsafe(frame,slot)||isScaleUnsafe(frame,slot)}function reviewInputs(){return [...review.querySelectorAll('input')]}function resetReview(){reviewInputs().forEach(input=>input.checked=false)}function thumb(src,alt){const img=document.createElement('img');img.src=src;img.alt=alt;return img}
+function render(){slots.replaceChildren();selected.forEach((frame,i)=>{const b=document.createElement('button');b.type='button';b.className='slot '+(i===active?'active ':'')+(i===0?'locked':'');const shown=data.exactIdleSlots.includes(i)?0:frame;const label=document.createElement('span');label.textContent=`${i+1}: ${data.reviewContract.slotLabels[i]||'Pose'} · #${frame}${isEdgeUnsafe(frame,i)?' · TOUCHES EDGE':''}${isScaleUnsafe(frame,i)?' · UNSTABLE SCALE':''}`;b.append(thumb(data.thumbnails[shown],'Frame '+shown),label);if(i>0)b.onclick=()=>{active=i;seek(frame);render()};slots.append(b)});document.querySelectorAll('.frame').forEach((el,i)=>{el.classList.toggle('selected',selected.includes(i));el.classList.toggle('active',selected[active]===i);const badge=el.querySelector('.badge');if(badge)badge.remove();const slot=selected.indexOf(i);if(slot>=0){const x=document.createElement('span');x.className='badge';x.textContent=slot+1;el.append(x)}});const edgeUnsafe=selected.filter((frame,slot)=>isEdgeUnsafe(frame,slot)),scaleUnsafe=selected.filter((frame,slot)=>isScaleUnsafe(frame,slot)),reviewed=reviewInputs().every(input=>input.checked);copy.disabled=download.disabled=edgeUnsafe.length>0||scaleUnsafe.length>0||!reviewed;headline.textContent=reviewed&&!edgeUnsafe.length&&!scaleUnsafe.length?'ready to ingest':'review required';status.textContent='Indices: '+selected.join(', ')+(edgeUnsafe.length?' · WARNING edge: '+edgeUnsafe.join(', '):' · safe source margins')+(scaleUnsafe.length?' · WARNING scale: '+scaleUnsafe.join(', '):' · stable scale')+(reviewed?' · review complete':' · confirm all review checks')+' · '+data.commandPrefix+'"'+selected.join(',')+'" --force'}
+review.addEventListener('change',render);data.candidates.forEach(c=>{const unsafe=c.indices.filter((frame,slot)=>isUnsafe(frame,slot));const b=document.createElement('button');b.type='button';b.className='candidate'+(unsafe.length?' unsafe':'');const head=document.createElement('strong');head.textContent=`#${c.rank} · score ${c.score}${unsafe.length?' · check '+unsafe.join(', '):' · safe'}`;b.append(head,...c.indices.map((i,slot)=>thumb(data.thumbnails[data.exactIdleSlots.includes(slot)?0:i],'Frame '+i)));b.onclick=()=>{selected=[...c.indices];active=1;resetReview();seek(selected[1]);render()};document.querySelector('#candidates').append(b)});data.thumbnails.forEach((src,i)=>{const b=document.createElement('button');b.type='button';b.className='frame'+(data.unsafeFrames.includes(i)?' unsafe':'')+(data.scaleUnsafeFrames.includes(i)?' scale-unsafe':'');const img=thumb(src,'Frame '+i);img.loading='lazy';b.append(img);b.onclick=()=>{seek(i);if(i===0){active=0}else if(selected.includes(i)){active=selected.indexOf(i)}else{selected[active]=i;selected=[selected[0],...selected.slice(1).sort((a,b)=>a-b)];active=selected.indexOf(i);resetReview()}render()};grid.append(b)});setInterval(()=>{const slot=cycleFrame++%selected.length;const index=data.exactIdleSlots.includes(slot)?0:selected[slot];cycle.src=data.thumbnails[index]},125);
+copy.onclick=async()=>{await navigator.clipboard.writeText(data.commandPrefix+'"'+selected.join(',')+'" --force');status.textContent='Reviewed command copied.'};download.onclick=()=>{const blob=new Blob([JSON.stringify({state:data.state,sample_indices:selected,fps:data.fps,review_contract:data.reviewContract,reviewed_checks:data.reviewContract.checks},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${data.state}-frame-selection.json`;a.click();URL.revokeObjectURL(a.href)};document.querySelector('#reset').onclick=()=>{selected=[...data.selected];active=1;resetReview();render()};render();</script></body></html>"""
+    html = (
+        html.replace("__THEME_CSS__", TOOL_CSS)
+        .replace("__THEME_SCRIPT__", THEME_SCRIPT)
+        .replace("__STATE__", escape(state))
+        .replace("__DATA__", encoded)
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
     atomic_write_text(output_path, html)
     timeline = write_timeline_pages(output_dir, thumbnails, fps)

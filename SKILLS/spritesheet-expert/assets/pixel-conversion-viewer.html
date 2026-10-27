@@ -1,12 +1,36 @@
-<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Conversión opcional a pixel art</title>
-<style>body{margin:28px;background:#16242d;color:#e4e8df;font:16px/1.5 system-ui}h1{font-size:28px}p{max-width:88ch}button{padding:8px 14px;font:inherit;color:inherit;background:#29404a;border:1px solid #71898d}button:focus-visible,a:focus-visible{outline:3px solid #efc37c}main{display:flex;gap:36px;flex-wrap:wrap}article{flex:1;min-width:280px}canvas{image-rendering:pixelated;background:repeating-conic-gradient(#263d49 0% 25%,#3d515c 0% 50%) 0/16px 16px;margin:8px 20px 8px 0;vertical-align:top}a{color:#efc37c}code{overflow-wrap:anywhere}pre{white-space:pre-wrap}#details{max-width:90ch}</style>
-<h1>Conversión opcional a pixel art</h1><p>La referencia usa el mismo muestreo y escala, antes de reducir colores. La conversión conserva ese alfa; una reducción puede perder detalles pequeños. Revisa el resultado y su movimiento antes de continuar.</p><p id="status"></p><button id="play">Reproducir</button> <button id="next">Siguiente celda</button> <span id="frame"></span><main><article><h2>Referencia a tamaño de destino</h2><canvas id="before-native"></canvas><canvas id="before"></canvas></article><article><h2>Paleta compartida</h2><canvas id="after-native"></canvas><canvas id="after"></canvas></article></main><p><a href="converted.png">PNG convertido</a> · <a href="conversion.json">Metadatos y pivote</a> · <a id="source">Fuente original</a></p><details id="details"><summary>Contrato de conversión</summary><pre></pre></details>
-<script id="conversion-data" type="application/json">__CONVERSION__</script><script>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark light"><title>Pixel-art conversion review</title>
+<style>__THEME_CSS__
+.pv-main{display:grid;gap:12px;padding:12px;min-width:0;align-content:start}
+.pv-intro{max-width:88ch;color:var(--muted)}
+.pv-compare{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.pv-compare .card{display:grid;gap:8px;padding:10px;min-width:0;align-content:start}
+.pv-compare .stage{min-height:200px;justify-items:center;align-content:center;gap:10px;grid-auto-flow:column;padding:16px}
+.pv-links{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px}
+.pv-links a{color:var(--accent)}
+details pre{max-width:100%;overflow:auto;padding:10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--sunken);font:11px/1.5 var(--font-mono);white-space:pre-wrap;overflow-wrap:anywhere}
+details summary{cursor:pointer;color:var(--muted)}
+@media(max-width:760px){.pv-compare{grid-template-columns:minmax(0,1fr)}.brand-mark{display:none}}
+</style></head><body>
+<div class="tool">
+<header class="tool-header"><div class="brand"><span class="brand-mark">Pixel art</span><h1>Conversion review</h1></div><div class="status" id="status" aria-live="polite"></div><button type="button" class="btn btn-icon" id="theme-toggle" aria-label="Switch theme"><span aria-hidden="true">&#9680;</span></button></header>
+<main class="pv-main">
+<p class="pv-intro">The reference uses the same sampling and scale before colors are reduced. The conversion keeps that alpha; a reduction can lose small details. Check the result and its motion before you continue.</p>
+<div class="toolbar"><div class="group"><button type="button" class="btn btn-primary" id="play">Play</button><button type="button" class="btn" id="next">Next cell</button></div><output class="readout" id="frame"></output></div>
+<div class="pv-compare">
+<article class="card"><h2 class="rail-title">Reference at target size</h2><div class="stage" data-background="checker"><canvas id="before-native" data-sampling="nearest"></canvas><canvas id="before" data-sampling="nearest"></canvas></div></article>
+<article class="card"><h2 class="rail-title">Shared palette</h2><div class="stage" data-background="checker"><canvas id="after-native" data-sampling="nearest"></canvas><canvas id="after" data-sampling="nearest"></canvas></div></article>
+</div>
+<p class="pv-links"><a href="converted.png">Converted PNG</a><a href="conversion.json">Metadata and pivot</a><a id="source">Original source</a></p>
+<details id="details"><summary>Conversion contract</summary><pre></pre></details>
+</main>
+</div>
+<script id="conversion-data" type="application/json">__CONVERSION__</script>
+<script>__THEME_SCRIPT__</script><script>
 const data=JSON.parse(document.getElementById('conversion-data').textContent),m=data.manifest,w=m.cell.width,h=m.cell.height,temporal=['animation','effects'].includes(m.frame_semantics),timing=Object.values(m.animation.rows)[0];let frame=0,playing=false,last=0;
-const play=document.getElementById('play');play.disabled=!temporal;document.getElementById('status').textContent=`${data.converted.length} celdas · ${w} × ${h} · ${m.conversion.palette.length} colores RGB · ${m.frame_semantics} · requiere revisión`;
+const play=document.getElementById('play');play.disabled=!temporal;document.getElementById('status').textContent=`${data.converted.length} cells · ${w} × ${h} · ${m.conversion.palette.length} RGB colors · ${m.frame_semantics} · review required`;
 document.querySelector('pre').textContent=JSON.stringify({conversion:m.conversion,animation:m.animation,source_sha256:m.source_sha256},null,2);
 document.getElementById('source').href=m.source_file;
-function draw(){for(const [prefix,frames] of [['before',data.baseline],['after',data.converted]])for(const [suffix,zoom] of [['-native',1],['',4]]){const c=document.getElementById(prefix+suffix);c.width=w;c.height=h;c.style.width=w*zoom+'px';c.style.height=h*zoom+'px';const ctx=c.getContext('2d');ctx.imageSmoothingEnabled=false;ctx.putImageData(new ImageData(new Uint8ClampedArray(frames[frame].flat()),w,h),0,0)}document.getElementById('frame').textContent=`Celda ${frame+1}/${data.converted.length}`}
-play.onclick=()=>{if(!temporal)return;if(!playing&&!timing.loop&&frame===data.converted.length-1){frame=0;draw()}playing=!playing;last=performance.now();play.textContent=playing?'Pausar':'Reproducir'};document.getElementById('next').onclick=()=>{playing=false;play.textContent='Reproducir';frame=(frame+1)%data.converted.length;draw()};
-function tick(now){if(playing){const interval=1000/timing.fps,steps=Math.floor((now-last)/interval);if(steps>0){last+=steps*interval;if(!timing.loop&&frame+steps>=data.converted.length){frame=data.converted.length-1;playing=false;play.textContent='Reproducir'}else frame=(frame+steps)%data.converted.length;draw()}}requestAnimationFrame(tick)}draw();requestAnimationFrame(tick);
-</script></html>
+function draw(){for(const [prefix,frames] of [['before',data.baseline],['after',data.converted]])for(const [suffix,zoom] of [['-native',1],['',4]]){const c=document.getElementById(prefix+suffix);c.width=w;c.height=h;c.style.width=w*zoom+'px';c.style.height=h*zoom+'px';const ctx=c.getContext('2d');ctx.imageSmoothingEnabled=false;ctx.putImageData(new ImageData(new Uint8ClampedArray(frames[frame].flat()),w,h),0,0)}document.getElementById('frame').textContent=`Cell ${frame+1}/${data.converted.length}`}
+play.onclick=()=>{if(!temporal)return;if(!playing&&!timing.loop&&frame===data.converted.length-1){frame=0;draw()}playing=!playing;last=performance.now();play.textContent=playing?'Pause':'Play';play.setAttribute('aria-pressed',String(playing))};document.getElementById('next').onclick=()=>{playing=false;play.textContent='Play';play.setAttribute('aria-pressed','false');frame=(frame+1)%data.converted.length;draw()};
+function tick(now){if(playing){const interval=1000/timing.fps,steps=Math.floor((now-last)/interval);if(steps>0){last+=steps*interval;if(!timing.loop&&frame+steps>=data.converted.length){frame=data.converted.length-1;playing=false;play.textContent='Play';play.setAttribute('aria-pressed','false')}else frame=(frame+steps)%data.converted.length;draw()}}requestAnimationFrame(tick)}draw();requestAnimationFrame(tick);
+</script></body></html>

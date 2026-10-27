@@ -391,28 +391,27 @@ def test_leaf_cli_report_cannot_overwrite_a_validated_source(
     source_relative: str,
 ) -> None:
     document_path = writer(tmp_path)  # type: ignore[operator]
-    source = tmp_path / source_relative
-    previous = source.read_bytes()
+    for source in (tmp_path / source_relative, document_path):
+        previous = source.read_bytes()
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(script),
+                document_flag,
+                str(document_path),
+                "--root",
+                str(tmp_path),
+                "--report",
+                source.relative_to(tmp_path).as_posix(),
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
 
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(script),
-            document_flag,
-            str(document_path),
-            "--root",
-            str(tmp_path),
-            "--report",
-            source_relative,
-        ],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    assert result.returncode == 1, result.stdout + result.stderr
-    assert source.read_bytes() == previous
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert source.read_bytes() == previous, source
 
 
 @pytest.mark.parametrize(

@@ -352,7 +352,7 @@ def main() -> int:
                 )
             if "pose_geometry" in row:
                 entry["pose_geometry"] = row["pose_geometry"]
-            for key in ("asset_labels", "catalog"):
+            for key in ("asset_labels", "catalog", "vfx"):
                 if key in row:
                     entry[key] = row[key]
             states[row["id"]] = entry

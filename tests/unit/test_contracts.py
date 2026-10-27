@@ -158,6 +158,16 @@ def test_vfx_request_requires_per_state_runtime_metadata() -> None:
         validate_contract(request)
 
 
+def test_preparer_keeps_per_state_vfx_metadata() -> None:
+    import prepare_sprite_run
+
+    request = _valid_vfx_request()
+
+    states = prepare_sprite_run.normalize_states(request["states"])
+
+    assert states["idle"]["vfx"] == request["states"]["idle"]["vfx"]
+
+
 def test_vfx_phase_sequence_must_align_with_frame_count() -> None:
     request = _valid_vfx_request()
     request["states"]["idle"]["vfx"]["phase_sequence"] = [

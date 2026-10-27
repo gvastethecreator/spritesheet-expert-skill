@@ -316,8 +316,13 @@ def validate_frame(
     invariants: TransformInvariantReport | None = None,
     alpha_threshold: int = 0,
     allow_full_cell: bool = False,
+    allow_sparse: bool = False,
 ) -> FrameValidationReport:
-    """Validate only blank, escape, extreme occupancy, and invariant failures."""
+    """Validate only blank, escape, extreme occupancy, and invariant failures.
+
+    ``allow_sparse`` is for VFX rows, where a first flash or final motes are
+    intentionally tiny: low occupancy becomes a warning, a blank frame still fails.
+    """
 
     selected = _resolve_profile(profile, image.size)
     metrics = measure_frame(image, alpha_threshold=alpha_threshold)
@@ -335,14 +340,14 @@ def validate_frame(
         opaque_too_low = metrics.opaque_ratio < selected.min_opaque_ratio
         opaque_too_high = metrics.opaque_ratio > selected.max_opaque_ratio
         if opaque_too_low or (opaque_too_high and not allow_full_cell):
-            failures.append(
+            (warnings if opaque_too_low and allow_sparse else failures).append(
                 f"extreme opaque occupancy {metrics.opaque_ratio:.4f}; expected "
                 f"{selected.min_opaque_ratio:.4f}..{selected.max_opaque_ratio:.4f}"
             )
         bbox_too_low = metrics.bbox_ratio < selected.min_bbox_ratio
         bbox_too_high = metrics.bbox_ratio > selected.max_bbox_ratio
         if bbox_too_low or (bbox_too_high and not allow_full_cell):
-            failures.append(
+            (warnings if bbox_too_low and allow_sparse else failures).append(
                 f"extreme bbox occupancy {metrics.bbox_ratio:.4f}; expected "
                 f"{selected.min_bbox_ratio:.4f}..{selected.max_bbox_ratio:.4f}"
             )

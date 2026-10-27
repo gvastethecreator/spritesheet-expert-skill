@@ -59,7 +59,7 @@ def _portable_output(root: Path, value: str) -> Path:
 
 
 def _source_paths(document: Mapping[str, object], root: Path) -> set[Path]:
-    sources: set[Path] = set()
+    paths: list[object] = []
     inventory = document.get("inventory")
     brand_kit = document.get("brand_kit")
     groups: list[object] = []
@@ -74,15 +74,38 @@ def _source_paths(document: Mapping[str, object], root: Path) -> set[Path]:
             if not isinstance(record, Mapping):
                 continue
             source = record.get("source")
-            if not isinstance(source, Mapping):
+            if isinstance(source, Mapping):
+                paths.extend(
+                    pin.get("path") for pin in source.values() if isinstance(pin, Mapping)
+                )
+
+    licenses = document.get("licenses")
+    if isinstance(licenses, list):
+        for record in licenses:
+            evidence = record.get("evidence") if isinstance(record, Mapping) else None
+            if isinstance(evidence, Mapping):
+                paths.append(evidence.get("path"))
+    for group_name in ("provenance", "gameplay_scenes"):
+        records = document.get(group_name)
+        if not isinstance(records, list):
+            continue
+        for record in records:
+            if not isinstance(record, Mapping):
                 continue
-            for pin in source.values():
-                if not isinstance(pin, Mapping) or not isinstance(pin.get("path"), str):
-                    continue
-                try:
-                    sources.add(_portable_output(root, pin["path"]))
-                except ValueError:
-                    continue
+            if group_name == "provenance":
+                paths.append(record.get("source_path"))
+            capture = record.get("capture_evidence")
+            if isinstance(capture, Mapping):
+                paths.append(capture.get("artifact_path"))
+
+    sources: set[Path] = set()
+    for value in paths:
+        if not isinstance(value, str):
+            continue
+        try:
+            sources.add(_portable_output(root, value))
+        except ValueError:
+            continue
     return sources
 
 

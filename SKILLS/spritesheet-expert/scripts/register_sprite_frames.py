@@ -194,6 +194,10 @@ def copy_optional_sidecars(run_dir: Path, out_dir: Path) -> None:
         src = run_dir / name
         if src.is_file():
             shutil.copyfile(src, out_dir / name)
+    # Registration moves pixels but keeps the cutout, so the matte reviews stay valid evidence.
+    for review in (run_dir / "qa").glob("*background-matte-review.png"):
+        (out_dir / "qa").mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(review, out_dir / "qa" / review.name)
     references = run_dir / "references"
     if references.is_dir() and not (out_dir / "references").exists():
         shutil.copytree(references, out_dir / "references")
@@ -280,8 +284,13 @@ def main() -> int:
     parser.add_argument("--cell", type=parse_cell, help="output cell WxH; defaults to input request cell")
     parser.add_argument("--states", default="all", help="'all' or comma-separated state names")
     parser.add_argument("--anchor", choices=("body-bottom", "bbox-bottom", "footprint", "center"), default="body-bottom")
-    parser.add_argument("--target-x", type=float, default=0.5)
-    parser.add_argument("--target-bottom", type=int)
+    parser.add_argument(
+        "--target-x",
+        type=float,
+        default=0.5,
+        help="anchor x as a fraction of the cell width (0..1), not pixels",
+    )
+    parser.add_argument("--target-bottom", type=int, help="anchor y in pixels from the cell top")
     parser.add_argument("--safe-margin-x", type=int)
     parser.add_argument("--safe-margin-y", type=int)
     parser.add_argument("--alpha-threshold", type=int, default=16)
@@ -296,6 +305,8 @@ def main() -> int:
     parser.add_argument("--force", action="store_true", help="allow writing into an existing out-dir")
     args = parser.parse_args()
 
+    if not 0.0 <= args.target_x <= 1.0:
+        parser.error("--target-x is a fraction of the cell width (0..1); pixel values are not accepted")
     run_dir = args.run_dir.expanduser().resolve()
     out_dir = args.out_dir.expanduser().resolve() if args.out_dir else run_dir.with_name(f"{run_dir.name}-registered")
     if out_dir.exists() and any(out_dir.iterdir()) and not args.force:
@@ -391,6 +402,7 @@ def main() -> int:
                 registered,
                 alpha_threshold=args.alpha_threshold,
                 allow_full_cell=allow_full_cell,
+                allow_sparse=str(request.get("asset_kind", "sprite")) == "vfx",
             )
             if resize_policy.mode is ArtMode.PIXEL:
                 alpha_invariant = inspect_hard_alpha(registered)
@@ -435,13 +447,17 @@ def main() -> int:
     for row in manifest_rows:
         row["frame_records"] = [{"index": index, **record, **{f"{key}_vs_reference": round(record[key]/value, 4)
             for key, value in reference_metrics.items() if record.get(key)}} for index, record in enumerate(row["frame_records"])]
+    sprite_registration = {"reference_state": reference_row.get("state"), "reference_basis": "registered-row-median", **reference_metrics}
+    if args.anchor != "center":
+        # Bottom anchors place every frame on this line, so alignment checks can verify it.
+        sprite_registration["baseline_y"] = args.target_bottom if args.target_bottom is not None else cell[1] - args.safe_margin_y
     manifest = {
         "ok": not errors,
         "engine": "component-row",
         "run_dir": str(out_dir),
         "cell": output_request["cell"],
         "rows": manifest_rows,
-        "sprite_registration": {"reference_state": reference_row.get("state"), "reference_basis": "registered-row-median", **reference_metrics},
+        "sprite_registration": sprite_registration,
         "errors": errors,
         "warnings": warnings,
     }

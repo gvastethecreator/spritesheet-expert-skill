@@ -1,31 +1,34 @@
 ---
 name: compose-asset-mockups
 description: "Asset mockups: non-destructive presentations of validated game assets; store art, review boards, gameplay reconstructions, pitch layouts; preserve source hashes, licenses, provenance, representative-media status, truth labels."
+license: MIT
 ---
 
 # Compose Asset Mockups
 
-Derived presentations from validated assets. Do not mutate sources or present reconstruction as captured gameplay.
+Derived presentations from validated assets. Do not mutate sources or present reconstruction as captured gameplay. Code: [MIT notice](LICENSE); imported media keep their own license terms.
 
 ## Workflow
 
 1. Accept only pinned inputs.
    - Each asset and font must reference artifact, upstream manifest, validation report, SHA-256, license, provenance.
-   - Unvalidated sources return to the owning skill. Do not repair or regenerate them here.
+   - Review the owning validator's pass result and artifact coverage; report pins identify supplied bytes. Unvalidated sources return to the owning skill. Do not repair or regenerate them here.
    - Reject upstream reports whose production-media evidence is missing, stale, or marked non-representative. Fixture, placeholder, or reconstructed substitute cannot replace a rejected source.
 
 2. Define the presentation contract.
    - Write `presentation.json` against `references/schemas/presentation.schema.json`.
    - Fix brief, approved copy, brand kit, inventory, gameplay scenes, compositions, licenses, provenance, output manifest.
-   - Label every scene runtime-captured, reconstructed, or illustrative. Attach capture evidence only to runtime-captured truth.
+   - Set `truth_type` to `concept`, `reconstructed`, or `runtime-captured`; set `proof_role` to `illustrative` or `runtime-proof`. Runtime proof requires runtime-captured truth and capture evidence.
 
 3. Seal and resolve imported content.
 
 ```powershell
-python scripts/prepare_presentation.py --presentation <root>/presentation.json --root <root>
+python "<skill-dir>/scripts/prepare_presentation.py" --presentation "<root>/presentation.json" --root "<root>"
 ```
 
-Validates contract, writes canonical prepared/resolved JSON, verifies every pin, copies imported content into `presentation/content-addressed/`. `--validate-only` skips import copy. Installed skill directory: `python -m pip install -r requirements-runtime.txt` when needed.
+`<skill-dir>` is the installed directory containing this file. Normal execution validates and seals the contract, verifies asset/font artifact, manifest and report pins, checks asset production-media declarations, and copies artifacts into `presentation/content-addressed/`.
+
+`--validate-only` still writes prepared JSON; it skips file-pin verification, imports, and resolved JSON. Use the project's selected Python. Install from the absolute `requirements-runtime.txt` path only within authorized dependency setup.
 
 4. Build only derived outputs.
    - Compose from the resolved store with the project's existing image, HTML/canvas, or design tooling.

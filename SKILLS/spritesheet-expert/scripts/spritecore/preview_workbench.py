@@ -14,6 +14,7 @@ from PIL import Image
 
 from spritecore.contracts import load_manifest
 from spritecore.paths import PathSafetyError, resolve_run_path
+from spritecore.tool_theme import THEME_SCRIPT, TOOL_CSS
 
 
 class PreviewWorkbenchError(ValueError):
@@ -69,6 +70,27 @@ def _durations(manifest: Mapping[str, Any], state: str, count: int) -> list[int]
     if isinstance(fps, bool) or not isinstance(fps, (int, float)) or fps <= 0:
         raise PreviewWorkbenchError(f"animation row {state!r} has invalid fps")
     return [max(1, round(1000 / fps))] * count
+
+
+def _gate_status(path: Path) -> str:
+    """Read pass/fail/warn from a QA JSON report; other files are plain evidence."""
+    if path.suffix.lower() != ".json":
+        return "file"
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "fail"
+    if not isinstance(report, Mapping):
+        return "file"
+    status = report.get("status")
+    if status in ("pass", "fail", "warn"):
+        return status
+    ok = report.get("ok")
+    if isinstance(ok, bool):
+        if not ok:
+            return "fail"
+        return "warn" if report.get("warnings") else "pass"
+    return "file"
 
 
 def _relative_href(output_path: Path, target: Path) -> str:
@@ -186,8 +208,11 @@ def prepare_workbench(
                     "label": label,
                     "path": relative,
                     "href": _relative_href(output_path, target),
+                    "status": _gate_status(target),
                 }
             )
+        else:
+            evidence.append({"label": label, "path": relative, "status": "missing"})
     for state in state_names:
         for label, relative in (
             (f"{state}: contact", f"qa/{state}-contact.png"),
@@ -203,6 +228,7 @@ def prepare_workbench(
                         "label": label,
                         "path": relative,
                         "href": _relative_href(output_path, target),
+                        "status": "file",
                     }
                 )
     runtime_dir = run_root / "qa" / "runtime-preview"
@@ -213,6 +239,7 @@ def prepare_workbench(
                     "label": f"Runtime: {target.stem.removesuffix('.evidence')}",
                     "path": target.relative_to(run_root).as_posix(),
                     "href": _relative_href(output_path, target),
+                    "status": "file",
                 }
             )
 
@@ -233,6 +260,8 @@ def prepare_workbench(
     ]
     evidence_sources = []
     for entry in evidence:
+        if entry["status"] == "missing":
+            continue
         target = resolve_run_path(run_root, entry["path"])
         record = _source_record(run_root, target, "evidence")
         record["label"] = entry["label"]
@@ -261,6 +290,33 @@ def prepare_workbench(
     return output_path, report_path, html_bytes, report
 
 
+WORKBENCH_CSS = """
+.tool { height:100vh; }
+.wb-main { display:grid; grid-template-columns:minmax(0,1fr) 280px; min-height:0; }
+.wb-work { display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr) auto auto; gap:10px; min-width:0; min-height:0; padding:12px; }
+.wb-work .stage { min-height:0; }
+.canvas-wrap { padding:32px; display:grid; place-items:center; }
+.controls { display:grid; gap:10px; padding:10px 12px; }
+.controls .toolbar { justify-content:space-between; }
+.atlas-source { display:none; }
+@media (max-width:860px) {
+  .tool { height:auto; }
+  .wb-main { grid-template-columns:minmax(0,1fr); }
+  .wb-work .stage { min-height:56vh; }
+  .rail { border-left:0; border-top:1px solid var(--line); }
+  .brand-mark { display:none; }
+}
+@media (max-width:480px) {
+  .wb-work { padding:8px; }
+  .transport { grid-template-columns:auto 1fr; }
+  .transport .readout { grid-column:2; grid-row:1; }
+  .transport .scrub { grid-column:1 / -1; }
+  .controls .toolbar { justify-content:flex-start; }
+  .canvas-wrap { padding:16px; }
+}
+"""
+
+
 def _render_html(data: Mapping[str, Any], atlas_data_uri: str) -> str:
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     safe_atlas = html.escape(atlas_data_uri, quote=True)
@@ -269,139 +325,69 @@ def _render_html(data: Mapping[str, Any], atlas_data_uri: str) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="dark">
+<meta name="color-scheme" content="dark light">
 <title>Sprite review workbench</title>
-<style>
-:root {{ color-scheme: dark; --ink:#f4f0e8; --muted:#a9a49b; --line:#393832; --panel:#171715; --accent:#ffbd59; --stage:#252522; }}
-* {{ box-sizing:border-box; scrollbar-width:thin; scrollbar-color:var(--line) #0d0d0c; }}
-*::-webkit-scrollbar {{ width:10px; height:10px; }}
-*::-webkit-scrollbar-track {{ background:#0d0d0c; }}
-*::-webkit-scrollbar-thumb {{ background:var(--line); border:2px solid #0d0d0c; border-radius:999px; }}
-*::-webkit-scrollbar-thumb:hover {{ background:#57554c; }}
-body {{ margin:0; min-width:320px; background:#0d0d0c; color:var(--ink); font:14px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; }}
-button, select, input {{ font:inherit; }}
-button, select {{ color:var(--ink); background:#22221f; border:1px solid var(--line); border-radius:5px; }}
-button {{ min-height:36px; padding:7px 11px; cursor:pointer; }}
-button:hover, button:focus-visible, select:focus-visible, input:focus-visible {{ border-color:var(--accent); outline:2px solid transparent; }}
-button[aria-pressed="true"], .film-frame[aria-current="true"] {{ color:#15120d; background:var(--accent); border-color:var(--accent); }}
-.shell {{ min-height:100vh; display:grid; grid-template-rows:auto 1fr; }}
-header {{ display:flex; align-items:flex-end; justify-content:space-between; gap:24px; padding:22px 26px 18px; border-bottom:1px solid var(--line); }}
-h1 {{ margin:0; font:600 clamp(20px, 3vw, 34px)/1.05 ui-sans-serif, system-ui, sans-serif; letter-spacing:-.035em; }}
-.eyebrow {{ margin:0 0 6px; color:var(--accent); font-size:11px; letter-spacing:.14em; text-transform:uppercase; }}
-.status {{ color:var(--muted); text-align:right; }}
-main {{ display:grid; grid-template-columns:minmax(0, 1fr) 270px; min-height:0; }}
-.artifact-column {{ min-width:0; padding:22px 26px 28px; }}
-.stage {{ min-height:460px; display:grid; place-items:center; overflow:auto; border:1px solid var(--line); background-color:var(--stage); box-shadow:inset 0 0 0 1px #090908; }}
-.stage:focus-visible {{ border-color:var(--accent); outline:2px solid var(--accent); outline-offset:2px; }}
-.stage[data-background="checker"] {{ background-image:linear-gradient(45deg,#333 25%,transparent 25%),linear-gradient(-45deg,#333 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#333 75%),linear-gradient(-45deg,transparent 75%,#333 75%); background-position:0 0,0 8px,8px -8px,-8px 0; background-size:16px 16px; }}
-.stage[data-background="black"] {{ background:#000; }}
-.stage[data-background="gray"] {{ background:#808080; }}
-.stage[data-background="white"] {{ background:#fff; }}
-.canvas-wrap {{ padding:44px; display:grid; place-items:center; }}
-canvas {{ box-shadow:0 8px 32px #0008; }}
-canvas[data-sampling="nearest"] {{ image-rendering:pixelated; image-rendering:crisp-edges; }}
-canvas[data-sampling="linear"] {{ image-rendering:auto; }}
-.transport {{ display:grid; grid-template-columns:auto auto minmax(150px,1fr) auto; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid var(--line); }}
-.transport-group, .backgrounds {{ display:flex; align-items:center; gap:6px; }}
-.scrub {{ width:100%; accent-color:var(--accent); }}
-.readout {{ min-width:76px; color:var(--muted); text-align:right; }}
-.secondary-controls {{ display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; padding:10px 0 16px; }}
-.field {{ display:flex; align-items:center; gap:7px; color:var(--muted); }}
-select {{ min-height:36px; padding:6px 30px 6px 9px; }}
-.filmstrip {{ display:flex; gap:8px; padding:3px 0 10px; overflow-x:auto; scroll-snap-type:x proximity; }}
-.film-frame {{ flex:0 0 auto; min-width:50px; scroll-snap-align:start; }}
-.film-frame span {{ display:block; font-size:10px; opacity:.78; }}
-aside {{ border-left:1px solid var(--line); padding:22px 20px; background:var(--panel); }}
-aside h2 {{ margin:0 0 8px; font:600 15px/1.2 ui-sans-serif, system-ui, sans-serif; }}
-.rail-copy {{ margin:0 0 18px; color:var(--muted); }}
-.evidence-list {{ list-style:none; margin:0; padding:0; border-top:1px solid var(--line); }}
-.evidence-list li {{ border-bottom:1px solid var(--line); }}
-.evidence-list a {{ display:block; padding:12px 2px; color:var(--ink); text-decoration:none; }}
-.evidence-list a:hover, .evidence-list a:focus-visible {{ color:var(--accent); }}
-.empty {{ color:var(--muted); font-style:italic; }}
-.atlas-source {{ display:none; }}
-.shortcut {{ margin-top:24px; color:var(--muted); font-size:11px; }}
-kbd {{ color:var(--ink); border:1px solid var(--line); border-bottom-width:2px; border-radius:3px; padding:1px 4px; }}
-@media (max-width:800px) {{
-  header {{ align-items:flex-start; padding:18px; }}
-  .status {{ display:none; }}
-  main {{ grid-template-columns:1fr; }}
-  .artifact-column {{ padding:16px 14px 20px; }}
-  .stage {{ min-height:390px; }}
-  .canvas-wrap {{ padding:28px; }}
-  .transport {{ grid-template-columns:auto minmax(120px,1fr) auto; }}
-  .transport-group {{ grid-column:1; }}
-  .scrub {{ grid-column:2; }}
-  .readout {{ grid-column:3; }}
-  aside {{ border-left:0; border-top:1px solid var(--line); padding:18px 16px 28px; }}
-}}
-@media (max-width:480px) {{
-  .transport {{ grid-template-columns:auto 1fr; }}
-  .transport > .transport-group {{ grid-column:1; grid-row:1; }}
-  .readout {{ grid-column:2; grid-row:1; justify-self:end; }}
-  .scrub {{ grid-column:1 / -1; grid-row:2; min-width:0; }}
-  .secondary-controls > .transport-group {{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); width:100%; gap:8px; }}
-  .secondary-controls .field {{ min-width:0; flex-direction:column; align-items:stretch; gap:3px; }}
-  .secondary-controls select {{ width:100%; min-width:0; padding-right:20px; }}
-  .backgrounds {{ flex-wrap:wrap; }}
-}}
-@media (prefers-reduced-motion:reduce) {{ * {{ scroll-behavior:auto !important; }} }}
-</style>
+<style>{TOOL_CSS}{WORKBENCH_CSS}</style>
 </head>
 <body>
-<div class="shell">
-  <header>
-    <div><p class="eyebrow">Runtime artifact review</p><h1>Sprite workbench</h1></div>
+<div class="tool">
+  <header class="tool-header">
+    <div class="brand"><span class="brand-mark">Sprite review</span><h1>Preview workbench</h1></div>
     <div class="status" id="status" aria-live="polite">Loading atlas…</div>
+    <button type="button" class="btn btn-icon" id="theme-toggle" aria-label="Switch theme"><span aria-hidden="true">◐</span></button>
   </header>
-  <main>
-    <section class="artifact-column" aria-label="Animation review">
+  <main class="wb-main">
+    <section class="wb-work" aria-label="Animation review">
       <div class="stage" data-testid="preview-stage" data-background="checker" id="stage" tabindex="0" aria-label="Animation stage. Use Space to play or pause and arrow keys to step frames.">
         <div class="canvas-wrap"><canvas id="frame-canvas" role="img" aria-label="Current animation frame"></canvas></div>
       </div>
-      <div class="transport" aria-label="Playback controls">
-        <div class="transport-group">
-          <button type="button" id="previous" aria-label="Previous frame">←</button>
-          <button type="button" id="play" aria-label="Play animation" aria-pressed="false">Play</button>
-          <button type="button" id="next" aria-label="Next frame">→</button>
+      <div class="controls card">
+        <div class="transport" aria-label="Playback controls">
+          <div class="group">
+            <button type="button" class="btn btn-icon" id="previous" aria-label="Previous frame">◀</button>
+            <button type="button" class="btn btn-primary" id="play" aria-label="Play animation" aria-pressed="false">Play</button>
+            <button type="button" class="btn btn-icon" id="next" aria-label="Next frame">▶</button>
+          </div>
+          <input class="scrub" id="scrub" aria-label="Animation frame" type="range" min="0" value="0" step="1">
+          <output class="readout" id="readout" for="scrub">1 / 1</output>
         </div>
-        <input class="scrub" id="scrub" aria-label="Animation frame" type="range" min="0" value="0" step="1">
-        <output class="readout" id="readout" for="scrub">1 / 1</output>
-      </div>
-      <div class="secondary-controls">
-        <div class="transport-group">
-          <label class="field" for="state">State <select id="state"></select></label>
-          <label class="field" for="speed">Speed <select id="speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label>
-          <label class="field" for="zoom">Zoom <select id="zoom"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option><option value="12">12×</option></select></label>
-        </div>
-        <div class="backgrounds" aria-label="Review background">
-          <button type="button" data-background="checker" aria-pressed="true">Checker</button>
-          <button type="button" data-background="black" aria-pressed="false">Black</button>
-          <button type="button" data-background="gray" aria-pressed="false">Gray</button>
-          <button type="button" data-background="white" aria-pressed="false">White</button>
+        <div class="toolbar">
+          <div class="group">
+            <label class="field" for="speed">Speed <select id="speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label>
+            <label class="field" for="zoom">Zoom <select id="zoom"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option><option value="12">12×</option></select></label>
+          </div>
+          <div class="seg backgrounds" role="group" aria-label="Review background">
+            <button type="button" class="btn" data-background="checker" aria-pressed="true"><span class="swatch" data-swatch="checker" aria-hidden="true"></span>Checker</button>
+            <button type="button" class="btn" data-background="black" aria-pressed="false"><span class="swatch" data-swatch="black" aria-hidden="true"></span>Black</button>
+            <button type="button" class="btn" data-background="gray" aria-pressed="false"><span class="swatch" data-swatch="gray" aria-hidden="true"></span>Gray</button>
+            <button type="button" class="btn" data-background="white" aria-pressed="false"><span class="swatch" data-swatch="white" aria-hidden="true"></span>White</button>
+          </div>
         </div>
       </div>
       <div class="filmstrip" id="filmstrip" aria-label="All frames"></div>
     </section>
-    <aside aria-label="Evidence">
-      <h2>Evidence</h2>
-      <p class="rail-copy">Open the current QA files without losing the frame under review.</p>
-      <ul class="evidence-list" id="evidence"></ul>
-      <p class="shortcut"><kbd>Space</kbd> play/pause · <kbd>←</kbd> <kbd>→</kbd> step · <kbd>Home</kbd> <kbd>End</kbd> jump</p>
+    <aside class="rail" aria-label="Inspector">
+      <section class="rail-section"><h2 class="rail-title">States</h2><ul class="list" id="states"></ul></section>
+      <section class="rail-section"><h2 class="rail-title">Frame</h2><dl class="facts" id="facts"></dl></section>
+      <section class="rail-section"><h2 class="rail-title">Evidence</h2><ul class="list" id="evidence"></ul></section>
+      <section class="rail-section"><h2 class="rail-title">Keys</h2>
+        <dl class="keys"><dt><kbd>Space</kbd></dt><dd>Play or pause</dd><dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Step one frame</dd><dt><kbd>Home</kbd> <kbd>End</kbd></dt><dd>First or last frame</dd><dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Previous or next state</dd></dl>
+      </section>
     </aside>
   </main>
 </div>
 <img class="atlas-source" id="atlas-source" src="{safe_atlas}" alt="">
 <script type="application/json" id="preview-data">{payload}</script>
+<script>{THEME_SCRIPT}</script>
 <script>
 (() => {{
   'use strict';
   const data = JSON.parse(document.getElementById('preview-data').textContent);
   const atlas = document.getElementById('atlas-source');
   const canvas = document.getElementById('frame-canvas');
-  const context = canvas.getContext('2d', {{ alpha: true }});
   const stage = document.getElementById('stage');
-  const stateSelect = document.getElementById('state');
+  const statesList = document.getElementById('states');
+  const facts = document.getElementById('facts');
   const speedSelect = document.getElementById('speed');
   const zoomSelect = document.getElementById('zoom');
   const scrub = document.getElementById('scrub');
@@ -410,9 +396,10 @@ kbd {{ color:var(--ink); border:1px solid var(--line); border-bottom-width:2px; 
   const play = document.getElementById('play');
   const filmstrip = document.getElementById('filmstrip');
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const stateNames = Object.keys(data.states);
   canvas.dataset.sampling = data.sampling;
   zoomSelect.value = String(data.initialZoom);
-  let state = Object.keys(data.states)[0];
+  let state = stateNames[0];
   let frame = 0;
   let playing = false;
   let timer = null;
@@ -420,7 +407,7 @@ kbd {{ color:var(--ink); border:1px solid var(--line); border-bottom-width:2px; 
   function current() {{ return data.states[state]; }}
   function fitInitialZoom() {{
     const rect = current().frames[0];
-    const available = Math.max(1, stage.clientWidth - 88);
+    const available = Math.max(1, Math.min(stage.clientWidth, stage.clientHeight || stage.clientWidth) - 64);
     const ceiling = Math.max(1, Math.floor(available / Math.max(rect.w, rect.h)));
     const target = Math.min(Number(data.initialZoom), ceiling);
     const supported = [1, 2, 4, 8, 12];
@@ -434,24 +421,52 @@ kbd {{ color:var(--ink); border:1px solid var(--line); border-bottom-width:2px; 
     const duration = current().durationsMs[frame] / Number(speedSelect.value);
     timer = window.setTimeout(() => {{ frame = (frame + 1) % current().frames.length; render(); schedule(); }}, duration);
   }}
-  function draw() {{
-    const rect = current().frames[frame];
-    canvas.width = rect.w; canvas.height = rect.h;
-    const zoom = Number(zoomSelect.value);
-    canvas.style.width = `${{rect.w * zoom}}px`;
-    canvas.style.height = `${{rect.h * zoom}}px`;
+  function paint(target, rect) {{
+    target.width = rect.w; target.height = rect.h;
+    const context = target.getContext('2d', {{ alpha: true }});
     context.imageSmoothingEnabled = data.sampling !== 'nearest';
     context.clearRect(0, 0, rect.w, rect.h);
     context.drawImage(atlas, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
   }}
+  function draw() {{
+    const rect = current().frames[frame];
+    const zoom = Number(zoomSelect.value);
+    paint(canvas, rect);
+    canvas.style.width = `${{rect.w * zoom}}px`;
+    canvas.style.height = `${{rect.h * zoom}}px`;
+  }}
+  function renderStates() {{
+    if (statesList.children.length === 0) {{
+      stateNames.forEach(name => {{
+        const entry = data.states[name];
+        const total = entry.durationsMs.reduce((sum, value) => sum + value, 0);
+        const item = document.createElement('li');
+        const button = document.createElement('button');
+        button.type = 'button'; button.className = 'list-row'; button.dataset.state = name;
+        const label = document.createElement('span'); label.textContent = name;
+        const meta = document.createElement('span'); meta.className = 'meta'; meta.textContent = `${{entry.frames.length}} fr · ${{total}} ms`;
+        button.append(label, meta);
+        button.addEventListener('click', () => selectState(name));
+        item.append(button); statesList.append(item);
+      }});
+    }}
+    statesList.querySelectorAll('button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.state === state)));
+  }}
   function renderFilmstrip() {{
     if (filmstrip.dataset.state !== state || filmstrip.children.length !== current().frames.length) {{
       filmstrip.replaceChildren();
-      current().frames.forEach((_rect, index) => {{
+      const longest = Math.max(...current().durationsMs);
+      current().frames.forEach((rect, index) => {{
         const button = document.createElement('button');
         button.type = 'button'; button.className = 'film-frame'; button.dataset.frame = String(index);
-        button.setAttribute('aria-label', `Show frame ${{index + 1}}`);
-        button.innerHTML = `<span>FRAME</span>${{String(index + 1).padStart(2, '0')}}`;
+        button.setAttribute('aria-label', `Show frame ${{index + 1}}, ${{current().durationsMs[index]}} milliseconds`);
+        const thumb = document.createElement('canvas');
+        thumb.dataset.sampling = data.sampling; thumb.setAttribute('aria-hidden', 'true');
+        paint(thumb, rect);
+        const number = document.createElement('span'); number.textContent = String(index + 1).padStart(2, '0');
+        const bar = document.createElement('span'); bar.className = 'bar';
+        bar.style.width = `${{Math.max(12, Math.round(current().durationsMs[index] / longest * 100))}}%`;
+        button.append(thumb, number, bar);
         button.addEventListener('click', () => {{ frame = index; render(); schedule(); }});
         filmstrip.append(button);
       }});
@@ -461,6 +476,19 @@ kbd {{ color:var(--ink); border:1px solid var(--line); border-bottom-width:2px; 
       button.setAttribute('aria-current', String(index === frame));
     }});
   }}
+  function renderFacts() {{
+    const rect = current().frames[frame];
+    const rows = [
+      ['State', state], ['Frame', `${{frame + 1}} of ${{current().frames.length}}`],
+      ['Size', `${{rect.w}} × ${{rect.h}} px`], ['Atlas x, y', `${{rect.x}}, ${{rect.y}}`],
+      ['Duration', `${{current().durationsMs[frame]}} ms`], ['Sampling', data.sampling], ['Zoom', `${{zoomSelect.value}}×`],
+    ];
+    facts.replaceChildren(...rows.flatMap(([term, value]) => {{
+      const dt = document.createElement('dt'); dt.textContent = term;
+      const dd = document.createElement('dd'); dd.textContent = value;
+      return [dt, dd];
+    }}));
+  }}
   function render() {{
     frame = Math.max(0, Math.min(frame, current().frames.length - 1));
     scrub.max = String(current().frames.length - 1); scrub.value = String(frame);
@@ -469,15 +497,13 @@ kbd {{ color:var(--ink); border:1px solid var(--line); border-bottom-width:2px; 
     play.textContent = playing ? 'Pause' : 'Play';
     play.setAttribute('aria-label', playing ? 'Pause animation' : 'Play animation');
     play.setAttribute('aria-pressed', String(playing));
-    draw(); renderFilmstrip();
+    draw(); renderStates(); renderFilmstrip(); renderFacts();
   }}
+  function selectState(name) {{ state = name; frame = 0; render(); schedule(); }}
   function step(delta) {{ frame = (frame + delta + current().frames.length) % current().frames.length; render(); schedule(); }}
 
-  Object.keys(data.states).forEach(name => {{ const option = document.createElement('option'); option.value = name; option.textContent = name; stateSelect.append(option); }});
-  stateSelect.value = state;
-  stateSelect.addEventListener('change', () => {{ state = stateSelect.value; frame = 0; render(); schedule(); }});
   speedSelect.addEventListener('change', schedule);
-  zoomSelect.addEventListener('change', draw);
+  zoomSelect.addEventListener('change', () => {{ draw(); renderFacts(); }});
   scrub.addEventListener('input', () => {{ frame = Number(scrub.value); render(); schedule(); }});
   play.addEventListener('click', () => {{ playing = !playing; render(); schedule(); }});
   document.getElementById('previous').addEventListener('click', () => step(-1));
@@ -489,15 +515,26 @@ kbd {{ color:var(--ink); border:1px solid var(--line); border-bottom-width:2px; 
   }}));
   document.addEventListener('keydown', event => {{
     if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLButtonElement) return;
+    const index = stateNames.indexOf(state);
     if (event.code === 'Space') {{ event.preventDefault(); playing = !playing; render(); schedule(); }}
     else if (event.code === 'ArrowLeft') {{ event.preventDefault(); step(-1); }}
     else if (event.code === 'ArrowRight') {{ event.preventDefault(); step(1); }}
+    else if (event.code === 'ArrowUp') {{ event.preventDefault(); selectState(stateNames[(index - 1 + stateNames.length) % stateNames.length]); }}
+    else if (event.code === 'ArrowDown') {{ event.preventDefault(); selectState(stateNames[(index + 1) % stateNames.length]); }}
     else if (event.code === 'Home') {{ event.preventDefault(); frame = 0; render(); schedule(); }}
     else if (event.code === 'End') {{ event.preventDefault(); frame = current().frames.length - 1; render(); schedule(); }}
   }});
   const evidence = document.getElementById('evidence');
-  if (data.evidence.length === 0) {{ const item = document.createElement('li'); item.className = 'empty'; item.textContent = 'No optional QA files are present yet.'; evidence.append(item); }}
-  data.evidence.forEach(entry => {{ const item = document.createElement('li'); const link = document.createElement('a'); link.href = entry.href; link.target = '_blank'; link.rel = 'noopener'; link.textContent = entry.label; item.append(link); evidence.append(item); }});
+  const chipText = {{ pass: 'pass', fail: 'fail', warn: 'warn', missing: 'missing', file: 'file' }};
+  if (data.evidence.every(entry => entry.status === 'missing')) {{ const item = document.createElement('li'); item.className = 'empty'; item.textContent = 'No QA files yet. Run the checks, then rebuild this workbench.'; evidence.append(item); }}
+  data.evidence.forEach(entry => {{
+    const item = document.createElement('li');
+    const chip = document.createElement('span'); chip.className = 'chip'; chip.dataset.status = entry.status; chip.textContent = chipText[entry.status] || entry.status;
+    const label = document.createElement('span'); label.textContent = entry.label;
+    if (entry.href) {{ const link = document.createElement('a'); link.className = 'list-row'; link.href = entry.href; link.target = '_blank'; link.rel = 'noopener'; link.append(label, chip); item.append(link); }}
+    else {{ const row = document.createElement('div'); row.className = 'list-row'; row.setAttribute('aria-disabled', 'true'); row.append(label, chip); item.append(row); }}
+    evidence.append(item);
+  }});
   fitInitialZoom();
   atlas.addEventListener('load', () => {{ render(); if (!reducedMotion) {{ playing = true; render(); schedule(); }} }}, {{ once: true }});
   if (atlas.complete) atlas.dispatchEvent(new Event('load'));
