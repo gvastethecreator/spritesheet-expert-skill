@@ -166,7 +166,10 @@ def _variant_errors(
                 errors.append(
                     f"variant '{variant['id']}' uses undeclared axis '{axis_id}'"
                 )
-            elif value not in declared_axes[axis_id]:
+            elif not any(
+                value == allowed and isinstance(value, bool) == isinstance(allowed, bool)
+                for allowed in declared_axes[axis_id]
+            ):
                 errors.append(
                     f"variant '{variant['id']}' uses disallowed value {value!r} "
                     f"for axis '{axis_id}'"

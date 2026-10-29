@@ -71,7 +71,9 @@ def _leaf_shape_errors(leaf: Mapping[str, Any]) -> list[str]:
         not isinstance(fingerprint, str) or not fingerprint
     ):
         errors.append("input_fingerprint must be a non-empty string")
-    if "status" in leaf and leaf["status"] not in _LEAF_STATUSES:
+    if "status" in leaf and (
+        not isinstance(leaf["status"], str) or leaf["status"] not in _LEAF_STATUSES
+    ):
         errors.append("status is unknown")
     return errors
 
@@ -187,6 +189,7 @@ def aggregate_asset_pack(
                     key
                     for key, expected in expected_style_tokens.items()
                     if candidate.get(key) != expected
+                    or isinstance(candidate.get(key), bool) != isinstance(expected, bool)
                 ]
                 if mismatches:
                     for key in mismatches:
@@ -205,8 +208,8 @@ def aggregate_asset_pack(
                 source_types_ok = (
                     isinstance(source_types, list)
                     and bool(source_types)
+                    and all(isinstance(source_type, str) and source_type in _PRODUCTION_SOURCE_TYPES for source_type in source_types)
                     and len(source_types) == len(set(source_types))
-                    and all(source_type in _PRODUCTION_SOURCE_TYPES for source_type in source_types)
                 )
                 if production_media.get("representative") is not True:
                     block(f"asset {reference.asset_id}: production media is not representative")
@@ -243,6 +246,10 @@ def aggregate_asset_pack(
             block(f"asset {reference.asset_id}: validation report did not check asset")
         if leaf is not None:
             leaf_status = leaf.get("status")
+            if not isinstance(leaf_status, str):
+                leaf_status = None
+            if leaf_status == "pass" and leaf.get("errors"):
+                block(f"asset {reference.asset_id}: validation reported errors")
             if leaf_status == "operational-error":
                 block(
                     f"asset {reference.asset_id} ({reference.asset_kind}): validation reported operational-error",

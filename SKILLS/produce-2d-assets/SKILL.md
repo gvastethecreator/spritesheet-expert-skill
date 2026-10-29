@@ -28,10 +28,10 @@ Execute directly for small local work. Delegate only when authorized and paralle
 
 2. Produce each family through its owner.
    - Real source provenance, licenses, portable paths, current hashes, and the selected bundled family's deterministic report/proof.
-   - `evidence.production_media` on every production leaf: `representative: true`, `provenance_verified: true`, explicit `source_types`. Imagegen/Grok/imported stay distinct. Fixtures, placeholders, deterministic drawings, legacy-unverified media cannot satisfy a production family.
+   - Inspect provenance and representative family proof before setting `evidence.production_media`: `representative: true`, `provenance_verified: true`, explicit `source_types`. These fields record declarations; keep the supporting evidence. Imagegen/Grok/imported stay distinct. Fixtures, placeholders, deterministic drawings, legacy-unverified media cannot satisfy a production family.
    - Isolated sprites, props and UI follow their leaf owner's alpha policy: prefer and preserve valid native transparency. Use a neutral gray/black/white matte only when required, with reviewed model-backed removal when extraction is ambiguous. Full-bleed backgrounds keep authored scene pixels.
    - Block a dependency until its upstream report passes. No placeholder deliverables to green the aggregate.
-   - Provider fails identity, anatomy, semantics, repeat behavior, or edge quality: retry that route. Deterministic code may extract, align, compose, preview, and validate; it may not replace the failed semantic art.
+   - Diagnose provider failures in identity, anatomy, semantics, repeat behavior, or edge quality. Retry with a concrete change and valid authorization; otherwise record the blocker. Deterministic code may extract, align, compose, preview, and validate; it may not replace the failed semantic art.
 
 3. Write `asset-pack.json` against the schemas under `references/schemas/`.
    - Require `schema_version`, `pack_id`, `owners`, `style_bible`, `inventory`, `variant_matrix`, and `delivery_manifest`.
@@ -45,14 +45,16 @@ python scripts/validate_asset_pack.py --pack <pack-root>/asset-pack.json --pack-
 
 Writes `validation/asset-pack-validation-report.json`. Exit `0` pass, `1` contract failure, `2` real dependency still blocked, `3` operational failure. Installed skill directory: `python -m pip install -r requirements-runtime.txt` when needed.
 
+Keep the report path separate from the pack document, declared leaf reports, deliverables, and style references. Collisions fail before writing.
+
 5. Reconcile the real pack.
    - Inspect family proof together: scale, palette, camera, density, naming, variants, ownership, licensing, presentation truth.
    - Right proof per claim: animation playback/onion/contact, background composite plus scroll, UI state plus stretch boards, static contact/alpha, truth-labelled mockups. A single contact sheet cannot certify all families.
-   - Re-run aggregate validator after leaf changes; stale leaf reports must fail.
+   - Refresh affected leaf validations after input changes, update their report hashes and fingerprint pins, then rerun the aggregate. It checks declared pins and file hashes; inspect the underlying source evidence for freshness and provenance.
 
 ## Completion Contract
 
-Done when every required leaf report is current and passing, every required variant and deliverable exists with matching hashes, presentation is passed or deliberately absent, paths are portable, and aggregate report exits zero.
+Done when required family proof has been inspected, every required leaf report is current and passing, every required variant and deliverable exists with matching hashes, presentation is passed or deliberately absent, paths are portable, and the aggregate exits zero. Its contract check does not substitute for required visual review or operator acceptance.
 
 ## Resources
 

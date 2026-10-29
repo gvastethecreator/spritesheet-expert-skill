@@ -68,6 +68,25 @@ def _atomic_write_json(path: Path, document: Mapping[str, Any]) -> None:
             temporary_path.unlink()
 
 
+def _declared_input_paths(document: Mapping[str, Any]) -> list[str]:
+    paths: list[str] = []
+    style = document.get("style_bible")
+    if isinstance(style, Mapping) and isinstance(style.get("references"), list):
+        paths.extend(value for value in style["references"] if isinstance(value, str))
+    for section, key in (("inventory", "assets"), ("delivery_manifest", "deliverables")):
+        container = document.get(section)
+        entries = container.get(key) if isinstance(container, Mapping) else None
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, Mapping):
+                continue
+            record = entry.get("validation_report") if section == "inventory" else entry
+            if isinstance(record, Mapping) and isinstance(record.get("path"), str):
+                paths.append(record["path"])
+    return paths
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pack", type=Path, required=True)
@@ -104,6 +123,7 @@ def main() -> int:
         return exit_code
     raw: bytes | None = None
     document: Mapping[str, Any] | None = None
+    protected_paths = {pack_path}
     try:
         if not pack_path.is_relative_to(pack_root):
             raise OSError("asset-pack document must be below pack root")
@@ -152,6 +172,15 @@ def main() -> int:
 
     try:
         report_path = resolve_pack_path(pack_root, args.report)
+        if document is not None:
+            for relative in _declared_input_paths(document):
+                try:
+                    protected_paths.add((pack_root / relative).resolve())
+                except ValueError:
+                    # Contract validation retains malformed path failures.
+                    continue
+        if report_path in protected_paths:
+            raise ValueError("report output would replace an input or declared artifact")
         _atomic_write_json(report_path, report)
     except (OSError, ValueError) as exc:
         report["ok"] = False
