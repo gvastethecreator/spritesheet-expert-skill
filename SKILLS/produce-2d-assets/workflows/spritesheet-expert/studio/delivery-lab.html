@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark light">
+<link rel="icon" href="data:,">
+<title>Delivery Lab · Spritesheet Expert</title>
+<link rel="stylesheet" href="tool-theme.css">
+<style>
+[hidden]{display:none!important}a{color:var(--accent)}
+.lab{display:grid;gap:12px;padding:12px 16px 24px}
+.tag{padding:2px 7px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font:11px var(--font-mono);white-space:nowrap}
+.header-end{margin-left:auto;display:flex;align-items:center;gap:12px}
+.loaders{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:12px;border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--surface)}
+.loaders label{display:grid;gap:4px;color:var(--muted);font-size:12px;min-width:0}
+.loaders input{min-width:0;padding:4px;border:1px solid var(--line);border-radius:var(--radius);background:var(--sunken);color:var(--ink)}
+.notice{padding:8px 12px;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:var(--radius);background:var(--surface);font:12px/1.5 var(--font-mono);overflow-wrap:anywhere}
+.lab-main{display:grid;grid-template-columns:260px minmax(0,1fr);gap:12px;align-items:start}
+.inventory{overflow:hidden}.inventory-head{padding:12px;border-bottom:1px solid var(--line)}.inventory-head h2{display:flex;align-items:center;gap:8px;font-size:13px}.inventory-head small{color:var(--muted)}
+#items{max-height:70vh;overflow:auto;padding:6px;display:grid;gap:4px}
+.item{display:grid;grid-template-columns:40px minmax(0,1fr);align-items:center;gap:8px;padding:4px 6px;border:1px solid transparent;border-radius:var(--radius);background:none;color:var(--ink);text-align:left;cursor:pointer}
+.item:hover{background:var(--raised)}.item[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent)}
+.item img{width:40px;height:40px;object-fit:contain;image-rendering:pixelated;background:conic-gradient(var(--checker-a) 25%,var(--checker-b) 0 50%,var(--checker-a) 0 75%,var(--checker-b) 0) 0 0/8px 8px;border-radius:3px}
+.item span{min-width:0;overflow-wrap:anywhere}.item small{display:block;color:var(--muted);font:11px var(--font-mono)}
+.viewer{min-width:0;overflow:hidden}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;padding:8px;border-bottom:1px solid var(--line)}
+.tabs button[aria-selected=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.viewer .toolbar{padding:8px 12px;border-bottom:1px solid var(--line)}
+.viewer .stage{height:460px;place-items:start center;padding:16px;border:0;border-radius:0;background:var(--sunken)}
+#canvas{max-width:none}
+.empty-copy{max-width:540px;margin:auto;padding:48px 16px;color:var(--muted);text-align:center}
+.details{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:12px;font-size:12px}
+.details small{color:var(--muted)}.details strong{display:block;font:500 12px var(--font-mono);overflow-wrap:anywhere}
+.legend{padding:8px 12px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}
+.checks{display:grid;gap:16px;padding:16px}.checks h2{margin-bottom:6px;font-size:13px}.checks p{color:var(--muted)}
+.checks pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 var(--font-mono);background:var(--sunken);padding:12px;border:1px solid var(--line);border-radius:var(--radius);max-height:330px;overflow:auto}
+.checks .btn{justify-self:start}
+footer{padding:0 16px 16px;color:var(--faint);font-size:12px}
+@media(max-width:850px){.loaders,.lab-main,.details{grid-template-columns:minmax(0,1fr)}#items{max-height:200px;grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}.viewer .stage{height:360px}.header-end small{display:none}}
+</style>
+<script src="tool-theme.js" defer></script>
+<script src="delivery-lab.js" type="module"></script>
+</head>
+<body>
+<div class="tool">
+<header class="tool-header"><div class="brand"><span class="brand-mark">Artifact inspection</span><h1>Delivery Lab</h1></div>
+<div class="header-end"><span class="tag">Local · read only</span><a href="index.html">Open Studio</a><button id="theme-toggle" class="btn btn-icon" type="button" aria-label="Switch theme">◐</button></div></header>
+<div class="lab">
+<section class="loaders" aria-label="Load a run"><label>1. Select the complete run folder<input id="folder" type="file" webkitdirectory multiple></label><label>2. Select the active manifest<select id="manifest" disabled><option>No folder selected</option></select></label><label>3. Optional CLI receipt<input id="receipt" type="file" accept=".json,application/json"></label></section>
+<p id="status" class="notice" role="status" aria-live="polite">No run loaded. Files stay in your browser; no upload or provider execution.</p>
+<main class="lab-main">
+<aside class="card inventory"><div class="inventory-head"><h2>Inventory <span id="count" class="tag">0</span></h2><small>Choose a sprite. Arrow keys step through the inventory.</small></div><div id="items"></div></aside>
+<section class="card viewer">
+<nav class="tabs" aria-label="Inspection view" role="tablist"><button class="btn" data-view="atlas" role="tab" aria-selected="true">Atlas</button><button class="btn" data-view="source" role="tab" aria-selected="false">Source</button><button class="btn" data-view="placement" role="tab" aria-selected="false">Placement</button><button class="btn" data-view="delivery" role="tab" aria-selected="false">Delivery</button></nav>
+<div id="visual"><div class="toolbar"><label class="field">Zoom<select id="zoom"><option value="1">1× native</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select></label><label class="field">Background<select id="background"><option value="checker">Checker</option><option value="black">Black</option><option value="gray">Gray</option><option value="white">White</option></select></label><label class="field">Overlays<select id="overlay"><option value="on">Frames + cells + pivot</option><option value="off">Artwork only</option></select></label><span class="group"><button id="previous" class="btn btn-icon" disabled aria-label="Previous sprite">←</button><button id="next" class="btn btn-icon" disabled aria-label="Next sprite">→</button></span></div>
+<div class="stage" id="stage"><p id="empty" class="empty-copy">Inspect existing art without repacking or changing it. Load a deterministic item-atlas run, including its manifest, atlas, source, and item PNGs.</p><canvas id="canvas" data-sampling="nearest" hidden aria-label="Verified sprite artifact preview"></canvas></div>
+<div class="details"><div><small>Stable item ID / review</small><strong id="item-info">—</strong></div><div><small>Source bounds / atlas frame</small><strong id="geometry-info">—</strong></div><div><small>Native size / normalized pivot</small><strong id="pivot-info">—</strong></div></div>
+<div class="legend" id="legend">Amber: selected frame. Gray: reserved cells. Cross: declared pivot. No scale or camera is inferred.</div></div>
+<div id="delivery" class="checks" hidden><section><h2>Independent checks, separate guarantees</h2><p>Browser hashes verify file identity. The Python gate checks pixel ownership and geometry. Human review judges artwork. A target-engine smoke test proves runtime behavior. None replaces another.</p></section><section><h2>Current evidence</h2><pre id="check-output">No manifest loaded.</pre></section><section><h2>Run the authoritative check</h2><pre>python scripts/validate_item_delivery.py --manifest &lt;run&gt;/manifest.json
+python scripts/export_item_atlas.py --manifest &lt;run&gt;/manifest.json --output-dir &lt;new-export&gt;</pre><p>Use the actual active manifest filename. A draft receipt is never a production approval. The default texture limit is not a device capability probe.</p></section><button id="download" class="btn" disabled>Download inspection record</button></div>
+</section>
+</main>
+</div>
+<footer>Placement is a Canvas diagnostic, not a Phaser/Godot smoke test. This viewer never approves, replaces, redraws, uploads, or silently resolves files by basename.</footer>
+</div>
+</body></html>

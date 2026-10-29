@@ -11,6 +11,8 @@ Six skills:
 
 One leaf skill per family. `produce-2d-assets` only when a delivery needs two+ families plus shared manifest.
 
+Each folder can be copied on its own. `produce-2d-assets/workflows/` includes the five family guides and their implementations, with `WORKFLOW.md` entrypoints to avoid duplicate skill discovery. No separate skills are required; the selected workflow still needs its declared runtime and an image tool or approved source media. Maintainers use `pnpm run sync:bundles` after changing a family and `pnpm run validate:bundles` to detect drift.
+
 ## Production Media Contract
 
 - `$imagegen` default still provider. `$grok-imagine` explicit, dry-run-first; paid run needs current-task acknowledgment. Video-to-frames → `spritesheet-expert`.

@@ -1,6 +1,6 @@
 ---
 name: spritesheet-expert
-description: "Make game sprites from generated art: animation sheets, icon and item atlases, pose sets, tiles, backgrounds and UI. Plans the generation prompt and layout guide, then cuts out, registers, packs and reviews the result with one CLI."
+description: "Make game sprites from generated art: animation sheets, icon and item atlases, pose sets and UI states. Plans the generation prompt and layout guide, then cuts out, registers, packs and reviews the result with one CLI."
 ---
 
 # Spritesheet Expert
@@ -26,7 +26,7 @@ Requires Python 3.11+, Pillow, numpy and scipy.
 | `slots` | Named cells without time: character poses and gestures, icons and items, UI states, nine-slice panels | [recipes/slots.md](recipes/slots.md) |
 | `atlas` | Loose items without a grid: separated by shape, named, packed tightly | [recipes/atlas.md](recipes/atlas.md) |
 
-Tiles and backgrounds come next. Until then, use the v1 skill for them.
+Tiles and backgrounds are outside this version's supported lanes. State that limit for such a request. The supported lanes need only this folder, its Python dependencies and an available image-generation tool or approved source image.
 
 ## Rules
 

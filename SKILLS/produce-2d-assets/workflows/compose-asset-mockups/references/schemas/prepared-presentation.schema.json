@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.openai.local/compose-asset-mockups/prepared-presentation.schema.json",
+  "title": "Canonical prepared presentation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "presentation_sha256", "presentation"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "prepared-presentation"},
+    "presentation_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "presentation": {
+      "$ref": "https://schemas.openai.local/compose-asset-mockups/presentation.schema.json"
+    }
+  }
+}

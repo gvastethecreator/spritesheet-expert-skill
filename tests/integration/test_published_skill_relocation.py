@@ -64,6 +64,22 @@ def test_published_skill_cli_runs_after_isolated_copy(
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "usage:" in result.stdout.lower()
+    if skill == "produce-2d-assets":
+        for family, (relative_cli, argument) in PUBLIC_CLIS.items():
+            if family == skill:
+                continue
+            bundled = destination / "workflows" / family
+            assert (bundled / "WORKFLOW.md").is_file()
+            assert not (bundled / "SKILL.md").exists()
+            result = subprocess.run(
+                [sys.executable, str(bundled / relative_cli), argument],
+                cwd=tmp_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert "usage:" in result.stdout.lower()
 
 
 def test_relocated_item_workflow_and_locked_runtime_paths(tmp_path: Path) -> None:
@@ -147,6 +163,21 @@ def test_relocated_leaf_executes_a_real_contract_request(
 
     assert result.returncode == 1, result.stdout + result.stderr
     assert "missing runtime dependency" not in result.stdout
+    if skill == "produce-2d-assets":
+        for family, flag in REQUEST_FLAGS.items():
+            if family == skill:
+                continue
+            relative_cli, _ = PUBLIC_CLIS[family]
+            result = subprocess.run(
+                [sys.executable, str(destination / "workflows" / family / relative_cli),
+                 flag, str(document), "--root", str(artifact)],
+                cwd=tmp_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            assert result.returncode == 1, result.stdout + result.stderr
+            assert "missing runtime dependency" not in result.stdout
 
 
 @pytest.mark.parametrize("skill", sorted(REQUEST_FLAGS))

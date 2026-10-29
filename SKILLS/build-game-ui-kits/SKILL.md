@@ -6,13 +6,13 @@ description: "Game UI kits: raster UI from imported art, Imagegen, or explicit G
 
 # Build Game UI Kits
 
-Create a portable raster family with explicit components, tokens, densities, states and nine-slice geometry. Animated art belongs to `spritesheet-expert`; use `produce-2d-assets` only for a requested cross-family delivery.
+Create a portable raster family with explicit components, tokens, densities, states and nine-slice geometry. This folder contains the complete raster UI workflow. Animation and cross-family coordination are separate scopes.
 
 ## Workflow
 
 1. Define components, intended sizes/densities, required states, stretch regions, color tokens and style fingerprint. Use the state keys supported by [the schema](references/schemas/ui-kit-v1.schema.json). A missing state contract needs a decision; do not silently rename it to a different behavior. Done when the requested controls and state coverage are explicit.
-2. Import approved art or use Imagegen for new bitmap art. Load `grok-imagine` only for explicitly selected Grok stills; review its dry run and require current-task consent for `--ack-run`. Keep real provenance for each state/density variant. A fixture tests geometry, not production media. Done when current source paths and hashes identify the actual art.
-3. Preserve accepted identity, text/icon geometry and valid native alpha. For a necessary matte, use gray/black/white, not new green/blue/cyan/magenta chroma. Use a reviewed cutout when neutral subject colors make removal ambiguous. BiRefNet/BEN2 comparison requires that scope; it does not justify replacing good native alpha. Regenerate a failed semantic state from the accepted provider base instead of procedurally repainting production UI. Done when every required state is actually distinct where its behavior requires it and all art is below the kit root.
+2. Import approved art or use the available image tool, with Imagegen as the default and Grok stills only when explicitly selected. Keep the exact request, provider result and selected bytes, then fill the bundled schema's provenance fields. No separate skill is required. `$imagegen` and `$grok-imagine` are optional client adapters; Grok's `--ack-run` requires a reviewed dry run and current-task consent. Without generation access, use approved imports or record the missing provider. Keep real provenance on every state/density variant. A fixture tests geometry, not production media. Deterministic tools may prepare and validate assets; they must not draw replacement production UI. Done when current source paths and hashes identify the actual art.
+3. Preserve accepted identity, text/icon geometry and valid native alpha. For a necessary matte, use flat gray, black, or white. Do not request new green, blue, cyan, or magenta chroma. Use a reviewed cutout when neutral subject colors make removal ambiguous. BiRefNet/BEN2 comparison requires that scope; it does not justify replacing good native alpha. Regenerate a failed semantic state from the accepted provider base instead of procedurally repainting production UI. Done when every required state is actually distinct where its behavior requires it and all art is below the kit root.
 4. Write `ui-kit.json` and run the installed skill's CLI from any working directory:
 
    ```powershell
@@ -20,7 +20,7 @@ Create a portable raster family with explicit components, tokens, densities, sta
    ```
 
    Use the existing runtime and [requirements](requirements-runtime.txt); installation needs the task's authority. Done when schema, source hashes, states/densities and geometry checks pass or failures are recorded.
-5. Inspect state and stretch evidence, plus the source variants at their intended render sizes. Check identity, legibility, alignment, focus cues, alpha edges and required density/state parity. A thumbnail comparison cannot establish one-to-one readability or an interactive control's behavior. Done when each requested visual/state/stretch claim has relevant proof, with gaps kept visible.
+5. Inspect state and stretch evidence, plus the source variants at their intended render sizes. The state board proves state/density comparison only at thumbnail scale. Check identity, legibility, alignment, focus cues, alpha edges and required density/state parity. A thumbnail comparison cannot establish one-to-one readability or an interactive control's behavior. Done when each requested visual/state/stretch claim has relevant proof, with gaps kept visible.
 
 ## Validator and proof scope
 

@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.openai.local/compose-asset-mockups/composition.schema.json",
+  "title": "Asset presentation composition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "scene_id",
+    "output_profile",
+    "canvas",
+    "layers",
+    "asset_ids",
+    "license_refs",
+    "provenance_refs"
+  ],
+  "properties": {
+    "id": {"$ref": "#/$defs/id"},
+    "scene_id": {"$ref": "#/$defs/id"},
+    "output_profile": {
+      "enum": ["asset-board", "variant-board", "contact-sheet", "catalog-board", "gameplay", "store", "social"]
+    },
+    "canvas": {"$ref": "#/$defs/canvas"},
+    "layers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/layer"}
+    },
+    "asset_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/id"}
+    },
+    "license_refs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/id"}
+    },
+    "provenance_refs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/id"}
+    }
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+    "color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+    "geometry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": {"type": "number"},
+        "y": {"type": "number"},
+        "width": {"type": "number", "exclusiveMinimum": 0},
+        "height": {"type": "number", "exclusiveMinimum": 0},
+        "rotation_degrees": {"type": "number"},
+        "opacity": {"type": "number", "minimum": 0, "maximum": 1},
+        "fit": {"enum": ["contain", "cover", "stretch"]},
+        "resampling": {"enum": ["nearest", "lanczos"]}
+      }
+    },
+    "safeZone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": {"type": "integer", "minimum": 0},
+        "y": {"type": "integer", "minimum": 0},
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1}
+      }
+    },
+    "canvas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height", "aspect_ratio", "background", "alpha_mode", "color_space", "safe_zone"],
+      "properties": {
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1},
+        "aspect_ratio": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["width", "height"],
+          "properties": {
+            "width": {"type": "integer", "minimum": 1},
+            "height": {"type": "integer", "minimum": 1}
+          }
+        },
+        "background": {"$ref": "#/$defs/color"},
+        "alpha_mode": {"enum": ["opaque", "straight"]},
+        "color_space": {"const": "srgb"},
+        "safe_zone": {"$ref": "#/$defs/safeZone"}
+      }
+    },
+    "layer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "layer_type", "z_index", "geometry"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "layer_type": {"enum": ["asset", "text"]},
+        "asset_id": {"$ref": "#/$defs/id"},
+        "copy_id": {"$ref": "#/$defs/id"},
+        "font_id": {"$ref": "#/$defs/id"},
+        "font_size": {"type": "integer", "minimum": 1},
+        "color": {"$ref": "#/$defs/color"},
+        "z_index": {"type": "integer"},
+        "geometry": {"$ref": "#/$defs/geometry"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"layer_type": {"const": "asset"}}, "required": ["layer_type"]},
+          "then": {"required": ["asset_id"]}
+        },
+        {
+          "if": {"properties": {"layer_type": {"const": "text"}}, "required": ["layer_type"]},
+          "then": {"required": ["copy_id", "font_id", "font_size", "color"]}
+        }
+      ]
+    }
+  }
+}

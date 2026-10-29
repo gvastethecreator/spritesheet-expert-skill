@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+"""Ingest a completed $grok-imagine video into a deterministic raw sprite grid."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+from build_video_frame_selector import build_selector
+from runio import atomic_write_bytes, atomic_write_text
+from spritecore.contracts import ContractError
+from spritecore.locks import RunLockError, acquire_run_lock
+from spritecore.video_animation import (
+    VideoAnimationError,
+    ingest_video,
+    revalidate_video_sources,
+)
+
+
+def parse_sample_indices(raw: str | None) -> list[int] | None:
+    if raw is None:
+        return None
+    try:
+        return [int(value.strip()) for value in raw.split(",") if value.strip()]
+    except ValueError as exc:
+        raise ValueError("--sample-indices must be comma-separated integers") from exc
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--run-dir", type=Path, required=True)
+    parser.add_argument("--state", required=True)
+    parser.add_argument("--invocation", type=Path, required=True)
+    parser.add_argument("--job")
+    parser.add_argument(
+        "--sample-indices",
+        help="reviewed chronological decoder indices, comma-separated; count must match the requested frames",
+    )
+    parser.add_argument(
+        "--sampling-strategy",
+        choices=("adaptive", "uniform"),
+        default="adaptive",
+        help="automatic frame selector; adaptive analyzes pose/quality while uniform preserves legacy time slicing",
+    )
+    parser.add_argument("--force", action="store_true")
+    args = parser.parse_args()
+    try:
+        result = ingest_video(
+            run_dir=args.run_dir,
+            state=args.state,
+            invocation_path=args.invocation,
+            job_name=args.job,
+            force=args.force,
+            sample_indices=parse_sample_indices(args.sample_indices),
+            sampling_strategy=args.sampling_strategy,
+        )
+        with acquire_run_lock(result.run_dir, "ingest-grok-video-animation"):
+            revalidate_video_sources(result)
+            result.raw_path.parent.mkdir(parents=True, exist_ok=True)
+            result.report_path.parent.mkdir(parents=True, exist_ok=True)
+            atomic_write_bytes(result.raw_path, result.raw_bytes)
+            atomic_write_text(
+                result.provenance_path,
+                json.dumps(result.provenance, ensure_ascii=False, indent=2) + "\n",
+            )
+            atomic_write_text(
+                result.report_path,
+                json.dumps(result.report, ensure_ascii=False, indent=2) + "\n",
+            )
+            selector = build_selector(
+                run_dir=result.run_dir,
+                state=args.state,
+                source_report=result.report_path,
+                force=True,
+            )
+    except (ContractError, OSError, RunLockError, VideoAnimationError, ValueError) as exc:
+        print(json.dumps({"status": "operational-error", "errors": [str(exc)]}, ensure_ascii=False))
+        return 3
+
+    print(
+        json.dumps(
+            {
+                "status": "pass",
+                "raw_path": result.raw_path.relative_to(result.run_dir).as_posix(),
+                "report_path": result.report_path.relative_to(result.run_dir).as_posix(),
+                "provenance_path": result.provenance_path.relative_to(result.run_dir).as_posix(),
+                "selector": selector["output"],
+                "selector_evidence": selector["evidence"],
+                "next": "review candidate cycles, re-ingest reviewed indices if needed, then run extraction and QA",
+            },
+            ensure_ascii=False,
+        )
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.openai.local/compose-asset-mockups/inventory.schema.json",
+  "title": "Presentation asset inventory",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["assets"],
+  "properties": {
+    "assets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/asset"}
+    }
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "truth_type", "source", "license_ref", "provenance_ref"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "kind": {
+          "enum": ["sprite", "tileset", "texture", "icon", "background", "ui", "mockup", "vfx", "other"]
+        },
+        "truth_type": {"enum": ["concept", "reconstructed", "runtime-captured"]},
+        "source": {
+          "$ref": "https://schemas.openai.local/compose-asset-mockups/content-reference.schema.json"
+        },
+        "license_ref": {"$ref": "#/$defs/id"},
+        "provenance_ref": {"$ref": "#/$defs/id"}
+      }
+    }
+  }
+}

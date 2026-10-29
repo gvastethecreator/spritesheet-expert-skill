@@ -1,6 +1,12 @@
 # Grok Image And Video Provider
 
-Optional provider: `$grok-imagine`. Default stills: `$imagegen`.
+Use an available Grok provider tool only when selected. Default stills use the available Imagegen tool. The `$grok-imagine` and `$imagegen` skill adapters are optional client integrations.
+
+## Without the Grok adapter
+
+For stills, retain the actual provider request and result, then use the source-intake contract in [workflows.md](workflows.md). For an existing video, use `scripts/ingest_video_animation.py` and [video-animation-workflow.md](video-animation-workflow.md). Supply the approved local video and declared source rights; keep the provider receipt beside it. This route records imported video provenance and does not certify an adapter invocation. Do not manufacture `invocation.json` or mark an imported source as wrapper-verified. If no selected provider or approved media is available, report that concrete blocker.
+
+The remaining sections describe the optional adapter's stricter invocation format. Use them only when that adapter is installed and selected; they are not prerequisites for the core sprite or imported-video workflows.
 
 This file defines the Grok boundary. Read `video-animation-workflow.md` for frame selection, imported videos, background removal, cropping, registration, and QA.
 

@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "workflow": "sideview-run",
+  "asset_kind": "sprite",
+  "output_kind": "six-frame-loop",
+  "views": ["side-right"],
+  "frame_count": 6,
+  "generation_order": [1, 4, 2, 3, 5, 6],
+  "required_templates": ["approved-sideview-walk-identity", "run-contact", "run-flight"],
+  "candidate_policy": "key-poses-first then inbetweens",
+  "review_artifacts": ["review-sheet.png", "flight-phase-report.json", "html-playback", "qa-verdict.json"],
+  "hard_gates": ["flight-phase", "forward-lean", "opposite-contacts", "arm-drive", "root-lock", "loop-seam"],
+  "promotion": "must read as run rather than accelerated walk"
+}

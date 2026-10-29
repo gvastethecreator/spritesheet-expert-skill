@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spritesheet-expert.local/schemas/video-source-v1.schema.json",
+  "title": "Spritesheet Expert provider-neutral video source v1",
+  "type": "object",
+  "required": [
+    "version",
+    "kind",
+    "status",
+    "origin",
+    "state",
+    "sprite_request",
+    "video",
+    "decoded",
+    "sampled_video_indices",
+    "sampling_mode",
+    "selection_reviewed",
+    "selection_metrics",
+    "sampled_timestamps_seconds",
+    "exact_first_frame_preserved",
+    "exact_idle_slots",
+    "independent_frame_background_removal",
+    "selector_required",
+    "output"
+  ],
+  "properties": {
+    "version": { "const": 1 },
+    "kind": { "const": "sprite-video-source" },
+    "status": { "const": "pass" },
+    "origin": { "enum": ["imported", "provider"] },
+    "state": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "maxLength": 64
+    },
+    "sprite_request": { "$ref": "#/$defs/file" },
+    "video": { "$ref": "#/$defs/file" },
+    "first_frame": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/imageFile" }
+      ]
+    },
+    "decoder": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "decoded": {
+      "type": "object",
+      "required": ["width", "height", "fps", "frame_count"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "fps": { "type": "number", "exclusiveMinimum": 0 },
+        "duration_seconds": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "frame_count": { "type": "integer", "minimum": 2 }
+      },
+      "additionalProperties": false
+    },
+    "sampled_video_indices": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": { "type": "integer", "minimum": 0 }
+    },
+    "sampling_mode": { "type": "string", "minLength": 1 },
+    "selection_reviewed": { "type": "boolean" },
+    "selection_metrics": { "type": ["object", "null"] },
+    "sampled_timestamps_seconds": {
+      "type": "array",
+      "minItems": 2,
+      "items": { "type": "number", "minimum": 0 }
+    },
+    "exact_first_frame_preserved": { "type": "boolean" },
+    "exact_idle_slots": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "integer", "minimum": 0 }
+    },
+    "independent_frame_background_removal": { "const": true },
+    "selector_required": { "const": true },
+    "output": { "$ref": "#/$defs/imageFile" }
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "required": ["path", "sha256", "size_bytes"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "size_bytes": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "imageFile": {
+      "type": "object",
+      "required": ["path", "sha256", "size_bytes", "width", "height"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "size_bytes": { "type": "integer", "minimum": 1 },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

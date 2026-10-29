@@ -6,13 +6,13 @@ description: "Static game assets: non-animated raster from imported art, Imagege
 
 # Build Static Game Assets
 
-Create a portable non-animated raster pack with explicit roles, sizes, pivots, crop policy, source rights, provenance and proof. Use `spritesheet-expert` for requested sequences/atlases, `build-game-backgrounds` for backgrounds and `build-game-ui-kits` for raster controls.
+Create a portable non-animated raster pack with explicit roles, sizes, pivots, crop policy, source rights, provenance and proof. This folder contains the complete static-asset workflow. Animation, backgrounds and raster controls are separate scopes.
 
 ## Workflow
 
 1. Define the inventory and intended use. Record each id, role, target size, pivot, transparency/crop policy, scale class, license reference and shared style fingerprint. Done when the required assets and their contracts are explicit.
-2. Import approved source art or use Imagegen for new bitmap art. Load `grok-imagine` only for explicitly selected Grok stills. Review its dry run and require current-task consent for `--ack-run`; never call paid inference from tests. Deterministic tools may crop, cut out, resize and assemble proof, not draw replacement production art. Done when each source path/hash and real provenance is recorded below the pack root.
-3. Preserve accepted identity, transparent margins and valid native alpha. If a matte is needed, use neutral gray/black/white, not new green/blue/cyan/magenta chroma. Use a reviewed cutout where subject neutrals make removal ambiguous. BiRefNet/BEN2 are scoped comparison options, not permission to replace valid alpha. Regenerate semantic/anatomical failures through the selected provider rather than procedurally repainting them. Done when preparation preserves the intended silhouette, crop and pivot instead of hiding defects by scaling a proof.
+2. Import approved source art or use an available image tool, with Imagegen as the default and Grok stills only when explicitly selected. Keep the exact request, provider result and selected bytes, then fill the bundled schema's `source.provenance` fields. No separate skill is required. `$imagegen` and `$grok-imagine` are optional client adapters; Grok's `--ack-run` requires a reviewed dry run and current-task consent. Missing generation access blocks new art, not approved imports. Never call paid inference from tests. Deterministic tools may crop, cut out, resize and assemble proof. They must not draw replacement production art. Done when each source path/hash and real provenance is recorded below the pack root.
+3. Preserve accepted identity, transparent margins and valid native alpha. If a matte is needed, use neutral gray, black, or white. Do not request new green, blue, cyan, or magenta chroma. Use a reviewed cutout where subject neutrals make removal ambiguous. BiRefNet/BEN2 are scoped comparison options, not permission to replace valid alpha. Regenerate semantic/anatomical failures through the selected provider rather than procedurally repainting them. Done when preparation preserves the intended silhouette, crop and pivot instead of hiding defects by scaling a proof.
 4. Write `static-pack.json` against [the schema](references/schemas/static-asset-pack-v1.schema.json), then run the installed CLI from any working directory:
 
    ```powershell

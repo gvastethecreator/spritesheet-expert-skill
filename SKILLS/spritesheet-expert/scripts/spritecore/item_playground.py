@@ -581,7 +581,7 @@ _HTML_TEMPLATE = """<!doctype html>
     const summary = counts();
     const pending = summary.pending > 0;
     const run = '<run-dir>';
-    return 'python SKILLS/spritesheet-expert/scripts/apply_item_review.py'
+    return 'python "<skill-root>/scripts/apply_item_review.py"'
       + ' --manifest ' + run + '/' + data.manifestFilename
       + ' --review ' + run + '/item-review.json'
       + ' --output-dir ' + run + '/reviewed'

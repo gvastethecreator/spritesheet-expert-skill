@@ -6,13 +6,13 @@ description: "Game backgrounds: layered raster packs from imported art, Imagegen
 
 # Build Game Backgrounds
 
-Create a portable layered pack whose sources, declared camera contract and proof agree. Background planes belong here; animated sprites/atlases use `spritesheet-expert`, and isolated props use `build-static-game-assets` only when those capabilities are needed.
+Create a portable layered pack whose sources, declared camera contract and proof agree. Full-bleed scene layers belong here; animated sprites, atlases and isolated prop production are separate scopes. This folder contains the complete background workflow.
 
 ## Workflow
 
 1. Define the requested scene before generating art. Record canvas/aspect, horizon, focal safe zone, layer order/depth, parallax, repeat behavior and style fingerprint. Keep the pack's supported schema roles rather than inventing aliases. Done when the requested view and layer responsibilities are explicit.
-2. Import approved art or generate it through the selected provider. Use Imagegen by default for new bitmap art; load `grok-imagine` only for explicitly selected Grok stills. Review Grok's dry run and require explicit current-task consent for `--ack-run`. Deterministic code may assemble, measure seams and render proof, not paint replacement production scenery. Done when each source, path, hash and provenance is recorded below one pack root.
-3. Preserve full-bleed authored pixels and valid alpha. For an isolated overlay, prefer native transparency. If a matte is necessary, use neutral gray/black/white and a reviewed cutout when subject colors are at risk; do not request new green/blue/cyan/magenta chroma. A composition or semantic failure needs the affected provider layer regenerated. Narrow repeat-edge harmonization must preserve the original source/hash and identify the derivative. Done when required media is actual approved/provider/imported art, with fixtures explicitly separated.
+2. Import approved art or generate it through an available image tool. Use Imagegen by default for new bitmap art; Grok stills require explicit provider selection. Keep the exact request, provider result and selected bytes, then fill the bundled schema's provenance fields. No separate skill is required. If the client exposes `$imagegen` or `$grok-imagine` adapters, they are optional integrations; Grok's `--ack-run` requires a reviewed dry run and current-task consent. Missing generation tools block new art, not approved-source import. Deterministic code may assemble, measure seams and render proof. It must not paint replacement production scenery. Done when source paths, hashes and provenance for every layer are recorded below one pack root.
+3. Preserve full-bleed authored pixels and valid alpha. For an isolated overlay, prefer native transparency. If a matte is necessary, use neutral gray/black/white and a reviewed cutout when subject colors are at risk; do not request new green, blue, cyan, or magenta chroma. A composition or semantic failure needs the affected provider layer regenerated. Narrow repeat-edge harmonization must preserve the original source/hash and identify the derivative. Done when required media is actual approved/provider/imported art, with fixtures explicitly separated.
 4. Write `background-pack.json` against [the schema](references/schemas/background-pack-v1.schema.json). Validate through this skill's CLI from any working directory, resolving the installed skill root:
 
    ```powershell
@@ -20,7 +20,7 @@ Create a portable layered pack whose sources, declared camera contract and proof
    ```
 
    Use the existing Python runtime and [requirements](requirements-runtime.txt). Install missing requirements only within the task's authority. Do not change the project toolchain to run a proof. Done when validation passes for the current bytes or the actual failure is retained.
-5. Inspect the composite and scroll sample. Judge continuity, readability behind gameplay, depth, blend order and framing. The GIF samples horizontal offsets; it does not prove vertical parallax, every camera crop, horizon behavior or a game's runtime integration. Add the actual requested view/interaction proof when needed. Done when all applicable visual claims are observed and missing proof stays explicit.
+5. Inspect the composite and scroll sample. The composite proves layer order and blend placement for that rendered view. Judge continuity, readability behind gameplay, depth and framing. The GIF samples horizontal offsets; it does not prove vertical parallax, every camera crop, horizon behavior or a game's runtime integration. Add the actual requested view/interaction proof when needed. Done when all applicable visual claims are observed and missing proof stays explicit.
 
 ## Validator and proof scope
 

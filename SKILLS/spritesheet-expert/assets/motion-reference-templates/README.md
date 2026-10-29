@@ -23,4 +23,3 @@ Approval checks:
 - anatomical colors stay attached to the same limb through every overlap;
 - no labels, grid marks, scenery, shadows, clothing, style cues, cropping;
 - frame 8 flows back to frame 1 without a pose or root-position pop.
-

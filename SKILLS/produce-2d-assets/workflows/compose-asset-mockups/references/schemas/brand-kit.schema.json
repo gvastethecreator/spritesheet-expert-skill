@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.openai.local/compose-asset-mockups/brand-kit.schema.json",
+  "title": "Presentation brand kit",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "palette", "fonts"],
+  "properties": {
+    "id": {"$ref": "#/$defs/id"},
+    "palette": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}
+    },
+    "fonts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/font"}
+    },
+    "logo_asset_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/id"}
+    }
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+    "font": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "source", "license_ref"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "source": {
+          "$ref": "https://schemas.openai.local/compose-asset-mockups/content-reference.schema.json"
+        },
+        "license_ref": {"$ref": "#/$defs/id"}
+      }
+    }
+  }
+}

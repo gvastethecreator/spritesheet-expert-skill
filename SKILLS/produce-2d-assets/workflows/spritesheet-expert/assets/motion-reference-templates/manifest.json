@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "kind": "imagegen-motion-reference-template-catalog",
+  "templates": {
+    "humanoid-walk-side-right-v1": {
+      "status": "needs-imagegen",
+      "view": "side",
+      "facing": "right",
+      "frames": 8,
+      "grid": { "columns": 4, "rows": 2, "order": "row-major" },
+      "asset": "humanoid-walk-side-right-v1.png",
+      "prompt": "humanoid-walk-side-right-v1.txt",
+      "sha256": null
+    },
+    "humanoid-walk-front-v1": {
+      "status": "needs-imagegen",
+      "view": "front",
+      "facing": "center",
+      "frames": 8,
+      "grid": { "columns": 4, "rows": 2, "order": "row-major" },
+      "asset": "humanoid-walk-front-v1.png",
+      "prompt": "humanoid-walk-front-v1.txt",
+      "sha256": null
+    },
+    "humanoid-walk-back-v1": {
+      "status": "needs-imagegen",
+      "view": "back",
+      "facing": "center",
+      "frames": 8,
+      "grid": { "columns": 4, "rows": 2, "order": "row-major" },
+      "asset": "humanoid-walk-back-v1.png",
+      "prompt": "humanoid-walk-back-v1.txt",
+      "sha256": null
+    },
+    "humanoid-walk-three-quarter-front-right-v1": {
+      "status": "needs-imagegen",
+      "view": "three-quarter-front",
+      "facing": "right",
+      "frames": 8,
+      "grid": { "columns": 4, "rows": 2, "order": "row-major" },
+      "asset": "humanoid-walk-three-quarter-front-right-v1.png",
+      "prompt": "humanoid-walk-three-quarter-front-right-v1.txt",
+      "sha256": null
+    },
+    "humanoid-walk-three-quarter-back-right-v1": {
+      "status": "needs-imagegen",
+      "view": "three-quarter-back",
+      "facing": "right",
+      "frames": 8,
+      "grid": { "columns": 4, "rows": 2, "order": "row-major" },
+      "asset": "humanoid-walk-three-quarter-back-right-v1.png",
+      "prompt": "humanoid-walk-three-quarter-back-right-v1.txt",
+      "sha256": null
+    }
+  }
+}

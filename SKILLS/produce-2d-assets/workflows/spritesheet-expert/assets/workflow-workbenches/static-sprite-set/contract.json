@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "workflow": "static-sprite-set",
+  "asset_kind": "asset",
+  "output_kind": "variant-set",
+  "views": ["side", "front", "back", "topdown", "isometric"],
+  "frame_count": 1,
+  "generation_order": ["identity-anchor", "orthographic-views", "style-variants"],
+  "required_templates": ["silhouette-anchor", "scale-board", "palette-anchor"],
+  "candidate_policy": "one asset or coherent set per call; variants are not animation frames",
+  "review_artifacts": ["contact-sheet", "target-size-preview", "slot-report.json"],
+  "hard_gates": ["view-lock", "scale-hierarchy", "silhouette", "palette-consistency", "slot-fit", "alpha-clean"],
+  "promotion": "all variants remain coherent and are correctly classified as still assets"
+}
