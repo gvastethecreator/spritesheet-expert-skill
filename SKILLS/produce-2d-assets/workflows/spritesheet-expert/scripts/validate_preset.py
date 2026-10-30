@@ -62,6 +62,7 @@ RATIO_KEYS = {
     "airborne_bottom_ratio",
 }
 BACKGROUND_REMOVAL_METHODS = {
+    "alpha",
     "none",
     "chroma",
     "matte",
@@ -118,7 +119,7 @@ def validate_background_removal(preset_id, value):
         return f"{preset_id}: background_removal must be an object"
     method = value.get("method")
     if method not in BACKGROUND_REMOVAL_METHODS:
-        return f"{preset_id}: background_removal.method must be none, chroma, matte, rembg, ben2, lucida, or auto"
+        return f"{preset_id}: background_removal.method must be alpha, none, chroma, matte, rembg, ben2, lucida, or auto"
     model = value.get("model")
     if model is not None and (not isinstance(model, str) or not model.strip()):
         return f"{preset_id}: background_removal.model must be a non-empty string"

@@ -42,6 +42,15 @@ def test_adaptive_grid_uses_variable_source_bounds_and_keeps_row_order() -> None
     assert report["spans"][1]["source_bbox"][2] > 110
     assert len({sprite.size for sprite in sprites}) > 1
 
+    wrong_rows = Image.new("RGBA", (220, 140), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(wrong_rows)
+    for index in range(4):
+        draw.rectangle((5 + index * 50, 10, 30 + index * 50, 49), fill=(170, 100, 50, 255))
+    rejected, mismatch = extract_grid_adaptive_sprites(wrong_rows, 4, 2, 2)
+    assert rejected is None and mismatch["ok"] is False
+    assert mismatch["row_counts"] == [4, 0]
+    assert mismatch["expected_row_counts"] == [2, 2]
+
 
 def test_adaptive_grid_writes_a_source_bound_review(tmp_path: Path) -> None:
     sheet = _irregular_grid()
@@ -69,6 +78,9 @@ def test_safe_alpha_crop_adds_transparent_padding() -> None:
     assert bbox == [7, 5, 25, 29]
     assert contacts == []
     assert cropped.getbbox() == (4, 4, cropped.width - 4, cropped.height - 4)
+    noise = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    noise.putpixel((8, 8), (100, 100, 100, 255))
+    assert safe_alpha_crop(noise, crop_padding=4) == (None, None, [])
 
 
 def test_safe_alpha_crop_reports_a_clipped_source_boundary() -> None:

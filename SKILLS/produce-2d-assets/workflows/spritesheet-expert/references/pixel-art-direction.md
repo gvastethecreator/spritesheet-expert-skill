@@ -34,9 +34,9 @@ or profile would fight custom style.
 Examples:
 
 ```bash
-python scripts/preset_to_request.py platformer-character --out /abs/run/request.json
-python scripts/preset_to_request.py custom-atlas --art-profile pixel-combat --out /abs/run/request.json --states-file /abs/run/states.json
-python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id hero --request /abs/run/request.json --force
+python scripts/preset_to_request.py platformer-character --out /abs/request.json
+python scripts/preset_to_request.py custom-atlas --art-profile pixel-combat --out /abs/request.json --states-file /abs/states.json
+python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id hero --request /abs/request.json
 ```
 
 ## Universal Bar
@@ -47,8 +47,8 @@ python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id hero --re
  noisy literal detail where suggestion reads better.
 - Light: one primary direction, top or upper corner; directional
  highlight/midtone/shadow, never pillow shading.
-- Scale: smaller is stronger. If detail, color, or frame count doesn't
- improve runtime readability, remove it.
+- Scale: review at the intended runtime size. Remove distracting detail while
+ preserving the accepted palette, dimensions and frame budget.
 - Playback: judge motion at full speed. Static zoomed-in contact sheet can
   hide jitter, pops, noisy flicker.
 
@@ -89,7 +89,7 @@ cycles without contact/down/pass/swing logic.
 
 ### `pixel-topdown`
 
-Top-down characters, props, tiles: one 3/4 projection, tile-unit sizing,
+Top-down characters, props, tiles: one declared projection, tile-unit sizing,
 Y-overlap discipline, flippability tradeoffs, direction planning, terrain 3x3
 repetition checks.
 
@@ -140,7 +140,8 @@ Water, wind, impacts, explosions, ambient motion: loop math, flow points,
 buildup/peak/decay, stable emitter/contact anchors, alpha-friendly fade/cooling.
 
 Fail: random motion, end-to-start pop, VFX stealing focus, detached effects
-hiding weak body posing, chroma-colored cores that break extraction.
+hiding weak body posing, lost alpha or matte residue. Subject colors are not
+ forbidden key colors on native-alpha or neutral-background sources.
 
 ### `pixel-shmup`
 
@@ -157,9 +158,8 @@ rarity/meaning affordance.
 8x8, 8x16, NES-like, ultra-small sprites: missing-information beauty, outline
 for readability, one-pixel movement economy, low frame-count discipline.
 
-Fail: detail so small it becomes noise, 8-frame cycles where 3-6 frames read
-better, no outline on busy backgrounds, movement larger than sprite
-scale can support.
+Fail: detail that becomes noise, in-betweens that hide key poses, insufficient
+foreground/background separation, or motion that loses readability at native size.
 
 ### `pixel-environment`
 
@@ -191,9 +191,9 @@ When pixel-art profiles are active:
 
 Repair order:
 
-1. Fix prompt/profile mismatch.
-2. Regenerate only failing row.
-3. Curate/reorder/select frames if the row has enough good keys.
-4. Adjust extraction/registration if art is good but atlas is wrong.
-5. Regenerate whole sheet only when identity, projection, palette, or core
- style language fails across multiple rows.
+1. Diagnose prompt/profile mismatch and inspect the existing source.
+2. Curate/reorder/select existing frames when they satisfy the full action.
+3. Repair extraction/registration when source art is valid but atlas placement is wrong.
+4. Retry only the failing row with a concrete correction and valid authorization.
+5. Consider a whole-sheet retry only for a shared identity, projection, palette
+ or style failure that row-level repair cannot resolve.

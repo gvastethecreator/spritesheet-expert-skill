@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from PIL import Image
+from spritecore.paths import create_run_marker
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -95,6 +96,45 @@ def test_smoke_clean_refuses_an_unowned_output_directory(tmp_path: Path) -> None
     assert sentinel.read_text(encoding="utf-8") == "owned by caller"
 
 
+def test_smoke_force_refuses_a_reference_inside_its_generated_rows(tmp_path: Path) -> None:
+    out_dir = tmp_path / "output"
+    reference = out_dir / "custom-atlas/raw/idle.png"
+    reference.parent.mkdir(parents=True)
+    Image.new("RGBA", (128, 128), (180, 120, 60, 255)).save(reference)
+    before = reference.read_bytes()
+    result = run_script(
+        "smoke_presets_from_reference.py", "--reference", str(reference),
+        "--out-dir", str(out_dir), "--source-grid", "1x1", "--preset", "custom-atlas", "--force",
+    )
+    assert result.returncode == 2
+    assert "reference must stay outside" in result.stderr
+    assert reference.read_bytes() == before
+    assert not (out_dir / ".sprite-gen-run.json").exists()
+
+
+def test_smoke_force_runs_static_fixtures_with_current_prepare_flags(tmp_path: Path) -> None:
+    reference = tmp_path / "reference.png"
+    Image.new("RGBA", (128, 128), (180, 120, 60, 255)).save(reference)
+    out_dir = tmp_path / "output"
+    out_dir.mkdir()
+    create_run_marker(out_dir, run_id="preset-smoke")
+    sentinel = out_dir / "keep-me.txt"
+    sentinel.write_text("caller context", encoding="utf-8")
+    before = reference.read_bytes()
+    result = run_script(
+        "smoke_presets_from_reference.py", "--reference", str(reference),
+        "--out-dir", str(out_dir), "--source-grid", "1x1",
+        "--preset", "custom-asset-atlas", "--preset", "custom-asset-atlas", "--force",
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = json.loads((out_dir / "summary.json").read_text())
+    assert summary["fixture"] is summary["ok"] is True
+    assert list(summary["presets"]) == ["custom-asset-atlas"]
+    assert summary["presets"]["custom-asset-atlas"]["states"] == ["props", "pickups"]
+    assert sentinel.read_text(encoding="utf-8") == "caller context"
+    assert reference.read_bytes() == before
+
+
 def test_smoke_clean_restores_owned_output_when_regeneration_fails(tmp_path: Path) -> None:
     reference = tmp_path / "too-small-reference.png"
     Image.new("RGBA", (1, 1), (200, 60, 60, 255)).save(reference)
@@ -170,9 +210,19 @@ def test_prepare_validates_base_image_before_creating_output(tmp_path: Path) -> 
     assert result.returncode != 0
     assert not run_dir.exists()
 
+    invalid_image = tmp_path / "invalid.png"
+    invalid_image.write_bytes(b"not an image")
+    result = run_script("prepare_sprite_run.py", "--out-dir", str(run_dir), "--character-id", "hero",
+                        "--base-image", str(invalid_image))
+    assert result.returncode != 0
+    assert not run_dir.exists()
+
 
 def test_prepare_force_removes_stale_known_outputs_but_preserves_unknown_files(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
+    source = tmp_path / "source.png"
+    Image.new("RGBA", (32, 32), (180, 80, 40, 255)).save(source)
+    source_bytes = source.read_bytes()
     first_request = {
         "states": {
             "idle": {"frames": 1, "fps": 1, "loop": True, "action": "idle"},
@@ -191,6 +241,8 @@ def test_prepare_force_removes_stale_known_outputs_but_preserves_unknown_files(t
         str(run_dir),
         "--character-id",
         "hero",
+        "--base-image",
+        str(source),
         "--request-json",
         json.dumps(first_request),
     )
@@ -204,6 +256,8 @@ def test_prepare_force_removes_stale_known_outputs_but_preserves_unknown_files(t
         str(run_dir),
         "--character-id",
         "hero",
+        "--base-image",
+        str(run_dir / "base-source.png"),
         "--request-json",
         json.dumps(second_request),
         "--force",
@@ -211,6 +265,7 @@ def test_prepare_force_removes_stale_known_outputs_but_preserves_unknown_files(t
 
     assert second.returncode == 0, second.stderr
     assert sentinel.read_text(encoding="utf-8") == "keep"
+    assert (run_dir / "base-source.png").read_bytes() == source_bytes
     assert not (run_dir / "prompts" / "run.txt").exists()
     assert not (run_dir / "references" / "layout-guides" / "run.png").exists()
 

@@ -23,7 +23,7 @@ def main() -> int:
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--state", required=True)
     parser.add_argument("--first-frame", required=True)
-    parser.add_argument("--duration-seconds", type=int, choices=(6, 10), default=6)
+    parser.add_argument("--duration-seconds", type=int, choices=range(1, 16), default=6)
     parser.add_argument(
         "--provider-action",
         help="state-local generation instruction; does not mutate sprite-request.json",

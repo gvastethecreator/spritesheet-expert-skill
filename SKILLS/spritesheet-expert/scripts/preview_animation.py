@@ -4,12 +4,12 @@
 
 For each state in frames/frames-manifest.json this writes:
   qa/<state>-contact.png  - frames left-to-right on a checker so motion is readable
-  qa/<state>.gif          - frames played at the state fps (loops)
+  qa/<state>.gif          - GIF preview; stdout records its decoded delays
   qa/all-contact.png      - every state stacked, one row per state
   qa/pose-scale-review.png - idle/reference + pose rows for visual scale review
 
-These are QA instruments, not runtime assets. The runtime SSoT stays
-manifest.json.frame_layout over sprite-sheet-alpha.png.
+These are QA instruments, not runtime assets. The runtime contract is
+manifest.json and its declared atlas; previews do not establish delivery.
 """
 
 from __future__ import annotations
@@ -17,32 +17,28 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import sys
 
 from PIL import Image, ImageDraw
 
-from gif_utils import delay_ticks_to_duration_ms, save_clean_gif
+from compose_sprite_gif import flatten
+from gif_utils import delay_ticks_to_duration_ms, gif_report, save_clean_gif
+from check_animation_contracts import frame_rows_by_state
+from check_asset_slots import review_output
+from runio import atomic_save_image
+from spritecore.paths import resolve_run_path
 
-
-def checker(size: tuple[int, int], square: int = 16) -> Image.Image:
-    """Neutral checker so transparent pixels and stray fringe are both visible."""
-    w, h = size
-    bg = Image.new("RGBA", size, (210, 210, 210, 255))
-    px = bg.load()
-    for y in range(h):
-        for x in range(w):
-            if ((x // square) + (y // square)) % 2 == 0:
-                px[x, y] = (235, 235, 235, 255)
-    return bg
-
-
-def flatten(frame: Image.Image) -> Image.Image:
-    base = checker(frame.size)
-    base.alpha_composite(frame)
-    return base.convert("RGB")
+REVIEW_BACKGROUND = (17, 17, 17)
+REVIEW_TEXT = (232, 232, 232)
+REVIEW_OUTLINE = (180, 180, 180)
 
 
 def load_frames(run_dir: Path, files: list[str]) -> list[Image.Image]:
-    return [Image.open(run_dir / rel).convert("RGBA") for rel in files]
+    frames = []
+    for relative in files:
+        with Image.open(resolve_run_path(run_dir, relative)) as opened:
+            frames.append(opened.convert("RGBA"))
+    return frames
 
 
 def contact_sheet(
@@ -56,7 +52,7 @@ def contact_sheet(
     n = len(frames)
     label_height = 28 if records else 0
     frame_top = gap + label_height
-    sheet = Image.new("RGB", (n * cw + (n + 1) * gap, ch + 2 * gap + label_height), (255, 255, 255))
+    sheet = Image.new("RGB", (n * cw + (n + 1) * gap, ch + 2 * gap + label_height), REVIEW_BACKGROUND)
     draw = ImageDraw.Draw(sheet)
     x = gap
     for index, f in enumerate(frames):
@@ -68,7 +64,7 @@ def contact_sheet(
         bbox = record.get("bbox") if isinstance(record, dict) else None
         if isinstance(bbox, list) and len(bbox) == 4:
             left, top, right, bottom = [int(value) for value in bbox]
-            draw.rectangle((x + left, frame_top + top, x + right - 1, frame_top + bottom - 1), outline=(37, 99, 235), width=1)
+            draw.rectangle((x + left, frame_top + top, x + right - 1, frame_top + bottom - 1), outline=REVIEW_OUTLINE, width=1)
         ratio = record.get("height_vs_reference") if isinstance(record, dict) else None
         width_ratio = record.get("width_vs_reference") if isinstance(record, dict) else None
         head_ratio = record.get("head_width_vs_reference") if isinstance(record, dict) else None
@@ -84,9 +80,9 @@ def contact_sheet(
         if isinstance(expected, (int, float)):
             labels_bottom.append(f"exp {expected:.2f}x")
         if labels_top:
-            draw.text((x + 2, gap + 2), "  ".join(labels_top), fill=(17, 24, 39))
+            draw.text((x + 2, gap + 2), "  ".join(labels_top), fill=REVIEW_TEXT)
         if labels_bottom:
-            draw.text((x + 2, gap + 14), "  ".join(labels_bottom), fill=(17, 24, 39))
+            draw.text((x + 2, gap + 14), "  ".join(labels_bottom), fill=REVIEW_TEXT)
         x += cw + gap
     return sheet
 
@@ -125,16 +121,16 @@ def write_pose_scale_review(
     header_h = 30
     width = label_w + max(sheet.width for _, _, sheet in selected) + gap * 3
     height = header_h + sum(sheet.height for _, _, sheet in selected) + gap * (len(selected) + 1)
-    review = Image.new("RGB", (width, height), (255, 255, 255))
+    review = Image.new("RGB", (width, height), REVIEW_BACKGROUND)
     draw = ImageDraw.Draw(review)
-    draw.text((gap, 8), "Pose scale visual review: compare height, width, baseline, and pose readability", fill=(17, 24, 39))
+    draw.text((gap, 8), "Pose scale visual review: compare height, width, baseline, and pose readability", fill=REVIEW_TEXT)
     y = header_h
     for state, kind, sheet in selected:
-        draw.text((gap, y + 4), state, fill=(17, 24, 39))
-        draw.text((gap, y + 20), kind, fill=(75, 85, 99))
+        draw.text((gap, y + 4), state, fill=REVIEW_TEXT)
+        draw.text((gap, y + 20), kind, fill=REVIEW_OUTLINE)
         review.paste(sheet, (label_w + gap, y))
         y += sheet.height + gap
-    review.save(qa_dir / "pose-scale-review.png")
+    atomic_save_image(review, qa_dir / "pose-scale-review.png")
 
 
 def main() -> int:
@@ -146,9 +142,10 @@ def main() -> int:
         help="override every GIF preview delay in 1/100 second ticks",
     )
     args = parser.parse_args()
+    override_duration = delay_ticks_to_duration_ms(args.delay_ticks) if args.delay_ticks is not None else None
 
     run_dir = args.run_dir.expanduser().resolve()
-    manifest_path = run_dir / "frames" / "frames-manifest.json"
+    manifest_path = resolve_run_path(run_dir, "frames/frames-manifest.json")
     if not manifest_path.is_file():
         raise SystemExit(f"missing frames manifest: {manifest_path} (run extract first)")
 
@@ -156,15 +153,29 @@ def main() -> int:
     registration = manifest.get("sprite_registration") if isinstance(manifest.get("sprite_registration"), dict) else {}
     baseline_y = registration.get("baseline_y")
     baseline_y = int(baseline_y) if isinstance(baseline_y, (int, float)) else None
-    request_path = run_dir / "sprite-request.json"
+    request_path = resolve_run_path(run_dir, "sprite-request.json")
     request = json.loads(request_path.read_text(encoding="utf-8")) if request_path.is_file() else {}
     state_meta = request.get("states", {})
 
-    qa_dir = run_dir / "qa"
-    qa_dir.mkdir(parents=True, exist_ok=True)
-
     summary = []
-    rows = manifest.get("rows", [])
+    rows = list(frame_rows_by_state(manifest).values())
+    sources = {manifest_path, request_path}
+    for row in rows:
+        files = row.get("files", [])
+        if not isinstance(files, list) or any(not isinstance(path, str) for path in files):
+            raise ValueError("preview frame files must be an array of relative paths")
+        sources.update(resolve_run_path(run_dir, path) for path in files)
+    outputs = {}
+    for relative in [
+        "qa/all-contact.png", "qa/pose-scale-review.png",
+        *[f"qa/{row['state']}{suffix}" for row in rows for suffix in ("-contact.png", ".gif")],
+    ]:
+        target = review_output(run_dir, relative, sources)
+        if target in outputs.values():
+            raise ValueError("preview outputs alias each other")
+        outputs[relative] = target
+    qa_dir = resolve_run_path(run_dir, "qa")
+    qa_dir.mkdir(parents=True, exist_ok=True)
     state_sheets: dict[str, Image.Image] = {}
     for row in rows:
         state = row["state"]
@@ -177,27 +188,31 @@ def main() -> int:
         loop = bool(state_meta.get(state, {}).get("loop", True))
 
         sheet = contact_sheet(frames, row.get("frame_records"), baseline_y)
-        sheet.save(qa_dir / f"{state}-contact.png")
+        atomic_save_image(sheet, outputs[f"qa/{state}-contact.png"])
         state_sheets[state] = sheet
 
         duration = (
-            delay_ticks_to_duration_ms(args.delay_ticks)
-            if args.delay_ticks
+            override_duration
+            if override_duration is not None
             else max(1, round(1000 / fps))
         )
         save_clean_gif(
             frames,
-            qa_dir / f"{state}.gif",
+            outputs[f"qa/{state}.gif"],
             duration_ms=duration,
             loop=0 if loop else 1,
         )
+        encoded_delays = gif_report(outputs[f"qa/{state}.gif"])["delay_ticks"]
         summary.append(
             {
                 "state": state,
                 "ok": True,
                 "frames": len(frames),
                 "fps": fps,
-                "delay_ticks": round(duration / 10),
+                "delay_ticks": encoded_delays[0] if len(set(encoded_delays)) == 1 else None,
+                "durations_ms": [ticks * 10 for ticks in encoded_delays],
+                "encoded_frames": len(encoded_delays),
+                "requested_duration_ms": duration,
                 "loop": loop,
             }
         )
@@ -207,17 +222,23 @@ def main() -> int:
         gap = 8
         width = max(s.width for s in state_sheets.values()) + 2 * gap
         height = sum(s.height for s in state_sheets.values()) + gap * (len(state_sheets) + 1)
-        stacked = Image.new("RGB", (width, height), (255, 255, 255))
+        stacked = Image.new("RGB", (width, height), REVIEW_BACKGROUND)
         y = gap
         for s in state_sheets.values():
             stacked.paste(s, (gap, y))
             y += s.height + gap
-        stacked.save(qa_dir / "all-contact.png")
+        atomic_save_image(stacked, outputs["qa/all-contact.png"])
         write_pose_scale_review(qa_dir, rows, state_sheets)
 
-    print(json.dumps({"ok": True, "qa_dir": str(qa_dir), "states": summary}, ensure_ascii=False, indent=2))
-    return 0
+    ok = bool(summary) and all(row["ok"] for row in summary)
+    print(json.dumps({"ok": ok, "qa_dir": str(qa_dir), "states": summary}, ensure_ascii=False, indent=2))
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (OSError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+        print(json.dumps({"ok": False, "complete": False, "status": "operational-error", "errors": [str(exc)]}))
+        raise SystemExit(3)

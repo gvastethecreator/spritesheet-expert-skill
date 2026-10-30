@@ -12,89 +12,55 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
 from PIL import Image
 
 from runio import atomic_write_text
-
-
-LOCOMOTION_RE = re.compile(r"(^|-)(walk|walking|run|running|move)(-|$)")
+from spritecore.paths import resolve_run_path
+from check_animation_contracts import (
+    LOCOMOTION_WORKFLOWS,
+    LOCOMOTION_TOKENS,
+    alpha_bbox,
+    contact_phase_check,
+    dedupe_ordered,
+    frame_rows_by_state,
+    load_frames,
+    load_json,
+    normalized_list,
+    normalized_pair_diff,
+    normalized_threshold,
+    report_output_path,
+    support_balance,
+    support_side,
+    workflows_for_state,
+)
 
 
 def is_locomotion_state(state: str, entry: dict[str, Any]) -> bool:
     action = str(entry.get("action", "")).lower()
-    workflows = entry.get("animation_workflows", [])
-    workflow_text = " ".join(str(item) for item in workflows) if isinstance(workflows, list) else str(workflows)
-    if workflow_text.strip():
-        return "locomotion" in workflow_text.lower()
-    text = f"{state} {action} {workflow_text}".lower()
+    workflows = [value for value in normalized_list(entry.get("animation_workflows")) if value != "auto"]
+    if workflows:
+        return bool(set(workflows) & LOCOMOTION_WORKFLOWS)
+    text = f"{state} {action}".lower()
     tokens = {token for token in re.split(r"[^a-z0-9]+", text) if token}
-    return bool(
-        LOCOMOTION_RE.search(state.lower())
-        or tokens & {"walk", "walking", "run", "running", "move", "moving", "advance", "retreat", "dash", "dashing"}
-    )
+    return bool(tokens & LOCOMOTION_TOKENS)
 
 
-def selected_states(request: dict[str, Any], mode: str) -> list[str]:
+def selected_states(request: dict[str, Any], mode: str, art_direction: dict[str, Any]) -> list[str]:
     states = request.get("states", {})
     if mode == "all":
         return list(states)
     if mode == "locomotion":
-        return [state for state, entry in states.items() if is_locomotion_state(state, entry)]
-    return [state.strip() for state in mode.split(",") if state.strip()]
-
-
-def load_frames(run_dir: Path, row: dict[str, Any]) -> list[Image.Image]:
-    frames = []
-    for rel in row.get("files", []):
-        with Image.open(run_dir / rel) as opened:
-            frames.append(opened.convert("RGBA"))
-    return frames
-
-
-def alpha_bbox(frame: Image.Image, threshold: int = 16) -> tuple[int, int, int, int] | None:
-    return frame.getchannel("A").point(lambda value: 255 if value > threshold else 0).getbbox()
-
-
-def lower_mask_diff(left: Image.Image, right: Image.Image, y_ratio: float) -> float:
-    width, height = left.size
-    if right.size != left.size:
-        return 1.0
-    y_start = max(0, min(height - 1, round(height * y_ratio)))
-    xor = 0
-    union = 0
-    left_alpha = left.getchannel("A")
-    right_alpha = right.getchannel("A")
-    for y in range(y_start, height):
-        for x in range(width):
-            a = left_alpha.getpixel((x, y)) > 16
-            b = right_alpha.getpixel((x, y)) > 16
-            if a or b:
-                union += 1
-                if a != b:
-                    xor += 1
-    return xor / union if union else 0.0
-
-
-def support_balance(frame: Image.Image) -> float:
-    bbox = alpha_bbox(frame)
-    if not bbox:
-        return 0.0
-    x0, y0, x1, y1 = bbox
-    width = max(1, x1 - x0)
-    center_x = (x0 + x1) / 2
-    y_start = y0 + round((y1 - y0) * 0.68)
-    total = 0
-    weighted = 0.0
-    alpha = frame.getchannel("A")
-    for y in range(y_start, y1):
-        for x in range(x0, x1):
-            if alpha.getpixel((x, y)) > 16:
-                total += 1
-                weighted += (x - center_x) / width
-    return weighted / total if total else 0.0
+        selected = []
+        for state, entry in states.items():
+            workflows, _source = workflows_for_state(request, art_direction, state, entry)
+            if is_locomotion_state(state, {**entry, "animation_workflows": workflows}):
+                selected.append(state)
+        return selected
+    return dedupe_ordered([state.strip() for state in mode.split(",") if state.strip()])
 
 
 def body_center(frame: Image.Image) -> tuple[float, float]:
@@ -103,65 +69,6 @@ def body_center(frame: Image.Image) -> tuple[float, float]:
         return 0.0, 0.0
     x0, y0, x1, y1 = bbox
     return (x0 + x1) / (2 * frame.width), (y0 + y1) / (2 * frame.height)
-
-
-def support_side(value: float, threshold: float) -> str:
-    if value <= -threshold:
-        return "left"
-    if value >= threshold:
-        return "right"
-    return "center/ambiguous"
-
-
-def contact_phase_check(
-    frames: list[Image.Image],
-    args: argparse.Namespace,
-    *,
-    shared_idle: bool = False,
-    min_pose_diff: float | None = None,
-) -> dict[str, Any] | None:
-    if len(frames) < 4:
-        return None
-    balances = [support_balance(frame) for frame in frames]
-    first_index = 1 if shared_idle and len(frames) == 4 else 0
-    opposite_index = 3 if shared_idle and len(frames) == 4 else (
-        len(frames) // 2 if len(frames) >= 6 else 2
-    )
-    first = balances[first_index]
-    opposite = balances[opposite_index]
-    first_side = support_side(first, args.min_contact_balance_abs)
-    opposite_side = support_side(opposite, args.min_contact_balance_abs)
-    contact_delta = abs(opposite - first)
-    contact_pose_diff = lower_mask_diff(
-        frames[first_index], frames[opposite_index], args.lower_body_start
-    )
-    effective_min_pose_diff = (
-        args.min_opposite_contact_pose_diff if min_pose_diff is None else min_pose_diff
-    )
-    ok = contact_pose_diff >= effective_min_pose_diff
-    reason = "distinct opposite-contact lower-body poses"
-    if not ok:
-        reason = "opposite contact lower-body pose is duplicated or too similar"
-    return {
-        "ok": ok,
-        "phase_layout": "idle-phase-a-idle-phase-b" if first_index == 1 else "standard-contact-cycle",
-        "first_contact_index": first_index,
-        "first_contact_frame": first_index + 1,
-        "opposite_contact_index": opposite_index,
-        "opposite_contact_frame": opposite_index + 1,
-        "frame_1_support_balance": round(first, 4),
-        "frame_1_support_side": first_side,
-        "opposite_contact_support_balance": round(opposite, 4),
-        "opposite_contact_support_side": opposite_side,
-        "contact_delta": round(contact_delta, 4),
-        "opposite_contact_pose_diff": round(contact_pose_diff, 4),
-        "min_opposite_contact_pose_diff": effective_min_pose_diff,
-        "min_contact_balance_abs": args.min_contact_balance_abs,
-        "min_contact_opposition": args.min_contact_opposition,
-        "screen_side_is_diagnostic_only": True,
-        "anatomical_leg_alternation_requires_visual_review": True,
-        "reason": reason,
-    }
 
 
 def inspect_state(
@@ -192,12 +99,15 @@ def inspect_state(
         min_pose_diff=min_opposite_contact_pose_diff,
     )
     centers = [body_center(frame) for frame in frames]
+    complete = bool(frames) and any(alpha_bbox(frame) is not None for frame in frames)
+    if not complete:
+        errors.append("motion analysis requires foreground above alpha threshold 16")
     pairs = len(frames) if entry.get("loop", True) and len(frames) > 2 else max(0, len(frames) - 1)
 
     for index in range(pairs):
         left = frames[index]
         right = frames[(index + 1) % len(frames)]
-        diffs.append(lower_mask_diff(left, right, args.lower_body_start))
+        diffs.append(normalized_pair_diff(left, right, args.lower_body_start))
 
     average_diff = sum(diffs) / len(diffs) if diffs else 0.0
     min_diff = min(diffs) if diffs else 0.0
@@ -241,6 +151,7 @@ def inspect_state(
         "frames": len(frames),
         "loop": bool(entry.get("loop", True)),
         "ok": not errors,
+        "complete": complete,
         "errors": errors,
         "warnings": warnings,
         "semantic_review_required": is_locomotion_state(state, entry),
@@ -252,8 +163,8 @@ def inspect_state(
         if is_locomotion_state(state, entry)
         else [],
         "metrics": {
-            "average_lower_body_diff": round(average_diff, 4),
-            "min_lower_body_diff": round(min_diff, 4),
+            "average_lower_body_diff": round(average_diff, 4) if diffs else None,
+            "min_lower_body_diff": round(min_diff, 4) if diffs else None,
             "support_balance_range": round(support_range, 4),
             "contact_phase_check": phase_check,
             "threshold_policy": threshold_policy,
@@ -273,73 +184,78 @@ def main() -> int:
     parser.add_argument("--run-dir", required=True, type=Path)
     parser.add_argument("--states", default="locomotion", help="'locomotion', 'all', or comma-separated state names")
     parser.add_argument("--report", default="qa/motion-variation-report.json")
-    parser.add_argument("--lower-body-start", type=float, default=0.45)
-    parser.add_argument("--min-average-lower-diff", type=float, default=0.10)
-    parser.add_argument("--min-pair-lower-diff", type=float, default=0.04)
-    parser.add_argument("--min-support-range", type=float, default=0.045)
-    parser.add_argument("--min-contact-balance-abs", type=float, default=0.012)
-    parser.add_argument("--min-contact-opposition", type=float, default=0.035)
-    parser.add_argument("--min-opposite-contact-pose-diff", type=float, default=0.08)
-    parser.add_argument("--min-center-range", type=float, default=0.015)
+    parser.add_argument("--lower-body-start", type=normalized_threshold, default=0.45)
+    parser.add_argument("--min-average-lower-diff", type=normalized_threshold, default=0.10)
+    parser.add_argument("--min-pair-lower-diff", type=normalized_threshold, default=0.04)
+    parser.add_argument("--min-support-range", type=normalized_threshold, default=0.045)
+    parser.add_argument("--min-contact-balance-abs", type=normalized_threshold, default=0.012)
+    parser.add_argument("--min-contact-opposition", type=normalized_threshold, default=0.035)
+    parser.add_argument("--min-opposite-contact-pose-diff", type=normalized_threshold, default=0.08)
+    parser.add_argument("--min-center-range", type=normalized_threshold, default=0.015)
     parser.add_argument(
         "--support-warn-only",
         action="store_true",
-        help="deprecated compatibility flag; screen-space balance is always diagnostic-only",
+        help="report the selected contact-silhouette failure as a warning; other motion failures still apply",
     )
     parser.add_argument("--warn-only", action="store_true")
     args = parser.parse_args()
 
     run_dir = args.run_dir.expanduser().resolve()
-    request = json.loads((run_dir / "sprite-request.json").read_text(encoding="utf-8"))
+    request = load_json(resolve_run_path(run_dir, "sprite-request.json"), {})
+    if not isinstance(request, dict) or not request:
+        raise ValueError("sprite request must be a non-empty JSON object")
+    request_states = request.get("states")
+    if not isinstance(request_states, dict) or any(not isinstance(value, dict) for value in request_states.values()):
+        raise ValueError("request states must be an object of state entries")
     creature_motion = request.get("creature_motion")
     shared_idle = bool(
         isinstance(creature_motion, dict) and creature_motion.get("shared_idle")
     )
-    frames_manifest = json.loads((run_dir / "frames" / "frames-manifest.json").read_text(encoding="utf-8"))
-    if not frames_manifest.get("ok"):
+    frames_manifest = load_json(resolve_run_path(run_dir, "frames/frames-manifest.json"), {})
+    art_direction = load_json(resolve_run_path(run_dir, "references/art-direction.json"), {})
+    if not isinstance(frames_manifest, dict) or not isinstance(art_direction, dict):
+        raise ValueError("frames manifest and art direction must be JSON objects")
+    if frames_manifest.get("ok") is not True:
         raise SystemExit("frames-manifest.json is not ok; fix extraction before motion QA")
-    rows_by_state = {row["state"]: row for row in frames_manifest.get("rows", [])}
-    states = selected_states(request, args.states)
+    rows_by_state = frame_rows_by_state(frames_manifest)
+    report_path = report_output_path(run_dir, args.report, rows_by_state)
 
     results = []
     contract_errors = []
     heuristic_errors = []
     warnings = []
+    try:
+        states = selected_states(request, args.states, art_direction)
+    except ValueError as exc:
+        states = []
+        contract_errors.append(str(exc))
     for state in states:
-        if state not in request.get("states", {}):
+        if state not in request_states:
             contract_errors.append(f"unknown state: {state}")
             continue
         if state not in rows_by_state:
             contract_errors.append(f"missing extracted frames for state: {state}")
             continue
-        entry = request["states"][state]
+        entry = request_states[state]
         row = rows_by_state[state]
-        files = row.get("files", [])
-        expected_frames = entry.get("frames")
-        if not isinstance(files, list):
-            contract_errors.append(f"{state}: frames-manifest files must be a list")
+        try:
+            frames = load_frames(run_dir, row, entry.get("frames"))
+            workflows, _source = workflows_for_state(request, art_direction, state, entry)
+        except (OSError, ValueError) as exc:
+            contract_errors.append(f"{state}: {exc}")
             continue
-        if (
-            isinstance(expected_frames, bool)
-            or not isinstance(expected_frames, int)
-            or expected_frames < 1
-        ):
-            contract_errors.append(f"{state}: request frames must be a positive integer")
-            continue
-        if len(files) != expected_frames:
-            contract_errors.append(
-                f"{state}: expected {expected_frames} frames, found {len(files)}"
-            )
-            continue
+        entry = {**entry, "animation_workflows": workflows}
         result = inspect_state(
             state,
             entry,
-            load_frames(run_dir, row),
+            frames,
             args,
             shared_idle=shared_idle,
             creature_motion=creature_motion if isinstance(creature_motion, dict) else None,
         )
         results.append(result)
+        if not result["complete"]:
+            contract_errors.append(f"{state}: required motion analysis is incomplete")
         heuristic_errors.extend(f"{state}: {error}" for error in result["errors"])
         warnings.extend(f"{state}: {warning}" for warning in result["warnings"])
 
@@ -352,6 +268,7 @@ def main() -> int:
     ok = not contract_errors and (not heuristic_errors or args.warn_only)
     report = {
         "ok": ok,
+        "complete": not contract_errors,
         "engine": "motion-variation-heuristic",
         "run_dir": str(run_dir),
         "states_mode": args.states,
@@ -364,12 +281,16 @@ def main() -> int:
         "warnings": warnings,
         "results": results,
     }
-    report_path = run_dir / args.report
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_text(report_path, json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    atomic_write_text(report_path, json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False) + "\n")
     print(json.dumps({k: v for k, v in report.items() if k != "results"}, ensure_ascii=False, indent=2))
     return 0 if ok else 1
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (OSError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+        print(json.dumps({"ok": False, "status": "operational-error", "errors": [str(exc)]}))
+        raise SystemExit(3)

@@ -30,7 +30,7 @@ existing/generated source sheet
 
 ## Alpha-first segmentation
 
-Transparent sheets should not begin with a general vision model. The alpha channel already encodes the strongest separation signal.
+Start with alpha inspection when the sheet has useful transparency. Connected pixels provide grouping candidates, not proof of semantic item boundaries.
 
 The compiler uses hysteresis:
 
@@ -51,7 +51,7 @@ connectivity = 8
 
 Strong components below `min_strong_pixels` remain pending rather than becoming automatic candidates. Remaining strong components grow through weak-alpha pixels only within the configured halo. Competing growth fronts keep a deterministic tie break and produce a review flag. Every unassigned visible pixel remains in the pending mask; nothing is silently discarded.
 
-This prevents a faint alpha bridge from joining unrelated objects across the sheet while retaining thin semitransparent edges near the accepted object.
+The thresholds and growth limit can separate faint bridges, but they can also split a valid item. Inspect pending pixels and group boundaries before accepting the result.
 
 ### When alpha-first is insufficient
 
@@ -89,7 +89,7 @@ The base ID is derived from native crop dimensions and RGBA bytes:
 item_<first 12 hex characters of content SHA-256>
 ```
 
-Identical duplicate content receives a deterministic occurrence suffix. Atlas coordinates are not part of the ID, so repacking does not break semantic references.
+Identical duplicate content receives a deterministic occurrence suffix (`_02` through `_99`). Exhausting that existing range fails before publication. Atlas coordinates are not part of the ID, so repacking does not break semantic references.
 
 ## Rectangular multi-size cells
 
@@ -141,12 +141,14 @@ Items are ordered by:
 3. cell height descending;
 4. stable item ID.
 
-The packer places consecutive shelves in that visual order, without backfilling earlier gaps. Automatic width (`max_width=0`) is quantum-aligned and derived from total cell area and the widest cell. An explicit width bounds the rows. Height grows as needed. Rotation remains disabled.
+The packer places consecutive shelves in that visual order, without backfilling earlier gaps. Automatic width (`max_width=0`) is quantum-aligned and derived from total cell area and the widest cell. An explicit width bounds the rows. Height grows within the configured page and allocation limits. See [packing limits](local-model-item-workflow.md#packing-and-review-contracts). Rotation remains disabled.
 
 ## CLI
 
+Run these commands from the installed skill directory.
+
 ```powershell
-python SKILLS/spritesheet-expert/scripts/build_deterministic_item_atlas.py `
+python scripts/build_deterministic_item_atlas.py `
   source/items.png `
   --output-dir build/item-atlas `
   --provenance imported `
@@ -185,7 +187,7 @@ The workflow runner leaves a self-contained HTML playground under
 `qa/item-playground/`. Rebuild it for any existing manifest:
 
 ```powershell
-python SKILLS/spritesheet-expert/scripts/build_item_playground.py `
+python scripts/build_item_playground.py `
   --run-dir build/item-atlas `
   --manifest manifest.json
 ```
@@ -193,15 +195,18 @@ python SKILLS/spritesheet-expert/scripts/build_item_playground.py `
 It embeds every atlas page and QA preview, filters items by QA flag and decision,
 shows native crops on neutral backgrounds, and exports an `item-review-v1` document
 for `apply_item_review.py`. It never edits the run.
+Generation rejects atlas pages whose bytes differ from the manifest's SHA-256.
+The embedded pages and receipt use the same captured bytes. This check does not
+replace the independent delivery validator or visual approval.
 
 ## Classification workflow
 
 Prepare jobs:
 
 ```powershell
-python SKILLS/spritesheet-expert/scripts/prepare_item_classification.py `
+python scripts/prepare_item_classification.py `
   --manifest build/item-atlas/manifest.json `
-  --taxonomy SKILLS/spritesheet-expert/references/taxonomies/generic-props-v1.json `
+  --taxonomy references/taxonomies/generic-props-v1.json `
   --out build/item-atlas/inference/jobs.jsonl
 ```
 
@@ -210,15 +215,15 @@ Each job describes exactly one item. A worker must choose values from the closed
 Apply results:
 
 ```powershell
-python SKILLS/spritesheet-expert/scripts/apply_item_classification.py `
+python scripts/apply_item_classification.py `
   --manifest build/item-atlas/manifest.json `
   --results build/item-atlas/inference/results.jsonl `
-  --taxonomy SKILLS/spritesheet-expert/references/taxonomies/generic-props-v1.json `
+  --taxonomy references/taxonomies/generic-props-v1.json `
   --minimum-confidence 0.60 `
   --out build/item-atlas/manifest.classified.json
 ```
 
-Low-confidence predictions are converted to `unknown` and receive `low_classification_confidence`. Values outside the taxonomy fail closed.
+Predictions below the selected confidence threshold become `unknown` and receive `low_classification_confidence`. The example threshold is an operator setting, not measured accuracy. Values outside the taxonomy fail closed.
 
 Write the classified manifest beside its parent. This location keeps all relative item and evidence paths valid.
 
@@ -237,7 +242,7 @@ A review may also override family, canonical type, tags, notes, and a replacemen
 Apply a completed review:
 
 ```powershell
-python SKILLS/spritesheet-expert/scripts/apply_item_review.py `
+python scripts/apply_item_review.py `
   --manifest build/item-atlas/manifest.json `
   --review review-workspace/item-review.json `
   --output-dir build/item-atlas-reviewed

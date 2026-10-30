@@ -102,6 +102,15 @@ def main() -> int:
 
     frames = load_frames(args)
     output = args.output.expanduser().resolve()
+    contact_path = args.contact_output.expanduser().resolve() if args.contact_output else None
+    manifest_path = args.manifest_output.expanduser().resolve() if args.manifest_output else None
+    outputs = [path for path in (output, contact_path, manifest_path) if path is not None]
+    if len(set(outputs)) != len(outputs):
+        raise SystemExit("GIF, contact sheet and manifest outputs must use distinct paths")
+    if set(outputs) & {path for _number, path, _frame in frames}:
+        raise SystemExit("outputs cannot replace source frames")
+    if output.suffix.lower() != ".gif":
+        raise SystemExit("GIF output must use a .gif filename")
     duration_ms = delay_ticks_to_duration_ms(args.delay_ticks)
     save_clean_gif(
         [frame for _number, _path, frame in frames],
@@ -111,7 +120,6 @@ def main() -> int:
         alpha_threshold=args.alpha_threshold,
     )
 
-    contact_path = args.contact_output.expanduser().resolve() if args.contact_output else None
     if contact_path:
         contact_path.parent.mkdir(parents=True, exist_ok=True)
         contact_sheet(frames).save(contact_path)
@@ -129,7 +137,6 @@ def main() -> int:
         "gif_report": gif_report(output),
     }
 
-    manifest_path = args.manifest_output.expanduser().resolve() if args.manifest_output else None
     if manifest_path:
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

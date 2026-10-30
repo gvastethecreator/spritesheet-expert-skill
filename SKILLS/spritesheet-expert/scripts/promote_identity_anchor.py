@@ -24,6 +24,8 @@ from extract_sprite_row_frames import (
     remove_background,
 )
 from runio import atomic_save_image, atomic_write_text
+from spritecore.models import is_state_slug
+from spritecore.paths import RUN_MARKER_FILENAME, PathSafetyError, resolve_run_path
 
 
 def main() -> int:
@@ -39,6 +41,8 @@ def main() -> int:
     args = parser.parse_args()
 
     run_dir = args.run_dir.expanduser().resolve()
+    if not is_state_slug(args.state):
+        raise SystemExit("--state must be a declared state slug")
     request = json.loads((run_dir / "sprite-request.json").read_text(encoding="utf-8"))
     state_entry = request["states"].get(args.state)
     if state_entry is None:
@@ -47,7 +51,30 @@ def main() -> int:
     if args.frame < 0 or args.frame >= frame_count:
         raise SystemExit(f"--frame must be between 0 and {frame_count - 1}")
 
-    raw_path = run_dir / "raw" / f"{args.state}.png"
+    try:
+        raw_path = resolve_run_path(run_dir, f"raw/{args.state}.png")
+        output = args.out or Path("references/identity-anchor.png")
+        if output.is_absolute():
+            output = output.relative_to(run_dir)
+        out_path = resolve_run_path(run_dir, output)
+        sidecar_path = resolve_run_path(run_dir, out_path.relative_to(run_dir).with_suffix(".json"))
+    except (PathSafetyError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
+    for target in (out_path, sidecar_path):
+        relative = target.relative_to(run_dir)
+        if relative.parts[0] in {"raw", "frames", "source"} or relative.as_posix() in {
+            "sprite-request.json", "source-provenance.json", "manifest.json", RUN_MARKER_FILENAME,
+        }:
+            raise SystemExit("identity anchor outputs cannot overwrite run inputs")
+    if out_path == sidecar_path:
+        raise SystemExit("identity anchor image and sidecar need distinct paths")
+    if sidecar_path.exists():
+        try:
+            previous = json.loads(sidecar_path.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError) as exc:
+            raise SystemExit("identity anchor sidecar would replace a non-anchor artifact") from exc
+        if not isinstance(previous, dict) or not {"state", "frame", "source", "output", "method"} <= previous.keys():
+            raise SystemExit("identity anchor sidecar would replace a non-anchor artifact")
     if not raw_path.is_file():
         raise SystemExit(f"missing raw strip: {raw_path}")
 
@@ -110,22 +137,21 @@ def main() -> int:
 
     cell_width, cell_height, safe_margin_x, safe_margin_y = cell_geometry(request["cell"])
     anchor = fit_to_cell(sprites[args.frame], cell_width, cell_height, safe_margin_x, safe_margin_y)
-    out_path = args.out or run_dir / "references" / "identity-anchor.png"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     atomic_save_image(anchor, out_path)
 
     sidecar = {
         "state": args.state,
         "frame": args.frame,
-        "source": str(raw_path.relative_to(run_dir)),
-        "output": str(out_path.relative_to(run_dir)),
+        "source": raw_path.relative_to(run_dir).as_posix(),
+        "output": out_path.relative_to(run_dir).as_posix(),
         "method": method,
         "background_method": background_method,
         "grid_segmentation": grid_segmentation,
         "segmentation": segmentation,
         "cell": request["cell"],
     }
-    atomic_write_text(out_path.with_suffix(".json"), json.dumps(sidecar, ensure_ascii=False, indent=2) + "\n")
+    atomic_write_text(sidecar_path, json.dumps(sidecar, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({"ok": True, "anchor": str(out_path), **sidecar}, ensure_ascii=False, indent=2))
     return 0
 

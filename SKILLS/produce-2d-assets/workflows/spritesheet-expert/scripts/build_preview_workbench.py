@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 from runio import atomic_write_bytes, atomic_write_text
-from spritecore.locks import acquire_run_lock
+from spritecore.locks import RunLockError, acquire_run_lock
 from spritecore.preview_workbench import PreviewWorkbenchError, prepare_workbench
 
 
@@ -29,21 +29,18 @@ def _error(message: str) -> int:
 
 def main() -> int:
     args = _parser().parse_args()
-    try:
-        output_path, report_path, html_bytes, report = prepare_workbench(
-            run_dir=args.run_dir,
-            manifest_name=args.manifest,
-            output_name=args.out,
-            report_name=args.report,
-            force=args.force,
-        )
-    except (OSError, PreviewWorkbenchError, ValueError) as exc:
-        return _error(str(exc))
-
     run_dir = args.run_dir.expanduser().resolve()
     try:
         with acquire_run_lock(run_dir, "build-preview-workbench"):
+            output_path, report_path, html_bytes, report = prepare_workbench(
+                run_dir=run_dir,
+                manifest_name=args.manifest,
+                output_name=args.out,
+                report_name=args.report,
+                force=args.force,
+            )
             output_path.parent.mkdir(parents=True, exist_ok=True)
+            report_path.parent.mkdir(parents=True, exist_ok=True)
             if not args.force and (output_path.exists() or report_path.exists()):
                 raise PreviewWorkbenchError(
                     "output appeared during build; pass --force to replace known outputs"
@@ -53,7 +50,7 @@ def main() -> int:
                 report_path,
                 json.dumps(report, ensure_ascii=False, indent=2) + "\n",
             )
-    except (OSError, PreviewWorkbenchError, ValueError) as exc:
+    except (OSError, RunLockError, PreviewWorkbenchError, ValueError) as exc:
         return _error(str(exc))
 
     print(

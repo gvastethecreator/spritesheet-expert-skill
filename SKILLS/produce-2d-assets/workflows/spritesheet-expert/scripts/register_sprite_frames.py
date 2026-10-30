@@ -11,18 +11,20 @@ overlay. Compose the registered run with `compose_sprite_atlas.py`.
 from __future__ import annotations
 
 import argparse
+from hashlib import sha256
+from io import BytesIO
 import json
-import shutil
 from pathlib import Path
 from statistics import median
 from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
 
-from runio import acquire_run_dir_lock, atomic_save_image, atomic_write_text
+from runio import acquire_run_dir_lock, atomic_save_image, atomic_write_bytes, atomic_write_text
+from check_animation_contracts import frame_rows_by_state
 from extract_sprite_row_frames import stable_feature_metrics, STABLE_FEATURE_KEYS
-from spritecore.paths import resolve_run_path
-from spritecore.item_delivery import digest_file
+from spritecore.paths import create_run_marker, resolve_run_path
+from spritecore.models import is_state_slug
 from spritecore.image_ops import (
     ArtMode,
     ImagePolicyError,
@@ -176,6 +178,7 @@ def register_frame(
         "crop_size": [crop.width, crop.height],
         "paste": [left, top],
         "target_anchor": [target_x, target_y],
+        "actual_anchor": [round(left + local_anchor_x, 3), round(top + local_anchor_y, 3)],
         "output_bbox": list(out_bbox) if out_bbox else None,
         "clipped": clipped,
     }
@@ -184,44 +187,66 @@ def register_frame(
 
 def load_manifest_rows(run_dir: Path) -> list[dict[str, Any]]:
     manifest = json.loads((run_dir / "frames" / "frames-manifest.json").read_text(encoding="utf-8"))
-    if not manifest.get("ok"):
+    if manifest.get("ok") is not True or manifest.get("errors"):
         raise SystemExit("frames-manifest.json is not ok; fix extraction before registration")
-    return list(manifest.get("rows", []))
+    return list(frame_rows_by_state(manifest).values())
 
 
 def copy_optional_sidecars(run_dir: Path, out_dir: Path) -> None:
+    copies: dict[str, bytes] = {}
+
+    def capture(path: Path) -> bytes:
+        relative = path.relative_to(run_dir).as_posix()
+        if relative in copies:
+            return copies[relative]
+        content = resolve_run_path(run_dir, relative).read_bytes()
+        copies[relative] = content
+        return content
+
+    def capture_tree(root: Path) -> None:
+        pending = [root]
+        while pending:
+            path = pending.pop()
+            if path.is_symlink() or path.is_junction():
+                raise ValueError(f"reference directory links are not portable: {path}")
+            if path.is_dir():
+                pending.extend(path.iterdir())
+            else:
+                capture(path)
+
     for name in ("unpack-source.json",):
         src = run_dir / name
         if src.is_file():
-            shutil.copyfile(src, out_dir / name)
-    # Registration moves pixels but keeps the cutout, so the matte reviews stay valid evidence.
+            capture(src)
+    # Preserve source matte panels as history, not approval of resized/registered output.
     for review in (run_dir / "qa").glob("*background-matte-review.png"):
-        (out_dir / "qa").mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(review, out_dir / "qa" / review.name)
+        capture(review)
     references = run_dir / "references"
-    if references.is_dir() and not (out_dir / "references").exists():
-        shutil.copytree(references, out_dir / "references")
+    if references.is_dir():
+        capture_tree(references)
     provenance = run_dir / "source-provenance.json"
     if provenance.is_file():
         from spritecore.contracts import load_provenance
-        document = load_provenance(provenance).to_dict()
+        document = load_provenance(json.loads(capture(provenance))).to_dict()
         for entry in document["accepted_sources"]:
             source = resolve_run_path(run_dir, entry["path"])
-            if digest_file(source) != entry["sha256"]:
+            if sha256(capture(source)).hexdigest() != entry["sha256"]:
                 raise SystemExit("accepted source hash changed before registration")
-            destination = resolve_run_path(out_dir, entry["path"])
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, destination)
             if entry.get("upstream_report"):
                 report_source = resolve_run_path(run_dir, entry["upstream_report"])
-                report_target = resolve_run_path(out_dir, entry["upstream_report"])
-                report_target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(report_source, report_target)
+                capture(report_source)
                 for state in entry["states"]:
                     selector = resolve_run_path(run_dir, f"qa/{state}-video-frame-selector")
                     if selector.is_dir():
-                        shutil.copytree(selector, out_dir / f"qa/{state}-video-frame-selector", dirs_exist_ok=True)
-        shutil.copy2(provenance, out_dir / provenance.name)
+                        capture_tree(selector)
+    destinations = {name: resolve_run_path(out_dir, name) for name in copies}
+    for name in copies:
+        if name == "sprite-request.json" or name.startswith("frames/") or name in {"qa/registration-report.json", "qa/registration-overlay.png"}:
+            raise ValueError(f"source sidecar overlaps a registration output: {name}")
+    for name, content in copies.items():
+        destination = destinations[name]
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_bytes(destination, content)
 
 
 def make_overlay(out_dir: Path, rows: list[dict[str, Any]], cell: tuple[int, int], args: argparse.Namespace) -> Path:
@@ -232,7 +257,7 @@ def make_overlay(out_dir: Path, rows: list[dict[str, Any]], cell: tuple[int, int
     max_frames = max((row["frames"] for row in rows), default=1)
     width = label_w + max_frames * (thumb + pad) + pad
     height = 58 + len(rows) * (thumb + 42)
-    overlay = Image.new("RGBA", (width, height), (10, 10, 10, 255))
+    overlay = Image.new("RGBA", (width, height), (17, 17, 17, 255))
     draw = ImageDraw.Draw(overlay, "RGBA")
     try:
         font = ImageFont.truetype("arial.ttf", 14)
@@ -266,8 +291,8 @@ def make_overlay(out_dir: Path, rows: list[dict[str, Any]], cell: tuple[int, int
                 thumb_frame = opened.convert("RGBA").resize((thumb, thumb), Image.Resampling.NEAREST)
             overlay.alpha_composite(thumb_frame, (x, y))
             draw.rectangle((x, y, x + thumb, y + thumb), outline=(245, 158, 11, 220))
-            draw.line((x + target_x, y, x + target_x, y + thumb), fill=(80, 190, 255, 210), width=1)
-            draw.line((x, y + target_y, x + thumb, y + target_y), fill=(80, 190, 255, 210), width=1)
+            draw.line((x + target_x, y, x + target_x, y + thumb), fill=(190, 190, 190, 210), width=1)
+            draw.line((x, y + target_y, x + thumb, y + target_y), fill=(190, 190, 190, 210), width=1)
             draw.text((x, y + thumb + 4), f"f{index + 1}", fill=(220, 220, 220, 255), font=small)
 
     qa_dir = out_dir / "qa"
@@ -309,10 +334,10 @@ def main() -> int:
         parser.error("--target-x is a fraction of the cell width (0..1); pixel values are not accepted")
     run_dir = args.run_dir.expanduser().resolve()
     out_dir = args.out_dir.expanduser().resolve() if args.out_dir else run_dir.with_name(f"{run_dir.name}-registered")
-    if out_dir.exists() and any(out_dir.iterdir()) and not args.force:
-        raise SystemExit(f"out-dir not empty: {out_dir} (use --force)")
-    out_dir.mkdir(parents=True, exist_ok=True)
-    acquire_run_dir_lock(out_dir, "register_sprite_frames")
+    if out_dir == run_dir or out_dir.is_relative_to(run_dir) or run_dir.is_relative_to(out_dir):
+        raise SystemExit("registration needs a separate output run; source and output directories must not overlap")
+    if not 0 <= args.alpha_threshold <= 255 or args.overlay_cell < 1:
+        parser.error("alpha threshold must be from 0 to 255 and overlay cell must be positive")
 
     request = json.loads((run_dir / "sprite-request.json").read_text(encoding="utf-8"))
     resize_policy = resize_policy_from_sampling_policy(request.get("sampling_policy"))
@@ -323,6 +348,8 @@ def main() -> int:
     )
     if cell[0] <= 0 or cell[1] <= 0:
         raise SystemExit("output cell must be positive; pass --cell WxH")
+    if args.target_bottom is not None and not 0 <= args.target_bottom <= cell[1]:
+        parser.error("--target-bottom must be within the output cell")
     request_margin = int(input_cell.get("safe_margin", 0))
     args.safe_margin_x = (
         int(input_cell.get("safe_margin_x", request_margin))
@@ -346,6 +373,34 @@ def main() -> int:
     states = [state for state in request.get("states", {}) if selected is None or state in selected]
     if not states:
         raise SystemExit("no matching states to register")
+    if selected and selected - set(states):
+        raise SystemExit(f"unknown states: {sorted(selected - set(states))}")
+    input_frames = {}
+    for state in states:
+        if not is_state_slug(state):
+            raise SystemExit(f"invalid state id: {state!r}")
+        entry = request["states"][state]
+        row = rows_by_state.get(state)
+        if not isinstance(row, dict) or ("ok" in row and row["ok"] is not True):
+            raise SystemExit(f"missing or failed extracted row: {state}")
+        files = row.get("files")
+        expected = entry.get("frames")
+        if type(expected) is not int or expected < 1 or not isinstance(files, list) or len(files) != expected:
+            raise SystemExit(f"{state}: extracted files must match the requested frame count")
+        if "frames" in row and (type(row["frames"]) is not int or row["frames"] != expected):
+            raise SystemExit(f"{state}: manifest frame count does not match its files")
+        input_frames[state] = []
+        for relative in files:
+            if not isinstance(relative, str):
+                raise SystemExit(f"{state}: frame paths must be relative strings")
+            payload = resolve_run_path(run_dir, relative).read_bytes()
+            with Image.open(BytesIO(payload)) as image:
+                input_frames[state].append(image.convert("RGBA"))
+
+    if out_dir.exists() and any(out_dir.iterdir()) and not args.force:
+        raise SystemExit(f"out-dir not empty: {out_dir} (use --force)")
+    create_run_marker(out_dir, run_id=out_dir.name)
+    acquire_run_dir_lock(out_dir, "register_sprite_frames")
 
     copy_optional_sidecars(run_dir, out_dir)
     output_request = dict(request)
@@ -375,27 +430,17 @@ def main() -> int:
     warnings: list[str] = []
     allow_full_cell = str(request.get("asset_kind", "sprite")) in {"tileset", "texture"}
     for state in states:
-        if state not in rows_by_state:
-            errors.append(f"missing extracted row for state: {state}")
-            continue
         row = rows_by_state[state]
         state_dir = frames_root / state
         state_dir.mkdir(parents=True, exist_ok=True)
         files: list[str] = []
         frame_reports: list[dict[str, Any]] = []
-        for index, rel in enumerate(row.get("files", [])):
-            frame_path = run_dir / rel
-            if not frame_path.is_file():
-                errors.append(f"missing frame: {frame_path}")
+        for index, image in enumerate(input_frames[state]):
+            try:
+                registered, metrics, frame_warnings = register_frame(image, cell, args, resize_policy)
+            except ImagePolicyError as exc:
+                errors.append(f"{state} frame {index}: {exc}")
                 continue
-            with Image.open(frame_path) as opened:
-                try:
-                    registered, metrics, frame_warnings = register_frame(
-                        opened.convert("RGBA"), cell, args, resize_policy
-                    )
-                except ImagePolicyError as exc:
-                    errors.append(f"{state} frame {index}: {exc}")
-                    continue
             used_pixels = alpha_nonzero_count(registered)
             metrics["nontransparent_pixels"] = used_pixels
             validation = validate_frame(
@@ -449,8 +494,12 @@ def main() -> int:
             for key, value in reference_metrics.items() if record.get(key)}} for index, record in enumerate(row["frame_records"])]
     sprite_registration = {"reference_state": reference_row.get("state"), "reference_basis": "registered-row-median", **reference_metrics}
     if args.anchor != "center":
-        # Bottom anchors place every frame on this line, so alignment checks can verify it.
-        sprite_registration["baseline_y"] = args.target_bottom if args.target_bottom is not None else cell[1] - args.safe_margin_y
+        sprite_registration["requested_baseline_y"] = args.target_bottom if args.target_bottom is not None else cell[1] - args.safe_margin_y
+        bottoms = {frame["output_bbox"][3] for row in report_rows for frame in row["frames_report"] if frame.get("output_bbox")}
+        if len(bottoms) == 1:
+            sprite_registration["baseline_y"] = next(iter(bottoms))
+        elif bottoms:
+            warnings.append("registered frame bottoms differ; no shared measured baseline is declared")
     manifest = {
         "ok": not errors,
         "engine": "component-row",
@@ -485,4 +534,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+        raise SystemExit(f"cannot register frames: {exc}") from exc

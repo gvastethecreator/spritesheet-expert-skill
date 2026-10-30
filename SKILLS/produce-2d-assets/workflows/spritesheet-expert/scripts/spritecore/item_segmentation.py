@@ -15,6 +15,8 @@ from typing import Any
 
 from PIL import Image
 
+from .paths import PathSafetyError, resolve_run_path
+
 from .item_sheet import (
     PackingConfig,
     write_item_atlas_run,
@@ -77,13 +79,10 @@ def read_json_records(path: Path) -> list[dict[str, Any]]:
 
 
 def portable_artifact(root: Path, relative: str) -> Path:
-    if not relative or "\\" in relative or relative.startswith("/") or ".." in Path(relative).parts:
-        raise ItemSegmentationError(f"unsafe artifact path: {relative}")
-    candidate = (root / relative).resolve()
     try:
-        candidate.relative_to(root.resolve())
-    except ValueError as exc:
-        raise ItemSegmentationError(f"artifact escapes run root: {relative}") from exc
+        candidate = resolve_run_path(root, relative)
+    except PathSafetyError as exc:
+        raise ItemSegmentationError(f"unsafe artifact path: {relative}: {exc}") from exc
     if not candidate.is_file():
         raise ItemSegmentationError(f"artifact does not exist: {relative}")
     return candidate

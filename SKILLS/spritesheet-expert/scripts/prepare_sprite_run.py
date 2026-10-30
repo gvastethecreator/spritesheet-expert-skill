@@ -11,16 +11,17 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import math
 import re
-import shutil
 from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageDraw
 
-from runio import acquire_run_dir_lock
+from runio import acquire_run_dir_lock, atomic_write_bytes
+from extract_sprite_row_frames import raw_layout_grid
 from spritecore.contracts import ContractError, normalize_contract
 from spritecore.models import is_state_slug
 from spritecore.paths import (
@@ -485,10 +486,10 @@ ART_PROFILES: dict[str, dict[str, Any]] = {
         "sources": ["09-melee-attacks", "52-idle-fighting-stance", "53-punches-and-kicks", "56-top-down-character-attack-animation"],
         "rules": [
             "Start from stance and biomechanics: weapon, guard, center of mass, support foot, hips, and shoulders must explain the attack.",
-            "For attack rows, use clear phases: load or anticipation when needed, smear with the strike direction, hit/contact, follow-through, recovery, and overshoot.",
+            "For attack rows, use clear poses: load or anticipation when needed, strike/contact, follow-through, recovery, and overshoot.",
             "For attack rows, the hit/contact frame should be the clearest silhouette and may hold slightly longer; the visual range should match the intended hitbox.",
-            "For attack rows, frame count encodes risk/reward: jab-like actions stay snappy, heavy weapons get more anticipation/follow-through/recovery, and smears stay brief.",
-            "For attack rows, do not put smears counter to the main motion or hide a weak body pose behind detached effects.",
+            "Match timing to gameplay: jab-like actions can stay snappy; committed heavy attacks may need longer anticipation or recovery. Keep the requested frame count.",
+            "Do not hide a weak body pose behind detached effects or motion marks.",
         ],
     },
     "pixel-items-ui": {
@@ -592,7 +593,7 @@ ANIMATION_WORKFLOWS: dict[str, dict[str, Any]] = {
             "Plan the cycle around contact, down, pass, and swing. Contact/pass are protected key poses when reducing frame count.",
             "Arms and legs move cross-laterally: opposite arm and leg share momentum, with torso/hip/shoulder counter-motion supporting the gait.",
             "Use a triangle-like head/body bob with accents, not a perfect sine wave; run is usually a leaned, faster, higher-energy walk.",
-            "Frame economy matters: 8 frames is fluid, 6 is a strong default, 4 keeps core energy, and 3 can work only with strong stride/pass keys.",
+            "Preserve contact and passing keys within the requested frame count; judge readability and timing at playback speed.",
             "Check the loop at playback speed for anchor jitter, foot sliding, same-leg repetition, and noisy pixel flicker.",
         ],
     },
@@ -602,7 +603,7 @@ ANIMATION_WORKFLOWS: dict[str, dict[str, Any]] = {
         "rules": [
             "Choose direction strategy first: 4 directions, 5 flippable orientations, or 8 unique orientations when asymmetry/handedness requires it.",
             "Build front/up/side first and diagonals last; rotation playback should reveal thickness, limb length, and projection errors.",
-            "Use a 6-frame variable bounce when possible: down, down, then a faster rise into the pass/tall frame rather than uniform bobbing.",
+            "Vary bounce timing when it supports the gait; preserve the requested frames and avoid uniform bobbing that hides contacts.",
             "Animate one anatomy/equipment layer at a time. Base motion should work before adding cape, hair, weapon, shield, or loadout details.",
             "For asymmetric gear, do not flip blindly; preserve the weapon/shield/marking side across directions.",
         ],
@@ -611,8 +612,8 @@ ANIMATION_WORKFLOWS: dict[str, dict[str, Any]] = {
         "label": "Combat quick-strike workflow",
         "sources": ["09-melee-attacks", "53-punches-and-kicks"],
         "rules": [
-            "Use immediate gameplay feedback: jab/front-kick style actions should have little or no windup, then smear, hit/contact, follow-through, recover, and overshoot.",
-            "The smear follows the main motion direction and is brief; do not smear counter to the strike or hide a weak body pose behind effects.",
+            "For quick gameplay feedback, use little or no windup, then a clear strike/contact, follow-through, recovery, and overshoot.",
+            "Show strike direction through body and weapon poses; do not add motion marks or effects to hide weak mechanics.",
             "The hit/contact frame is the clearest silhouette and may hold slightly longer for impact.",
             "Recover back toward guard quickly; overshoot can shift the idle/stance back by about one pixel to create snap.",
         ],
@@ -622,8 +623,8 @@ ANIMATION_WORKFLOWS: dict[str, dict[str, Any]] = {
         "sources": ["09-melee-attacks", "53-punches-and-kicks"],
         "rules": [
             "Use load/pull or anticipation only when the move is meant to trade responsiveness for power, range, or commitment.",
-            "Sequence the action as load or pull, fast smear, hit/contact, follow-through, recover, and overshoot/settle.",
-            "Heavy weapons and finishers can hold anticipation or follow-through longer, but smears stay few and fast.",
+            "Sequence the action as load or pull, strike/contact, follow-through, recovery, and overshoot/settle.",
+            "Heavy weapons and finishers can hold anticipation or follow-through longer when gameplay calls for that commitment.",
             "Weapon, hips, shoulders, support foot, and line of action must all explain the same force direction.",
         ],
     },
@@ -631,9 +632,9 @@ ANIMATION_WORKFLOWS: dict[str, dict[str, Any]] = {
         "label": "Top-down weapon attack workflow",
         "sources": ["56-top-down-character-attack-animation", "58-top-down-character-animation-part-3"],
         "rules": [
-            "Use the five-phase attack structure: anticipation, forward smear, optional rebound on ground/contact weapons, follow-through, and recover.",
-            "Six frames is a practical default; timing encodes weight, with quick swords, more committed spears, and slower hammer-like weapons.",
-            "Smear only with the forward strike, not during anticipation or recovery, so the attack direction remains readable.",
+            "Stage anticipation, strike/contact, optional rebound, follow-through, and recovery within the requested frames.",
+            "Match holds and playback timing to the weapon and gameplay; frame count alone does not establish weight or quality.",
+            "Keep attack direction readable through the weapon and body silhouette, without motion marks.",
             "Preserve handedness across all directions. A weapon should not jump hands because a row was flipped.",
             "Balance the visual hitbox across directions so no angle looks unfairly longer, shorter, or weaker unless gameplay asks for it.",
         ],
@@ -674,7 +675,7 @@ ANIMATION_WORKFLOWS: dict[str, dict[str, Any]] = {
         "rules": [
             "Stage effects as buildup, peak, decay, and fade/cooling; avoid linear growth where every frame has equal energy.",
             "Keep emitter/contact anchor stable so the effect reads as attached to the source or impact point.",
-            "Use alpha-friendly opacity and require neutral-background removal to preserve intentional translucent color.",
+            "Review translucent colors after background removal; retain native alpha when available because matte removal can change soft edges.",
             "Review at playback speed for pop, focus stealing, and end-to-start discontinuity.",
         ],
     },
@@ -890,11 +891,11 @@ def color_distance(left: tuple[int, int, int], right: tuple[int, int, int]) -> f
     return math.sqrt(sum((left[index] - right[index]) ** 2 for index in range(3)))
 
 
-def sampled_reference_pixels(path: Path | None) -> list[tuple[int, int, int]]:
-    if path is None or not path.is_file():
+def sampled_reference_pixels(path: Path | None, payload: bytes | None = None) -> list[tuple[int, int, int]]:
+    if payload is None and (path is None or not path.is_file()):
         return []
     pixels: list[tuple[int, int, int]] = []
-    with Image.open(path) as opened:
+    with Image.open(io.BytesIO(payload) if payload is not None else path) as opened:
         image = opened.convert("RGBA")
         image.thumbnail((128, 128), Image.Resampling.LANCZOS)
         data = image.tobytes()
@@ -913,6 +914,7 @@ def choose_generation_background(
     requested: str,
     *,
     fallback: str = "#808080",
+    reference_bytes: bytes | None = None,
 ) -> dict[str, Any]:
     if requested.lower() != "auto":
         rgb = parse_hex_color(requested)
@@ -937,7 +939,7 @@ def choose_generation_background(
             "selection": "manual",
         }
 
-    pixels = sampled_reference_pixels(reference)
+    pixels = sampled_reference_pixels(reference, reference_bytes)
     if not pixels:
         rgb = parse_hex_color(fallback)
         fallback_hex = rgb_to_hex(rgb)
@@ -1005,6 +1007,8 @@ def normalize_background_removal(
     model = args.background_model or str(source.get("model", default_model))
     revision = args.background_revision or source.get("revision")
     if method == "lucida":
+        if not revision and model != DEFAULT_LUCIDA_MODEL:
+            raise SystemExit("a custom Lucida model requires its own immutable background_revision")
         revision = str(revision or DEFAULT_LUCIDA_REVISION)
         if not re.fullmatch(r"[0-9a-f]{40}", revision):
             raise SystemExit(
@@ -1059,14 +1063,14 @@ def normalize_background_removal(
         "alpha_matting": alpha_matting,
         "post_rembg_chroma_cleanup": False,
         "source_family": "transparent" if method == "alpha" else "neutral",
+        "alpha_mode": alpha_mode,
+        "hard_alpha_threshold": hard_alpha_threshold,
     }
     if method == "lucida":
         normalized.update(
             {
                 "revision": revision,
                 "input_size": input_size,
-                "alpha_mode": alpha_mode,
-                "hard_alpha_threshold": hard_alpha_threshold,
             }
         )
     return normalized
@@ -1106,16 +1110,19 @@ def normalize_states(raw: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
             )
         if not isinstance(entry, dict):
             raise SystemExit(f"state {state!r} must be an object")
-        frames = int(entry.get("frames", 0))
-        if frames <= 0:
-            raise SystemExit(f"state {state!r} must have positive frames")
-        fps = int(entry.get("fps", DEFAULT_STATES.get(state, {}).get("fps", 6)))
-        if fps <= 0:
-            raise SystemExit(f"state {state!r} must have positive fps")
+        frames = entry.get("frames", 0)
+        if type(frames) is not int or frames <= 0:
+            raise SystemExit(f"state {state!r} must have positive integer frames")
+        fps = entry.get("fps", DEFAULT_STATES.get(state, {}).get("fps", 6))
+        if type(fps) is not int or fps <= 0:
+            raise SystemExit(f"state {state!r} must have positive integer fps")
+        loop = entry.get("loop", True)
+        if type(loop) is not bool:
+            raise SystemExit(f"state {state!r} loop must be boolean")
         normalized[state] = {
             "frames": frames,
             "fps": fps,
-            "loop": bool(entry.get("loop", True)),
+            "loop": loop,
             "action": str(entry.get("action", DEFAULT_STATES.get(state, {}).get("action", state))),
         }
         if "durations_ms" in entry:
@@ -1126,17 +1133,19 @@ def normalize_states(raw: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
             normalized[state]["pose_geometry"] = entry["pose_geometry"]
         if "raw_layout" in entry:
             normalized[state]["raw_layout"] = entry["raw_layout"]
-        for key in ("vfx", "label", "labels", "asset_labels", "asset_names"):
+        for key in ("vfx", "video_prompt", "label", "labels", "asset_labels", "asset_names"):
             if key in entry:
                 normalized[state][key] = entry[key]
     return normalized
 
 
 def normalize_cell(raw_cell: dict[str, Any], size: int, safe_margin: int) -> dict[str, Any]:
-    width = int(raw_cell.get("width", raw_cell.get("cell_width", raw_cell.get("size", size))))
-    height = int(raw_cell.get("height", raw_cell.get("cell_height", raw_cell.get("size", size))))
-    margin_x = int(raw_cell.get("safe_margin_x", raw_cell.get("safe_margin", safe_margin)))
-    margin_y = int(raw_cell.get("safe_margin_y", raw_cell.get("safe_margin", safe_margin)))
+    width = raw_cell.get("width", raw_cell.get("cell_width", raw_cell.get("size", size)))
+    height = raw_cell.get("height", raw_cell.get("cell_height", raw_cell.get("size", size)))
+    margin_x = raw_cell.get("safe_margin_x", raw_cell.get("safe_margin", safe_margin))
+    margin_y = raw_cell.get("safe_margin_y", raw_cell.get("safe_margin", safe_margin))
+    if any(type(value) is not int for value in (width, height, margin_x, margin_y)):
+        raise SystemExit("cell dimensions and margins must be integers")
     if width <= 0 or height <= 0:
         raise SystemExit("cell width and height must be positive")
     if margin_x < 0 or margin_y < 0 or margin_x * 2 >= width or margin_y * 2 >= height:
@@ -1180,7 +1189,8 @@ def is_locomotion_state(state: str, entry: dict[str, Any] | None = None) -> bool
 def state_tokens(state: str, entry: dict[str, Any] | None = None) -> set[str]:
     text = state
     if entry:
-        text = f"{text} {entry.get('action', '')}"
+        action = re.split(r"\b(?:never|do not|don't|without)\b", str(entry.get("action", "")), flags=re.IGNORECASE)[0]
+        text = f"{text} {action}"
     return {token for token in re.split(r"[^a-z0-9]+", text.lower()) if token}
 
 
@@ -1801,7 +1811,7 @@ def inferred_pose_geometry(state: str, entry: dict[str, Any]) -> dict[str, Any] 
             "min_height_vs_reference": 0.45,
             "baseline": "collapse",
         }
-    if tokens & {"jump", "jumping", "leap", "leaping", "airborne"}:
+    if tokens & {"jump", "jumping", "leap", "leaping"} or "airborne" in state_tokens(state):
         return {
             "kind": "jump",
             "grounded": False,
@@ -1902,16 +1912,6 @@ def compact_grid_dimensions(frames: int) -> tuple[int, int]:
     columns = max(1, math.ceil(math.sqrt(frames)))
     rows = math.ceil(frames / columns)
     return columns, rows
-
-
-def raw_layout_grid(entry: dict[str, Any], frames: int) -> tuple[int, int]:
-    raw = entry.get("raw_layout")
-    if isinstance(raw, dict):
-        columns = int(raw.get("columns", raw.get("cols", frames)))
-        rows = int(raw.get("rows", 1))
-        if columns > 0 and rows > 0:
-            return columns, rows
-    return frames, 1
 
 
 def is_body_animation_row(request: dict[str, Any], state: str, entry: dict[str, Any], asset_kind: str) -> bool:
@@ -2105,7 +2105,7 @@ def draw_isometric_slot_guide(
         (cx, cy + tile_h / 2),
         (cx - tile_w / 2, cy),
     ]
-    draw.polygon(points, outline="#10b981")
+    draw.polygon(points, outline="#dddddd")
     draw.line((cx - 6, py, cx + 6, py), fill="#ef4444", width=1)
     draw.line((cx, py - 6, cx, py + 6), fill="#ef4444", width=1)
     draw.line((slot_left + safe_margin_x, py, slot_left + cell_width - safe_margin_x, py), fill="#f97316", width=1)
@@ -2128,7 +2128,7 @@ def draw_guide(
     columns, rows = raw_layout_grid(entry or {}, frames)
     width = columns * cell_width
     height = rows * cell_height
-    image = Image.new("RGB", (width, height), "#f6f6f6")
+    image = Image.new("RGB", (width, height), "#111111")
     draw = ImageDraw.Draw(image)
     for index in range(frames):
         column = index % columns
@@ -2137,15 +2137,15 @@ def draw_guide(
         top = row * cell_height
         right = left + cell_width - 1
         bottom = top + cell_height - 1
-        draw.rectangle((left, top, right, bottom), outline="#333333", width=3)
+        draw.rectangle((left, top, right, bottom), outline="#888888", width=3)
         safe = (
             left + safe_margin_x,
             top + safe_margin_y,
             right - safe_margin_x,
             bottom - safe_margin_y,
         )
-        draw.rectangle(safe, outline="#2f80ed", width=2)
-        draw.line((left + cell_width // 2, top + safe_margin_y, left + cell_width // 2, bottom + 1 - safe_margin_y), fill="#b8c8e8", width=1)
+        draw.rectangle(safe, outline="#dddddd", width=2)
+        draw.line((left + cell_width // 2, top + safe_margin_y, left + cell_width // 2, bottom + 1 - safe_margin_y), fill="#777777", width=1)
         if pose_geometry:
             draw_pose_geometry(draw, left, top, index, frames, cell_width, cell_height, safe_margin_x, safe_margin_y, pose_geometry)
         if isometric_guides:
@@ -2291,22 +2291,13 @@ def choose_motion_template(
     return candidates[0] if candidates else None
 
 
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def materialize_motion_reference_template(
+def prepare_motion_reference_template(
     template_root: Path,
     catalog: dict[str, Any],
-    run_dir: Path,
     state: str,
     entry: dict[str, Any],
     contract: dict[str, Any],
-) -> dict[str, Any] | None:
+) -> tuple[Image.Image, dict[str, Any], dict[str, Any]] | None:
     selected = choose_motion_template(catalog, state, entry)
     if selected is None:
         return None
@@ -2315,19 +2306,24 @@ def materialize_motion_reference_template(
     if template_root.resolve() not in source.parents or not source.is_file():
         return None
     expected_sha = str(template.get("sha256", ""))
-    actual_sha = sha256_file(source)
+    source_bytes = source.read_bytes()
+    actual_sha = hashlib.sha256(source_bytes).hexdigest()
     if not expected_sha or actual_sha != expected_sha:
         raise SystemExit(f"motion template hash mismatch for {template_id}: {source}")
 
     source_grid = template.get("grid", {})
-    source_columns = int(source_grid.get("columns", 4))
-    source_rows = int(source_grid.get("rows", 2))
+    if not isinstance(source_grid, dict):
+        raise SystemExit(f"motion template grid must be an object for {template_id}")
+    source_columns = source_grid.get("columns", 4)
+    source_rows = source_grid.get("rows", 2)
+    if type(source_columns) is not int or type(source_rows) is not int or source_columns < 1 or source_rows < 1 or source_columns * source_rows < 8:
+        raise SystemExit(f"motion template grid must contain all eight source frames for {template_id}")
     phase_indices = RUN_PHASE_INDICES_BY_FRAME_COUNT.get(int(entry["frames"]))
     if not phase_indices:
         return None
     target_columns = int(contract["layout"]["columns"])
     target_rows = int(contract["layout"]["rows"])
-    with Image.open(source) as opened:
+    with Image.open(io.BytesIO(source_bytes)) as opened:
         master = opened.convert("RGB")
         if master.width % source_columns or master.height % source_rows:
             raise SystemExit(f"motion template grid is not evenly divisible for {template_id}: {master.size}")
@@ -2351,9 +2347,6 @@ def materialize_motion_reference_template(
             target_row = output_index // target_columns
             output.paste(frame, (target_column * cell_width, target_row * cell_height))
 
-    output_path = run_dir / str(contract["expected_output"])
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output.save(output_path)
     provenance = {
         "version": 1,
         "kind": "motion-reference-provenance",
@@ -2365,10 +2358,7 @@ def materialize_motion_reference_template(
         "derived_frames": phase_indices,
         "mirrored": mirror,
     }
-    output_path.with_suffix(".provenance.json").write_text(
-        json.dumps(provenance, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
-    return {"template_id": template_id, "mirrored": mirror, "derived_frames": phase_indices}
+    return output, provenance, {"template_id": template_id, "mirrored": mirror, "derived_frames": phase_indices}
 
 
 def row_prompt(request: dict[str, Any], state: str, entry: dict[str, Any]) -> str:
@@ -2472,7 +2462,7 @@ def row_prompt(request: dict[str, Any], state: str, entry: dict[str, Any]) -> st
             f"- A separate Image Gen motion reference is required at `references/motion-references/{state}.png`. Use it for body mechanics, foot contact, anatomical side, counter-swing, and phase timing only.\n"
             "- The color-coded neutral mannequin is not an identity or style reference. Transfer its pose logic to the accepted character anchor; never copy mannequin colors, featureless anatomy, or rendering style into the sprite.\n"
             "- The deterministic layout guide is geometry-only. It does not provide anatomy or motion quality and must never substitute for the Image Gen motion reference.\n"
-            "- Make the sequence loop as one continuous locomotion cycle, not eight unrelated poses.\n"
+            "- Make the sequence loop as one continuous locomotion cycle.\n"
             "- The Image Gen motion reference and any approved multi-pose contact sheet override a single running/walking pose anchor for leg phase. Do not repeat one anchor's forward leg across every frame.\n"
             "- Opposite contact frames must visibly trade which leg reaches forward; passing frames must not look like duplicate contact frames.\n"
             "- If the character has tiny legs, exaggerated feet, or non-human limbs, still alternate contact side, body weight, and swing timing. Never keep both feet leaning the same way for every frame.\n"
@@ -2490,7 +2480,7 @@ def row_prompt(request: dict[str, Any], state: str, entry: dict[str, Any]) -> st
     elif is_sprite and is_temporal and frames == 4:
         frame_economy_text = (
             "\n\nCompact animation requirements:\n"
-            "- Use four distinct key poses. Keep timing readable and loopable, but do not pretend this has the smoothness of a 6-8 frame cycle.\n"
+            "- Use the four requested key poses. Review timing and continuity at playback speed.\n"
             "- For locomotion, make contact and passing poses visibly alternate."
         )
     pose_geometry_text = ""
@@ -2544,7 +2534,7 @@ def row_prompt(request: dict[str, Any], state: str, entry: dict[str, Any]) -> st
         isometric_asset_text = (
             "\n\nIsometric slot requirements:\n"
             f"- Treat each invisible slot as runtime cell {runtime_cell}; the visual floor/contact footprint is {footprint}, not the full rectangle.\n"
-            "- The layout guide shows a green 2:1 diamond and red floor/contact pivot. Use it only to align the tile or object; do not draw the guide.\n"
+            "- The layout guide shows a gray 2:1 diamond and red floor/contact pivot. Use it only to align the tile or object; do not draw the guide.\n"
             "- Place terrain so the bottom point of the diamond sits on the pivot. Place props/buildings so their ground-contact point sits on the same pivot.\n"
             "- Do not center by the rectangular image cell, do not make a full scene, and do not let shadows or silhouettes cross slot borders.\n"
             "- Leave enough flat neutral-background padding above and around tall geometry while keeping the contact point stable."
@@ -2801,6 +2791,10 @@ def main() -> int:
     base_source = args.base_image.expanduser().resolve() if args.base_image else None
     if base_source is not None and not base_source.is_file():
         raise SystemExit(f"missing base image: {base_source}")
+    base_bytes = base_source.read_bytes() if base_source is not None else None
+    if base_bytes is not None:
+        with Image.open(io.BytesIO(base_bytes)) as base_image:
+            base_image.load()
 
     base_dest_name = f"base-source{base_source.suffix.lower() or '.png'}" if base_source else None
     if args.chroma_key is not None:
@@ -2847,6 +2841,7 @@ def main() -> int:
             if background_removal["method"] == "lucida"
             else "#808080"
         ),
+        reference_bytes=base_bytes,
     )
     grid_segmentation = normalize_grid_segmentation(
         raw_request,
@@ -2906,6 +2901,13 @@ def main() -> int:
     except ContractError as exc:
         raise SystemExit(str(exc)) from exc
     validate_isometric_catalog_contract(request)
+    prepared_templates = {}
+    for state, entry in states.items():
+        contract = motion_reference_contract(request, state, entry)
+        if contract is not None:
+            prepared_templates[state] = prepare_motion_reference_template(
+                motion_template_root, motion_template_catalog, state, entry, contract
+            )
 
     try:
         create_run_marker(out_dir, run_id=args.character_id)
@@ -2918,7 +2920,7 @@ def main() -> int:
         raise SystemExit(str(exc)) from exc
 
     if base_source is not None and base_dest_name is not None:
-        shutil.copy2(base_source, out_dir / base_dest_name)
+        atomic_write_bytes(out_dir / base_dest_name, base_bytes)
 
     references = out_dir / "references" / "layout-guides"
     reference_root = out_dir / "references"
@@ -2962,14 +2964,15 @@ def main() -> int:
         reference_prompt = motion_reference_prompt(request, state, entry)
         if reference_contract is not None and reference_prompt is not None:
             (motion_reference_prompts / f"{state}.txt").write_text(reference_prompt.rstrip() + "\n", encoding="utf-8")
-            materialized = materialize_motion_reference_template(
-                motion_template_root,
-                motion_template_catalog,
-                out_dir,
-                state,
-                entry,
-                reference_contract,
-            )
+            prepared = prepared_templates.get(state)
+            materialized = None
+            if prepared is not None:
+                image, provenance, materialized = prepared
+                output_path = out_dir / reference_contract["expected_output"]
+                image.save(output_path)
+                output_path.with_suffix(".provenance.json").write_text(
+                    json.dumps(provenance, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+                )
             reference_contract["source"] = (
                 {"mode": "approved-template", **materialized}
                 if materialized is not None

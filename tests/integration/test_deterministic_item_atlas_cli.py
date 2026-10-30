@@ -371,6 +371,9 @@ def test_workflow_cancel_resume_and_changed_evidence(tmp_path: Path) -> None:
     assert finished.returncode == 0, finished.stdout + finished.stderr
     state = json.loads((output / "workflow.json").read_text())
     assert state["processingComplete"] and state["manifest"]
+    registry = json.loads((SCRIPT_ROOT.parent / "studio/workflows.json").read_text(encoding="utf-8"))
+    workflow = next(entry for entry in registry["workflows"] if entry["id"] == "run-local-item-workflow")
+    assert all((output / relative).is_file() for relative in workflow["expectedArtifacts"])
     original = (output / state["manifest"]).read_bytes()
     resumed = _run(*command)
     assert resumed.returncode == 0

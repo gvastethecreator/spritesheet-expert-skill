@@ -9,6 +9,7 @@ import sys
 from PIL import Image
 import pytest
 
+import convert_pixel_art as converter
 from convert_pixel_art import accent_preserving_palette, convert, validate
 
 SCRIPTS = Path(__file__).resolve().parents[2] / 'SKILLS/spritesheet-expert/scripts'
@@ -103,6 +104,37 @@ def test_conversion_rejects_output_reuse_and_pixel_drift(tmp_path):
     image.save(out / 'frames/0000.png')
     with pytest.raises(ValueError, match='Pixel mismatch'):
         validate(out)
+    copied_request = out / 'request.json'
+    invalid = json.loads(copied_request.read_text())
+    invalid['source'] = 123
+    copied_request.write_text(json.dumps(invalid))
+    with pytest.raises(ValueError, match='Invalid source snapshot path'):
+        validate(out)
+    copied_request.write_text('[]')
+    with pytest.raises(ValueError, match='must be a JSON object'):
+        validate(out)
+
+
+def test_conversion_uses_one_source_snapshot_when_the_live_file_changes(tmp_path, monkeypatch):
+    path, _, _ = fixture(tmp_path)
+    source = tmp_path / 'source.png'
+    original = source.read_bytes()
+    compile_original = converter.compile_conversion
+
+    def change_after_decode(request, source_path, **kwargs):
+        result = compile_original(request, source_path, **kwargs)
+        if Path(source_path) == source:
+            Image.new('RGBA', (16, 8), (10, 20, 30, 255)).save(source)
+        return result
+
+    monkeypatch.setattr(converter, 'compile_conversion', change_after_decode)
+    output = tmp_path / 'converted'
+    assert convert(path, output) == {'valid': True, 'frames': 2, 'status': 'review-required'}
+    assert source.read_bytes() != original
+    assert (output / 'source-input.png').read_bytes() == original
+    manifest = json.loads((output / 'conversion.json').read_text())
+    assert manifest['source_sha256'] == hashlib.sha256(original).hexdigest()
+    assert validate(output)['valid'] is True
 
 
 def test_palette_keeps_a_small_saturated_accent_that_median_cut_drops():

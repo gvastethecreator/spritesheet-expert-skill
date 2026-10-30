@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Iterable
 
 from PIL import Image, ImageSequence
+from runio import atomic_save_image
 
 
 def delay_ticks_to_duration_ms(delay_ticks: int) -> int:
@@ -29,7 +30,8 @@ def _prepare_transparent_frame(frame: Image.Image, alpha_threshold: int) -> Imag
     # Keep invisible RGB out of the adaptive palette; otherwise transparent
     # source pixels can steal palette entries and produce colored fringe.
     rgb = Image.new("RGB", rgba.size, (0, 0, 0))
-    rgb.paste(rgba.convert("RGB"), mask=alpha)
+    visible = alpha.point(lambda value: 255 if value > alpha_threshold else 0)
+    rgb.paste(rgba.convert("RGB"), mask=visible)
 
     paletted = rgb.convert("P", palette=Image.ADAPTIVE, colors=255)
     palette = paletted.getpalette() or []
@@ -59,12 +61,14 @@ def save_clean_gif(
     """
     if duration_ms <= 0:
         raise ValueError("duration_ms must be positive")
+    if output_path.suffix.lower() != ".gif":
+        raise ValueError("GIF output must use a .gif filename")
     prepared = [_prepare_transparent_frame(frame, alpha_threshold) for frame in frames]
     if not prepared:
         raise ValueError("at least one frame is required")
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    prepared[0].save(
-        output_path,
+    atomic_save_image(
+        prepared[0], output_path,
         save_all=True,
         append_images=prepared[1:],
         duration=duration_ms,
@@ -77,15 +81,17 @@ def save_clean_gif(
 def gif_report(path: Path) -> dict[str, object]:
     """Return frame count, delay list, loop, transparency, and disposal values."""
     with Image.open(path) as image:
-        frames = list(ImageSequence.Iterator(image))
-        delays = [int(frame.info.get("duration", 0) / 10) for frame in frames]
-        alpha_extrema = [frame.convert("RGBA").getchannel("A").getextrema() for frame in frames]
-        disposal = [getattr(frame, "disposal_method", None) for frame in frames]
+        loop = image.info.get("loop", 0)
+        delays, alpha_extrema, disposal = [], [], []
+        for frame in ImageSequence.Iterator(image):
+            delays.append(int(frame.info.get("duration", 0) / 10))
+            alpha_extrema.append(frame.convert("RGBA").getchannel("A").getextrema())
+            disposal.append(getattr(frame, "disposal_method", None))
         return {
             "path": str(path),
-            "frames": len(frames),
+            "frames": len(delays),
             "delay_ticks": delays,
-            "loop": image.info.get("loop", 0),
+            "loop": loop,
             "transparent": all(min_alpha < 255 for min_alpha, _max_alpha in alpha_extrema),
             "disposal": disposal,
         }

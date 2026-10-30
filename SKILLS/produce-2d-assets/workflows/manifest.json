@@ -266,7 +266,7 @@
     {
       "source": "SKILLS/spritesheet-expert/assets/workflow-workbenches/README.md",
       "path": "spritesheet-expert/assets/workflow-workbenches/README.md",
-      "sha256": "bb40e610d6b97ca068ba98e5023da1d139683efd82d6304c99f911beced20815"
+      "sha256": "79917061e5b31e58f7e9e28aad0a13b57800b5c2d207948f025afa190ec74ea0"
     },
     {
       "source": "SKILLS/spritesheet-expert/assets/workflow-workbenches/catalog.json",
@@ -336,77 +336,77 @@
     {
       "source": "SKILLS/spritesheet-expert/references/agent-first-studio.md",
       "path": "spritesheet-expert/references/agent-first-studio.md",
-      "sha256": "24d86cfec35d068a9e7908e34fddedaeaadb48f1cc13c7bb1c43d30eebf275d9"
+      "sha256": "54391ba26dc0aa23f73e25dd613c8f9017e1de27c84ffef98b4e68081edd5c16"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/atlas-reference.md",
       "path": "spritesheet-expert/references/atlas-reference.md",
-      "sha256": "b15e5390c36ce11024586dace7893df3af7e052de84b9cc219631ab5552d6068"
+      "sha256": "b057cb44231d8c48ea08d521ea3c1c8c2c407d39b01f68b01a636b867973c0f5"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/creature-animation.md",
       "path": "spritesheet-expert/references/creature-animation.md",
-      "sha256": "f38dc631102fa4aae7e8e1830748452fab5f6afcfdb653984abd906b71beb50c"
+      "sha256": "bd7af45d3a19156759979def6caf72a5f059d71cfdf82635b1df6c9ad73dc5f5"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/deterministic-item-atlas.md",
       "path": "spritesheet-expert/references/deterministic-item-atlas.md",
-      "sha256": "0a1288b65e8a151d737274f3ec3f275d1af90c409f39d22e452ed31423736ea7"
+      "sha256": "fa4b4b9caab753d93c20c757826e8d0cdf1c8b8afeee2f6d96408ee27a6ee12a"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/grok-video-animation.md",
       "path": "spritesheet-expert/references/grok-video-animation.md",
-      "sha256": "21614edf82aa91cc4cac83ac57f3dc6e1afa8ed406882a3312ca6ecb650c2a2c"
+      "sha256": "bbdefc6a12cae8ca7015017e82313e7d82a98679fb88172677019fa2e8394cb1"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/isometric-tilesets.md",
       "path": "spritesheet-expert/references/isometric-tilesets.md",
-      "sha256": "54a5ec3f0040e7fef898430cb3a2bf7c02e80aca61556c2a7085a678e0dc4bd5"
+      "sha256": "f65950a3a7ee5811e00333531a9450f94c2f5812365cd7729346d3e6dccc1625"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/local-model-item-workflow.md",
       "path": "spritesheet-expert/references/local-model-item-workflow.md",
-      "sha256": "5d8f19fa831e86a4a64c2dce91feb920e5378c67f425cc8e1dff162e6da08aea"
+      "sha256": "9d2ed5dd966809482e49236b881c794f7583416172a00381121efb9b487bd822"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/lucida-adaptive-workflow.md",
       "path": "spritesheet-expert/references/lucida-adaptive-workflow.md",
-      "sha256": "16e5980c79c377a61bcadc77c283f6cdd404a81ae546de3f51734ca93cf86d50"
+      "sha256": "7c04e7f133ba2637b7542edd713493beceaa73c8cacdfd0f97c217a966723b09"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/pixel-animation-workflows.md",
       "path": "spritesheet-expert/references/pixel-animation-workflows.md",
-      "sha256": "d03dc4b8de8e2e7a67efe974f90b42a3b7115a6a7596dc9f650d1e1a28ba1120"
+      "sha256": "9e13d6bb6e07bb04c6d8d45696a124ca817bc801ab01f8979ec120d1f8ac6151"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/pixel-art-conversion.md",
       "path": "spritesheet-expert/references/pixel-art-conversion.md",
-      "sha256": "69d87922fdd85e9cb0d8a4b7c1841d6c9d998194991ede245cbb2c15d41bdcdb"
+      "sha256": "cfd377f8ff09f23571f0b45a1d48d0baebb2950672a3181ad0d57ec3e685a366"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/pixel-art-direction.md",
       "path": "spritesheet-expert/references/pixel-art-direction.md",
-      "sha256": "43a0df0ebe7247e6652ee918bc11e31871b71d9a7f028f2a508498e89f1cf73e"
+      "sha256": "889fac6fab044dad7bfd664f074c5e22f33f18b99f29525fedc1e1c8995d4297"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/presets.json",
       "path": "spritesheet-expert/references/presets.json",
-      "sha256": "1ff9574da42c75e9510848ffbf284a2e3ad90b56d52bed5901a4f4aaa9c87caf"
+      "sha256": "1562d09234c98a49d31f9c7d05c64f14aa81900a19f09bf319c39ba0b996ca3a"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/production-workflow.md",
       "path": "spritesheet-expert/references/production-workflow.md",
-      "sha256": "3aa09bb2da46586be81fcc1b1e6c40b6cf29b01887e67bda391b4cfaae123181"
+      "sha256": "b7f8c5211255e2a74f8e40c6f399e8ab22c39d257e938a271027d96d0d3c8e61"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/professional-sprite-animation.md",
       "path": "spritesheet-expert/references/professional-sprite-animation.md",
-      "sha256": "2793afdd9dbec82c3895d849f95c9936e6571c9af3a30e1ee878256a94c10fa9"
+      "sha256": "2d2e2ebc5a7d4e667936bb242a9fbdbcec2dc74f2a0147e163ecbe64cf6a0449"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/qa-and-outputs.md",
       "path": "spritesheet-expert/references/qa-and-outputs.md",
-      "sha256": "c70c2e89176de8c635e787f0147325eb6f4b2fe9d251ee32c60c283c46caf37a"
+      "sha256": "552b3fadeb5f5165fae9b4c129d376c16cacac66d8bc2421ca60cba78cbbb37f"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/schemas/deterministic-item-sheet-v1.schema.json",
@@ -416,7 +416,7 @@
     {
       "source": "SKILLS/spritesheet-expert/references/schemas/grok-video-animation-job-v1.schema.json",
       "path": "spritesheet-expert/references/schemas/grok-video-animation-job-v1.schema.json",
-      "sha256": "0959c5522000f0a696fcea683a24781e9488a9dce7fc895c70fb4ca318ede1e2"
+      "sha256": "16e9b2fba4b8b6921344da1b742dd75b98864e7ffd5d24ee76c0def2a1b58304"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/schemas/item-classification-v1.schema.json",
@@ -446,7 +446,7 @@
     {
       "source": "SKILLS/spritesheet-expert/references/schemas/screenshot-evidence-v1.schema.json",
       "path": "spritesheet-expert/references/schemas/screenshot-evidence-v1.schema.json",
-      "sha256": "a1b6655e5738c09f8a0824968e039a35aac53bd209de632da51e5a0c0d2b9c51"
+      "sha256": "ac9d27e88c2ff8582a397dbf2929b17ebcf6e81728ffc8f1ea5c65cc4d5ce656"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/schemas/source-intake-v1.schema.json",
@@ -501,7 +501,7 @@
     {
       "source": "SKILLS/spritesheet-expert/references/video-animation-workflow.md",
       "path": "spritesheet-expert/references/video-animation-workflow.md",
-      "sha256": "1579ef210a2cb02e553cc809c8ffe257b06149e5b7b606cb0997ddf1dcad1519"
+      "sha256": "0e6fe7f19d42b19381f58dbe6e012e1223c5ae27c28211f684438a7852431df3"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/workflow-lanes.json",
@@ -511,7 +511,7 @@
     {
       "source": "SKILLS/spritesheet-expert/references/workflows.md",
       "path": "spritesheet-expert/references/workflows.md",
-      "sha256": "dcda9dd9280cf9424f335ea117a02a5ca7ad9ace7228fabc5e1ea0a993fb7e6c"
+      "sha256": "533624f265ea5f9df55e5e53b1e2d7a5583a04fe3ea0e4f75e0afe41b9c3c6ad"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/apply_item_classification.py",
@@ -541,47 +541,47 @@
     {
       "source": "SKILLS/spritesheet-expert/scripts/build_motion_sequence_review.py",
       "path": "spritesheet-expert/scripts/build_motion_sequence_review.py",
-      "sha256": "e9ad5069f3d5b7a5d9dd13d85782c05211c7fca87fe49fec31ca5be0e210367e"
+      "sha256": "cde127fb928f89abc67cbe777c38f666e4e01eced851013715ec0a430754f592"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/build_preview_workbench.py",
       "path": "spritesheet-expert/scripts/build_preview_workbench.py",
-      "sha256": "5a4cb6c8ba1590ca61dd8653059ea6f13674ae9b33faa855ebafde06c5145d33"
+      "sha256": "3f2eb7457037de38d6c4a59619c23d1d864a170df18cf80474bb5408fbe91751"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/build_video_frame_selector.py",
       "path": "spritesheet-expert/scripts/build_video_frame_selector.py",
-      "sha256": "f6e15d5c169eaee5a3456197bebc8822d469bc9db03c31095ffe4f19ea6ed642"
+      "sha256": "c362438e30c998fdf0d0dbee2b965a73c573fee61d5e8aa18f50b09364b8ee12"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/check_animation_batch_completion.py",
       "path": "spritesheet-expert/scripts/check_animation_batch_completion.py",
-      "sha256": "0f75bc9d8369e9bbd6950fe82215dc6c4c0ad59d563cd95c5044c82d2a8d5abd"
+      "sha256": "bd0518e23600a9e97f857d2a058f805eb22b9067400cf2f8d11b9d0584cc1503"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/check_animation_contracts.py",
       "path": "spritesheet-expert/scripts/check_animation_contracts.py",
-      "sha256": "f46108a7272703cf6feffc4231d2dfa0e160e5838f2fa7a6a29f984b4cb7d5b2"
+      "sha256": "b40b3a4ac4312893a2ae7326f6dd4a235e5a2bfac9462ff91e4268573e838ec9"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/check_asset_slots.py",
       "path": "spritesheet-expert/scripts/check_asset_slots.py",
-      "sha256": "a6917da1780041b73739c26494270b677a6e41c1576102c6ae35d9bc911481eb"
+      "sha256": "7ecc6cd9253467a74f0655cf9489e57194897d997540efece856aa7740b95420"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/check_chroma_key_safety.py",
       "path": "spritesheet-expert/scripts/check_chroma_key_safety.py",
-      "sha256": "43632cae20307f75b63389a7ec46b821f4f574504f216e3b9582279dabaa9d22"
+      "sha256": "468146e5d548e7a9f57ad20d38ce7bf203f47386e7806b6bef61428cba3d5ead"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/check_colored_limb_motion.py",
       "path": "spritesheet-expert/scripts/check_colored_limb_motion.py",
-      "sha256": "946ff4a51616998043999e2d0f1d5b019cb945fc52d9020c9f4826945d0d5ffa"
+      "sha256": "e85f6ea0bba7eab66c95ebeac5baefa2d9605414c10aba80006ea8e8a03e18d0"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/check_frame_alignment.py",
       "path": "spritesheet-expert/scripts/check_frame_alignment.py",
-      "sha256": "a4fdaa08e1b74e6b709a5ac00bb8bfe5119262ebd1c7507d5db0447128d9e801"
+      "sha256": "eb77ed86db436a383ff3be573c7f62ea315401d713bae3fa70f528315973cdea"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/check_generation_provenance.py",
@@ -591,12 +591,12 @@
     {
       "source": "SKILLS/spritesheet-expert/scripts/check_identity_consistency.py",
       "path": "spritesheet-expert/scripts/check_identity_consistency.py",
-      "sha256": "07c19b9a298295a1dac2d34f0b487757159700fd95d98039e85995ded27eefe5"
+      "sha256": "b9ba68b4fe8205aa45b2a3278bc1b27d9f1cf046eb42ab4a4620ba12b9da4b7e"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/check_isometric_tiles.py",
       "path": "spritesheet-expert/scripts/check_isometric_tiles.py",
-      "sha256": "3024b1e2523fdb5e499d2778da01f91751642798e3f1c2deeeeb1feae60bc8c9"
+      "sha256": "808c9e6c9d73dcb8d112fee5ea9e1318fd65d62783ac41eb5f905907ee2b58e3"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/check_item_model_runtime.py",
@@ -616,7 +616,7 @@
     {
       "source": "SKILLS/spritesheet-expert/scripts/check_motion_variation.py",
       "path": "spritesheet-expert/scripts/check_motion_variation.py",
-      "sha256": "44ead902b0550af6fc21a2b0ec593fb25989c597a1ebee1ef8ef86b607ff7e25"
+      "sha256": "c03f88cdd1814cfdc7190fa6e325afd80335ea4800c0e04ba86aee17b768676b"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/check_python_env.py",
@@ -641,37 +641,37 @@
     {
       "source": "SKILLS/spritesheet-expert/scripts/compose_selected_cycle.py",
       "path": "spritesheet-expert/scripts/compose_selected_cycle.py",
-      "sha256": "2632823f76a792b93a52ed2e9770a084fd0fc67abcb95aff7f27b53a8e114aac"
+      "sha256": "e9dba9de6d8da51800fc861b8bddbc657a2ef85324b5d23a2c61db4ad3b2b754"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/compose_sprite_atlas.py",
       "path": "spritesheet-expert/scripts/compose_sprite_atlas.py",
-      "sha256": "499d17339863b13bc01bf8e13757cc87cc23b4e2e2bd0d5ac0c38e61b1267b64"
+      "sha256": "2b26977bf755c2dd4b5ec6d561ac4b5ad3a9561ef3dfbcd47dc9dd926d361df3"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/compose_sprite_gif.py",
       "path": "spritesheet-expert/scripts/compose_sprite_gif.py",
-      "sha256": "f57c41a23d003dcb8debff3d5db290ef6c8c46a6dcc204779ced105260a0fa1f"
+      "sha256": "040e31ac609c02c18ed7ad92b54d7e2c425ca07096b601bd184ccf763cd9e3f4"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/convert_pixel_art.py",
       "path": "spritesheet-expert/scripts/convert_pixel_art.py",
-      "sha256": "28a3c61f46ba277ddd490445a99e72ef56fc7de4bffb95be4c0fba16fb38e776"
+      "sha256": "9158ee67f81dce907b10232a51f991c35795c7f8b048e23cc89b7380bf3c9238"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/curation.py",
       "path": "spritesheet-expert/scripts/curation.py",
-      "sha256": "5b8c9422a573369ef538baf46e25d50c6a1ded4118f7c3b09a3a0804c4f5c845"
+      "sha256": "f82fa7f09a5a5390a5d4f2636412fa2206b5158546f366d4b08c993fa818e932"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/curator/curator.css",
       "path": "spritesheet-expert/scripts/curator/curator.css",
-      "sha256": "b732328d57d8ea7cf000a7c9423913089a17d92cdfa4911574df34be9ec354a2"
+      "sha256": "1b817cd7b09204a765ae2fd577965b600d4ca64560d1900984d5cb50f30e7ad4"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/curator/curator.js",
       "path": "spritesheet-expert/scripts/curator/curator.js",
-      "sha256": "253d67de2481003085310db3144d58028b90202808d210cc299731a638f90b81"
+      "sha256": "4031ffba0db353ffc27111d2f23ecf59dbbb7e3d1102da326d9c4cc8d68b8e62"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/curator/index.html",
@@ -686,7 +686,7 @@
     {
       "source": "SKILLS/spritesheet-expert/scripts/export_curated_pngs.py",
       "path": "spritesheet-expert/scripts/export_curated_pngs.py",
-      "sha256": "261995be0cfadadda812b333e8797018cc4864ffd873cc8799edb1476a115a99"
+      "sha256": "3e973785085f7cce077b866274f7d75ac68b8f6bc1f24e23c26db837cb8d6534"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/export_item_atlas.py",
@@ -696,27 +696,27 @@
     {
       "source": "SKILLS/spritesheet-expert/scripts/extract_sprite_row_frames.py",
       "path": "spritesheet-expert/scripts/extract_sprite_row_frames.py",
-      "sha256": "e07840817431b2717699cebb684ef25e41ac83782ce491c6d60fd1edeff7a1bd"
+      "sha256": "ea2823a345ad44a5247d20ae0d13ee1b15cca3f93837e9a999a1cd53fb4e69d0"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/gif_utils.py",
       "path": "spritesheet-expert/scripts/gif_utils.py",
-      "sha256": "4b36d639eec0fb287cf3a4f286ed1096bc6f25c22bc917211967aafc0a2f6492"
+      "sha256": "35d41061bfb50005e6874f288b7ef2e20335ceb7f8d599d7249a7c19299a565f"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/ingest_grok_video_animation.py",
       "path": "spritesheet-expert/scripts/ingest_grok_video_animation.py",
-      "sha256": "9446a38688d6f10581d365ee624c64320f5a10be6f4c73610afeb04a577d8848"
+      "sha256": "1c82a2b8b1d852728110d30622e2d724c96872b8df5fb12ac646b81583c71de5"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/ingest_source.py",
       "path": "spritesheet-expert/scripts/ingest_source.py",
-      "sha256": "fd38a9d41622e0e17a41fa733afd8c7144f57a908929d00d6f3c1a24f352f02e"
+      "sha256": "a0a308af1cd55b9ce693b090c1ec2015d0964bc189583ec5ae1a384ae1ca18a8"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/ingest_video_animation.py",
       "path": "spritesheet-expert/scripts/ingest_video_animation.py",
-      "sha256": "0a645bf691f0ae300cdaa6771ad5bfa3f5c419323e54f4a50f08f60919b758e9"
+      "sha256": "8e84f3f802b3210254fe4ce3b1344db9e73f9aaeaa1211d90618d8daa6f40d29"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/manage_studio_workspace.py",
@@ -731,17 +731,17 @@
     {
       "source": "SKILLS/spritesheet-expert/scripts/motion-reference-review/index.html",
       "path": "spritesheet-expert/scripts/motion-reference-review/index.html",
-      "sha256": "5ecfba91ec13052001f0e998a451b84fe0a53036752472651634580fd30c9c89"
+      "sha256": "8566229214c0eafe5afea34bef42b3547dadcdc53a60eccf0143c7678178806d"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/prepare_grok_video_animation.py",
       "path": "spritesheet-expert/scripts/prepare_grok_video_animation.py",
-      "sha256": "1b91aca6363f341d50d20b3d318c9cae8a032c8b7c89d4309be45888d551cdbc"
+      "sha256": "73195bc0b67652f2a3d9c595076788caa88a6de12520438e85d9b66376ddb493"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/prepare_item_classification.py",
       "path": "spritesheet-expert/scripts/prepare_item_classification.py",
-      "sha256": "aff33d72c061b4bccc793c6c368d094c7801d4a3b53b5fa11c4e6efcad291cda"
+      "sha256": "e86b4ac03530a2b89c25451765a7c04d149a8030c431b93568447035d4d46fc8"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/prepare_item_models.py",
@@ -761,52 +761,52 @@
     {
       "source": "SKILLS/spritesheet-expert/scripts/prepare_sprite_run.py",
       "path": "spritesheet-expert/scripts/prepare_sprite_run.py",
-      "sha256": "c7ca13e9e474f6268f34285034fb116bab2f0c39017e010ad247bffc39398882"
+      "sha256": "94259a22f915d99d2e1ba425c13a4eee707d405a06fb231741bcedbe6ce75a9b"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/preset_to_request.py",
       "path": "spritesheet-expert/scripts/preset_to_request.py",
-      "sha256": "c3c5acd257f5b44b290aef126f0ecd6e10a41df0c31e274d17a187ee86fa5fe1"
+      "sha256": "3cdee45ea5873582e2924cde6b69c9998bf0f6e63203a0156a7ac2f9312733c7"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/preview_animation.py",
       "path": "spritesheet-expert/scripts/preview_animation.py",
-      "sha256": "d3f1b31d2c89240357a4cb231ab92c890656347257e4260458a2fc08c9b54d62"
+      "sha256": "09ed13573ced663d5ad0cfb85b35a8e0b1867b89bff40a9419a0f7cb2e2de505"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/promote_identity_anchor.py",
       "path": "spritesheet-expert/scripts/promote_identity_anchor.py",
-      "sha256": "65f1910e3d37f1fdc3e29e494ce3865e4bd6fed402f64339068584d2131a7a99"
+      "sha256": "1716d4692f80a44bfe90ffbf764518cf5e7e0070058b3a3642ca4a98be26fe7b"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/record_identity_proxy_review.py",
       "path": "spritesheet-expert/scripts/record_identity_proxy_review.py",
-      "sha256": "d0be6307066e450c669eac4f7ad3965501ccabdbbd13164130b0fe7d557675d1"
+      "sha256": "304ebca926e5edf529ad84a3b41ce4d5d0593e414df9af87b09cdc3306fe5aac"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/record_visual_review.py",
       "path": "spritesheet-expert/scripts/record_visual_review.py",
-      "sha256": "7f51f9f7f84108efd2dcf3f9b63edbb67c6b4940d02c5a866cf9401e86f2221a"
+      "sha256": "91df74c16ff53f22ccfead35bc9e38b815a32b8cfdd00db9cf75b55f32139361"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/register_sprite_frames.py",
       "path": "spritesheet-expert/scripts/register_sprite_frames.py",
-      "sha256": "c7fe5e000ccea65b45da3feacd5149639c6b3990c4cab66ede217b9ea172647a"
+      "sha256": "a06f0137d5f2e1536629b32f423edfcdc7c9c724d30b6bc5fbf5afc28683c0ee"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/rekey_chroma_background.py",
       "path": "spritesheet-expert/scripts/rekey_chroma_background.py",
-      "sha256": "de5fb8350509254fee3a65d7a5c7374fe31dcdd7955072a7365cd8ac8bb230f4"
+      "sha256": "e2f71a30d2e377f3f2a72d2af12c0ed55e862ed567fd0d15bb6de80c69864e24"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/render_runtime_preview.py",
       "path": "spritesheet-expert/scripts/render_runtime_preview.py",
-      "sha256": "80d1ddbaa46cfb7ce3a5e85fbda857cab13b202d4e11ea9ce2a102c8b8a9f98a"
+      "sha256": "98a6696c615b9afe024b05c2664d67dc8b79d516d0ef303f22d85cf5e940b9e9"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/repair_repeat_edges.py",
       "path": "spritesheet-expert/scripts/repair_repeat_edges.py",
-      "sha256": "61533575ef42aac166150a201744d4fcdb3e0f71bc4285e907e22889788be80a"
+      "sha256": "d7d6d42c5eddc7233a3edc69f6837f8fb23821be56e7874154826bf42df982c5"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/requirements-background.txt",
@@ -836,7 +836,7 @@
     {
       "source": "SKILLS/spritesheet-expert/scripts/runio.py",
       "path": "spritesheet-expert/scripts/runio.py",
-      "sha256": "d4f757501546581ced3bdab1ef456eff1603369498bcea10b46f7a739f2565f4"
+      "sha256": "0870f964e9badee76d0d77c32d72d6886fdcec7e2f45d78418fb059f383ee5a7"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/segmentation.py",
@@ -846,27 +846,27 @@
     {
       "source": "SKILLS/spritesheet-expert/scripts/serve_curation.py",
       "path": "spritesheet-expert/scripts/serve_curation.py",
-      "sha256": "fcbebe2710896a7478638f8f70ed757265a1e38674f0b4ed3998b92dd9baa341"
+      "sha256": "623f311feeef421bb02d9a35115afc0a1d85949a02d43d83d2845a03de5a4412"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/serve_item_studio.py",
       "path": "spritesheet-expert/scripts/serve_item_studio.py",
-      "sha256": "3ade6ea5da09220525fa5b0a6185a886d7e8d72fefafc5fa9fa0f04337c56c43"
+      "sha256": "0e79aaa546567408fe5831ab0badfda473bda5d6378dcf537b456a174f9734ed"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/setup_item_model_runtime.py",
       "path": "spritesheet-expert/scripts/setup_item_model_runtime.py",
-      "sha256": "f01335fdb4eaaebaaf15637ac4bd0cadcbb758f2641cf9da835b89ec831f1eea"
+      "sha256": "da9ff00aa3deebc2142f5a3930dedc228954f5908d8457a7f08241cac6a0b425"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/smoke_pipeline.py",
       "path": "spritesheet-expert/scripts/smoke_pipeline.py",
-      "sha256": "220db0cc3505cf975f8d3221e6a6ad1ea6ac88d1959deef88897df99dfe518e0"
+      "sha256": "3aa55ae3a4cc1ed5f23f033443e9a919c0b09198345d369b22e1e5cafe855c40"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/smoke_presets_from_reference.py",
       "path": "spritesheet-expert/scripts/smoke_presets_from_reference.py",
-      "sha256": "525a9acf617e66ef10a03b6badddfe7b767859e20c2cb90efac869b548d1de00"
+      "sha256": "5bd30f14e5977402cde9875b428af7df9aa02925a75f3a57dbaa7f1e42dda229"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/__init__.py",
@@ -876,7 +876,7 @@
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/contracts.py",
       "path": "spritesheet-expert/scripts/spritecore/contracts.py",
-      "sha256": "7489b4e96a5a864b380e195d84625a014ac157ad8082811845a637cfb6603e31"
+      "sha256": "2a5c412cc044a48d2213c9c5b77637caf4c53a765dfc50212874d6e76a673e8b"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/image_ops.py",
@@ -896,7 +896,7 @@
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/item_playground.py",
       "path": "spritesheet-expert/scripts/spritecore/item_playground.py",
-      "sha256": "1a10942b24d9f7285a2e604bfdb90cc97f320d8f1f0bf3c6dfab0b99de9643d3"
+      "sha256": "a4678fbca48386dbbe71230370b5dcc9a1e9e2d54d123d2049cf8c9e0b6a584b"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/item_review.py",
@@ -906,12 +906,12 @@
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/item_segmentation.py",
       "path": "spritesheet-expert/scripts/spritecore/item_segmentation.py",
-      "sha256": "99948e41a1d29125963b45645b9906fcc60dada708621667f70989e3b4e034ad"
+      "sha256": "060cd10e1aa1b4da5c8ac0628c7aa553a2f687ec4d46210183d9c158e7657e43"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/item_sheet.py",
       "path": "spritesheet-expert/scripts/spritecore/item_sheet.py",
-      "sha256": "441e8e9128a1c3167b0f68ea74176751d69932f15b0e860c7470aa396bff803c"
+      "sha256": "c61fa59f32ebe8bc0393cf42a3abce5acec6be1e3f4a269e4c14ace04f9dcdff"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/locks.py",
@@ -926,12 +926,12 @@
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/models.py",
       "path": "spritesheet-expert/scripts/spritecore/models.py",
-      "sha256": "1f7abe8d1903a0b8c9422e4daf606b0097ab5ecf833837f8b6b7d18cbb8015c7"
+      "sha256": "681108a095b04c17e9e416844cf13a673cb2ff483560fcac380536ecaa018b38"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/orchestrator.py",
       "path": "spritesheet-expert/scripts/spritecore/orchestrator.py",
-      "sha256": "f7db9cfa311ad2a6e38d8f45fdef4c222f12ebffb6e21528648932f2b29f2afd"
+      "sha256": "331cdadc4e6441856183b6f4577b5bc0b904f577239f881d823f691f6c641555"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/paths.py",
@@ -946,12 +946,12 @@
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/preview_workbench.py",
       "path": "spritesheet-expert/scripts/spritecore/preview_workbench.py",
-      "sha256": "1899655010d3f8aad7fe53176f1e8d7c8c9f9da33fe87bec4770a74dcd220519"
+      "sha256": "aeb51c07942affe0e0050a5d483db2d07c7409fad94ee8c1c9f44c463d7b60b9"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/provenance.py",
       "path": "spritesheet-expert/scripts/spritecore/provenance.py",
-      "sha256": "cb8580c7fb1eaf92ce0227d15b1cc1bae4c2d7008da252258ab8e59452b9d274"
+      "sha256": "07d03185960e1f03cecc00b6c73e60038f9a021365d5903a4b03dc66af70e2c2"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/publication.py",
@@ -961,7 +961,7 @@
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/reporting.py",
       "path": "spritesheet-expert/scripts/spritecore/reporting.py",
-      "sha256": "bdb9633ff86012fb36e44c7f4f61f6d44bbea09ea95dc47ee9bc93aa42ed3fe3"
+      "sha256": "45d4c0fedcbc796447735b41892327402c2031b6908ae0136c557fc6d163e6cc"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/results.py",
@@ -971,22 +971,22 @@
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/runtime_preview.py",
       "path": "spritesheet-expert/scripts/spritecore/runtime_preview.py",
-      "sha256": "8a4e1dd867577198dbc8d30c9e327d616ec28c871e364d8dc84f66ad2436c5d3"
+      "sha256": "c1c4d77a00e7362902f3539b0499f9412a1d4506e3c3f98cad59840b829ee28d"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/source_intake.py",
       "path": "spritesheet-expert/scripts/spritecore/source_intake.py",
-      "sha256": "8c2b770c5a90aba4800bcb629997a7bb806cd438116e9c8397f06f1b3fae1a88"
+      "sha256": "6aa4b16c25aef79889d2088ad02d1b93866b8cc0f82eef57f4cd849005851b00"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/tool_theme.py",
       "path": "spritesheet-expert/scripts/spritecore/tool_theme.py",
-      "sha256": "985e2339508dd89c02615c29517057eab992b1e4e5f171b5230580ca4fbe277c"
+      "sha256": "92c12ce5aa2a65dd09a63e3269b02bd0591ba3262476d191f19f88b25644653b"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/video_animation.py",
       "path": "spritesheet-expert/scripts/spritecore/video_animation.py",
-      "sha256": "6ed67a65bc0cf8cb241fcdf171b6cfcfaee48cebfa5081182ffb121f7b5211a1"
+      "sha256": "d06e2bc62c622099513735ed2128e9d34ceae2da4d266de9c7f2d4b643074cc5"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/visual_review.py",
@@ -1006,17 +1006,17 @@
     {
       "source": "SKILLS/spritesheet-expert/scripts/sync_imagegen_repair_provenance.py",
       "path": "spritesheet-expert/scripts/sync_imagegen_repair_provenance.py",
-      "sha256": "878cf04a94b21fa507494e77d9c052eaf81007979b3f7319098492db4c69305f"
+      "sha256": "30d04c52be869bee2440e86a03275179128d52f3d4ab0dd7b544d25d1d3ffd55"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/sync_tool_theme.py",
       "path": "spritesheet-expert/scripts/sync_tool_theme.py",
-      "sha256": "625c1c402a98fc7692554c5be05bd2ba575248cb0d975bf5bc52ecf661bbfa91"
+      "sha256": "4ad356de8b183c816b37352f58ec6f828713016e4717bcbb45b3f30e7cc16206"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/unpack_atlas_run.py",
       "path": "spritesheet-expert/scripts/unpack_atlas_run.py",
-      "sha256": "7ca0a6e7de86c2762e78d093f63c3b5496fd74a4f64ee5e0c6f2e6e49f873a96"
+      "sha256": "5f559ad3f57107f983230b805f3238760b6654470917b0f0e2e0a7e99e4cabc8"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/validate_item_delivery.py",
@@ -1026,27 +1026,27 @@
     {
       "source": "SKILLS/spritesheet-expert/scripts/validate_preset.py",
       "path": "spritesheet-expert/scripts/validate_preset.py",
-      "sha256": "c4816e0d224655373c78f407824c60dc257a9f9be3f7c7be0a1b5e4bfffc680a"
+      "sha256": "7cc0da3bc2909712c073a10e98e2358991b67b69785fb93cd9c36f9808271d9f"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/validate_run.py",
       "path": "spritesheet-expert/scripts/validate_run.py",
-      "sha256": "f77e25f63f28ec29424ee80dfba43356fe1bd4c93907c0c6a57867ee3fab5a5d"
+      "sha256": "e181e469d26c90b5b77a0ce03f8bec172bc253bd5ed0728079e2f8b0538ac49a"
     },
     {
       "source": "SKILLS/spritesheet-expert/studio/DELIVERY-LAB.md",
       "path": "spritesheet-expert/studio/DELIVERY-LAB.md",
-      "sha256": "499035c279dc887f80bf459b557b0c19577fa72ad94e9772029ab956d94b1d13"
+      "sha256": "a97b9d3ae45ec1cc1b96645da0db7237bee69a6f2d02c2e1404a02b24c82933b"
     },
     {
       "source": "SKILLS/spritesheet-expert/studio/README.md",
       "path": "spritesheet-expert/studio/README.md",
-      "sha256": "56dfd0cbfa900409718cd7c182a15786eabdc66d2c934d39fef2674d3518b956"
+      "sha256": "962e81709bca0a185fe2fecbc40227ac68ef8042e9dd9aec7efe1d4c2bb30fe1"
     },
     {
       "source": "SKILLS/spritesheet-expert/studio/app.js",
       "path": "spritesheet-expert/studio/app.js",
-      "sha256": "15bd615d1cb9a2a98516881131366c6f74236d76991bd88e1753ebc3cbc225b0"
+      "sha256": "829813b98b034bc4fd6184a2c84f07ea9ad84b612e33b0b439fbcae60b69c991"
     },
     {
       "source": "SKILLS/spritesheet-expert/studio/artifacts.js",
@@ -1096,7 +1096,7 @@
     {
       "source": "SKILLS/spritesheet-expert/studio/tool-theme.css",
       "path": "spritesheet-expert/studio/tool-theme.css",
-      "sha256": "d9ed0f8de3099252aae9e40af2ea16cb555429a2adb0ec99cc995531647c7c55"
+      "sha256": "c31eb6229a068ec0f0960c56ada306ba34e45c1cb70a61589247610acefc5e4c"
     },
     {
       "source": "SKILLS/spritesheet-expert/studio/tool-theme.js",
@@ -1106,7 +1106,7 @@
     {
       "source": "SKILLS/spritesheet-expert/studio/workflows.json",
       "path": "spritesheet-expert/studio/workflows.json",
-      "sha256": "4a527347f1b162a78e7353118f08127d2bcf3f7ee87ee0220dcd3c8a051ab2e6"
+      "sha256": "ec5b047926077aa012f4016b894731731f343692d2e4a11efd79a2cb2d0659fd"
     },
     {
       "source": "SKILLS/spritesheet-expert/studio/workspace.js",

@@ -110,6 +110,16 @@ def test_duplicate_content_gets_a_deterministic_occurrence_suffix() -> None:
     assert items[0].content_sha256 == items[1].content_sha256
     assert items[1].item_id == f"{items[0].item_id}_02"
 
+    repeated = Image.new("RGBA", (302, 3), (0, 0, 0, 0))
+    for index in range(99):
+        repeated.putpixel((1 + 3 * index, 1), (210, 80, 40, 255))
+    accepted = segment_items(repeated, SegmentationConfig(min_strong_pixels=1))
+    assert len(accepted) == 99
+    assert accepted[-1].item_id == f"{accepted[0].item_id}_99"
+    repeated.putpixel((298, 1), (210, 80, 40, 255))
+    with pytest.raises(ItemSheetError, match="too many identical items"):
+        segment_items(repeated, SegmentationConfig(min_strong_pixels=1))
+
 
 def test_rectangular_packing_is_quantized_non_overlapping_and_repeatable() -> None:
     items = segment_items(_sheet())
@@ -577,3 +587,10 @@ def test_segmentation_handoff_rejects_changed_mask_bytes(tmp_path: Path) -> None
     assert item["source"]["assignedPixels"] == target.histogram()[255]
     assert "whole_source_group_review" in item["qaFlags"]
     assert accepted["completion"]["pendingPixels"] > 0  # Other objects stay pending.
+
+    absolute_results = tmp_path / "absolute-results.jsonl"
+    record["decision"]["instances"][0]["mask"]["path"] = mask.as_posix()
+    absolute_results.write_text(json.dumps(record))
+    with pytest.raises(ItemSegmentationError, match="unsafe artifact path|not valid under"):
+        apply_segmentation_results(root / "manifest.json", jobs, absolute_results, tmp_path / "absolute-rejected")
+    assert not (tmp_path / "absolute-rejected").exists()

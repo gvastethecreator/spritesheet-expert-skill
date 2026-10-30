@@ -13,6 +13,8 @@ from typing import Any, Mapping
 
 from runio import acquire_run_dir_lock, atomic_write_text
 from spritecore.contracts import ContractError, normalize_contract
+from spritecore.models import is_state_slug
+from spritecore.paths import resolve_run_path
 
 
 DEFAULT_PLAN = "qa/quota-sealed-repair-plan.json"
@@ -22,45 +24,45 @@ class RepairProvenanceError(ValueError):
     """Raised when repair evidence cannot support a provenance update."""
 
 
-def _load_json(path: Path, label: str) -> dict[str, Any]:
+def _load_json(path: Path, label: str) -> tuple[dict[str, Any], bytes]:
     if not path.is_file():
         raise RepairProvenanceError(f"{label} is missing: {path}")
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        content = path.read_bytes()
+        payload = json.loads(content.decode("utf-8-sig"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise RepairProvenanceError(f"{label} is unreadable: {exc}") from exc
     if not isinstance(payload, dict):
         raise RepairProvenanceError(f"{label} must be a JSON object")
-    return payload
+    return payload, content
 
 
-def _completed_states(plan: Mapping[str, Any]) -> list[str]:
+def _completed_repairs(plan: Mapping[str, Any]) -> dict[str, str]:
     if plan.get("status") != "completed":
         raise RepairProvenanceError("repair plan status must be completed")
 
-    states: list[str] = []
+    completed: dict[str, str] = {}
     repairs = plan.get("repairs")
-    if isinstance(repairs, list):
-        for index, repair in enumerate(repairs):
-            if not isinstance(repair, Mapping):
-                raise RepairProvenanceError(f"repairs[{index}] must be an object")
-            if repair.get("status") != "completed":
-                continue
-            state = repair.get("state")
-            if not isinstance(state, str) or not state:
-                raise RepairProvenanceError(
-                    f"repairs[{index}].state must name a completed state"
-                )
-            states.append(state)
-    else:
-        state = plan.get("state")
-        if isinstance(state, str) and state:
-            states.append(state)
-
-    unique = list(dict.fromkeys(states))
-    if not unique:
+    if repairs is None:
+        repairs = [plan]
+    if not isinstance(repairs, list):
+        raise RepairProvenanceError("repair plan repairs must be an array")
+    for index, repair in enumerate(repairs):
+        if not isinstance(repair, Mapping):
+            raise RepairProvenanceError(f"repairs[{index}] must be an object")
+        if repair.get("status") != "completed":
+            continue
+        state, result = repair.get("state"), repair.get("result")
+        if not is_state_slug(state):
+            raise RepairProvenanceError(f"repairs[{index}].state must be a portable state slug")
+        if not isinstance(result, str) or not result:
+            raise RepairProvenanceError(f"repairs[{index}].result must name the repaired source")
+        if state in completed:
+            raise RepairProvenanceError(f"duplicate completed repair state: {state}")
+        completed[state] = result
+    if not completed:
         raise RepairProvenanceError("repair plan has no completed states")
-    return unique
+    return completed
 
 
 def _requested_states(raw: str | None, completed: list[str]) -> list[str]:
@@ -79,8 +81,8 @@ def _requested_states(raw: str | None, completed: list[str]) -> list[str]:
 
 def _state_order(request: Mapping[str, Any]) -> list[str]:
     states = request.get("states")
-    if not isinstance(states, Mapping):
-        raise RepairProvenanceError("sprite-request.json states must be an object")
+    if not isinstance(states, Mapping) or not states or any(not is_state_slug(state) for state in states):
+        raise RepairProvenanceError("sprite-request.json states must be a non-empty object of portable state slugs")
     return [str(state) for state in states]
 
 
@@ -88,9 +90,12 @@ def _sync(
     *,
     run_dir: Path,
     plan_path: Path,
+    plan_bytes: bytes,
+    completed: Mapping[str, str],
     states: list[str],
 ) -> dict[str, Any]:
-    request = _load_json(run_dir / "sprite-request.json", "sprite request")
+    request_path = resolve_run_path(run_dir, "sprite-request.json")
+    request, request_bytes = _load_json(request_path, "sprite request")
     order = _state_order(request)
     unknown = [state for state in states if state not in order]
     if unknown:
@@ -98,8 +103,10 @@ def _sync(
             "repair states are not declared in sprite-request.json: " + ", ".join(unknown)
         )
 
-    provenance_path = run_dir / "source-provenance.json"
-    prior_payload = _load_json(provenance_path, "source provenance")
+    provenance_path = resolve_run_path(run_dir, "source-provenance.json")
+    if plan_path == provenance_path:
+        raise RepairProvenanceError("repair plan cannot be the provenance output")
+    prior_payload, prior_bytes = _load_json(provenance_path, "source provenance")
     try:
         provenance = normalize_contract(
             prior_payload, expected_kind="source-provenance"
@@ -108,6 +115,9 @@ def _sync(
         raise RepairProvenanceError(f"source provenance is invalid: {exc}") from exc
 
     accepted = [dict(entry) for entry in provenance["accepted_sources"]]
+    if provenance["fixture"] or any(entry.get("source_type") == "fixture" for entry in accepted):
+        raise RepairProvenanceError("fixture sources require source intake, not promotion through repair sync")
+    snapshots = {request_path: request_bytes, provenance_path: prior_bytes, plan_path: plan_bytes}
     plan_relative = plan_path.relative_to(run_dir).as_posix()
     updates: list[dict[str, Any]] = []
 
@@ -122,10 +132,15 @@ def _sync(
             raise RepairProvenanceError(
                 f"accepted source for {state!r} must cover only that state"
             )
-        raw_path = run_dir / "raw" / f"{state}.png"
+        raw_path = resolve_run_path(run_dir, f"raw/{state}.png")
+        if raw_path in snapshots:
+            raise RepairProvenanceError(f"repaired source aliases metadata: {raw_path}")
+        if resolve_run_path(run_dir, completed[state]) != raw_path:
+            raise RepairProvenanceError(f"repair result for {state!r} does not match raw/{state}.png")
         if not raw_path.is_file():
             raise RepairProvenanceError(f"repaired source is missing: {raw_path}")
         content = raw_path.read_bytes()
+        snapshots[raw_path] = content
         if not content:
             raise RepairProvenanceError(f"repaired source is empty: {raw_path}")
         digest = sha256(content).hexdigest()
@@ -161,19 +176,12 @@ def _sync(
         {
             "source_type": "mixed" if mixed else next(iter(source_types)),
             "art_engine": "mixed" if mixed else next(iter(art_engines)),
-            "fixture": False,
-            "verification_status": "verified",
             "accepted_sources": accepted,
             "state_coverage": [
                 state
                 for state in order
                 if any(state in entry["states"] for entry in accepted)
             ],
-            "notes": (
-                "Quota-sealed video states with documented ImageGen frame repairs; "
-                "accepted source hashes match the current raw sheets."
-            ),
-            "license": "mixed-provider-terms" if mixed else "OpenAI-provider-terms",
         }
     )
     try:
@@ -183,9 +191,12 @@ def _sync(
     except ContractError as exc:
         raise RepairProvenanceError(f"updated source provenance is invalid: {exc}") from exc
 
+    for path, expected_bytes in snapshots.items():
+        if path.read_bytes() != expected_bytes:
+            raise RepairProvenanceError(f"repair input changed during synchronization: {path}")
     atomic_write_text(
         provenance_path,
-        json.dumps(normalized, indent=2, ensure_ascii=False) + "\n",
+        json.dumps(normalized, indent=2, ensure_ascii=False, allow_nan=False) + "\n",
     )
     return {
         "ok": True,
@@ -215,20 +226,22 @@ def main() -> int:
     args = parse_args()
     run_dir = args.run_dir.resolve()
     try:
-        plan_path = (run_dir / args.repair_plan).resolve()
-        try:
-            plan_path.relative_to(run_dir)
-        except ValueError as exc:
-            raise RepairProvenanceError("repair plan must stay inside the run directory") from exc
-        plan = _load_json(plan_path, "repair plan")
-        states = _requested_states(args.states, _completed_states(plan))
+        requested = Path(args.repair_plan).expanduser()
+        if requested.is_absolute():
+            requested = requested.relative_to(run_dir)
+        plan_path = resolve_run_path(run_dir, requested)
         acquire_run_dir_lock(run_dir, "sync-imagegen-repair-provenance")
+        plan, plan_bytes = _load_json(plan_path, "repair plan")
+        completed = _completed_repairs(plan)
+        states = _requested_states(args.states, list(completed))
         result = _sync(
             run_dir=run_dir,
             plan_path=plan_path,
+            plan_bytes=plan_bytes,
+            completed=completed,
             states=states,
         )
-    except (OSError, RepairProvenanceError) as exc:
+    except (OSError, ValueError) as exc:
         print(json.dumps({"ok": False, "error": str(exc)}), file=sys.stderr)
         return 1
     print(json.dumps(result, indent=2))

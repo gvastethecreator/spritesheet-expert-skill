@@ -12,7 +12,7 @@ import sys
 from typing import Any, Mapping
 
 from runio import atomic_write_text
-from spritecore.paths import PathSafetyError, resolve_run_path
+from spritecore.paths import RUN_MARKER_FILENAME, PathSafetyError, resolve_run_path
 from spritecore.visual_review import (
     VISUAL_REVIEW_KIND,
     VISUAL_REVIEW_RELATIVE_PATH,
@@ -69,6 +69,27 @@ def record_visual_review(
         raise VisualReviewValidationError(
             ["visual review output cannot overwrite a reviewed artifact"]
         )
+    relative = target.relative_to(run_root)
+    if relative.parts[0] in {"frames", "raw", "source", "references"} or relative.as_posix() in {
+        "sprite-request.json", "source-provenance.json", "manifest.json",
+        RUN_MARKER_FILENAME,
+    }:
+        raise VisualReviewValidationError(["visual review output would replace a run input"])
+    if target.exists():
+        try:
+            previous = json.loads(target.read_text(encoding="utf-8-sig"))
+        except ValueError as exc:
+            raise VisualReviewValidationError(
+                ["visual review output would replace a non-review artifact"]
+            ) from exc
+        if (
+            not isinstance(previous, dict)
+            or previous.get("kind") != VISUAL_REVIEW_KIND
+            or previous.get("version") != VISUAL_REVIEW_VERSION
+        ):
+            raise VisualReviewValidationError(
+                ["visual review output would replace a non-review artifact"]
+            )
     target.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_text(
         target, json.dumps(validated, ensure_ascii=False, indent=2) + "\n"

@@ -23,14 +23,16 @@ Block done unless:
 - `sprite-sheet-alpha.report.json.ok` true.
 - `manifest.json.frame_layout` exists and runtime can use rectangles.
 - Imported or irregular whole-sheet candidates have `qa/segmentation-report.json` and `qa/segmentation-overlay.png` from `unpack_atlas_run.py`. Review overlay before registration; bad boxes = matte/segmentation failed, not alignment. Auto-detect and projection-repair layout warnings block production packaging until trusted manifest/grid/authored-box layout replaces them.
-- Imported or whole-sheet sprite candidates have `qa/registration-report.json.ok` true after `register_sprite_frames.py`, unless trusted manifest already provides exact rectangles and origins. Review `qa/registration-overlay.png` for stable body pivot/baseline before judging animation.
+- Imported or whole-sheet sprite candidates have `qa/registration-report.json.ok` true after `register_sprite_frames.py`, unless trusted manifest already provides exact rectangles and origins. Registration requires complete declared rows and a separate output run. `sprite_registration.baseline_y` records a shared observed bottom when one exists; `requested_baseline_y` retains the requested position, which cell constraints can shift. Review `qa/registration-overlay.png` for stable body pivot/baseline before judging animation. Copied matte panels describe the source, not approval of transformed frames.
 - Animated rows with active or inferred `animation_workflows` have `qa/animation-contract-report.json.ok` true. Workflow gate: hard errors block done; warnings need review notes or repair; `visual_review_checklist` items need playback/contact/prototype inspection.
-- Animated sprite runs have `qa/frame-alignment-report.json.ok` true from `check_frame_alignment.py`, and relevant `qa/<state>-onion.png` overlays are reviewed. Compares extracted frames, not prompts: baseline, bbox, alpha-center/root, takeoff/landing closure, and final ground settlement make sense.
+- Animated sprite runs have `qa/frame-alignment-report.json.ok` and `.complete` true from `check_frame_alignment.py`, and relevant `qa/<state>-onion.png` overlays are reviewed. Missing frames, empty foreground, or a missing required ground baseline cannot satisfy the gate, including with `--warn-only`. Airborne states need no ground baseline; jump checks require declared jump pose geometry. Review measured baseline, bbox, alpha-center/root, takeoff/landing closure, and final ground settlement.
 - Jump rows: takeoff and landing bottoms on same shared baseline within tolerance, visible airborne arc, no accidental root-x drift unless state is intentional forward/back jump. Crouch/block/idle/locomotion rows keep grounded contact stable. Fall/knockdown rows settle to baseline by final frame.
-- Animated character runs and multi-frame static pose/direction sets have `qa/identity-consistency-report.json.ok` true from `check_identity_consistency.py`. Head size, upper-body scale, central body-mass width, and opaque-area proxy drift block identity unless row is deliberate fall/knockdown/crouch with visual proof the change is pose/orientation, not zoom or redesign. Static `variants` never waives same-character identity.
+- Animated character runs and multi-frame static pose/direction sets require `qa/identity-consistency-report.json.ok` and `.complete` true from `check_identity_consistency.py`. Recorded silhouette ratios are proxies; verify current frames visually for identity and scale. A hash-bound review can accept exact proxy false positives, including pose changes; missing or malformed records still block. Static `variants` never waives same-character identity.
 - Contact sheets + GIF/PNG evidence: identity, frame count, direction, loop seam, timing, pose scale/baseline overlays.
 - `qa/preview-workbench/index.html` and `qa/preview-workbench/workbench.evidence.json` exist for animated review. Report hashes atlas, manifest, linked QA evidence, and self-contained HTML. Pause, step, scrub, speed, zoom, state selection, every filmstrip frame, checker/black/gray/white backgrounds; keyboard/layout to 360px without overflow. Initial zoom fits measured stage (incl. high-res provider frames). Canvas scaling honors manifest `sampling_policy`: nearest-neighbor for pixel art, linear for illustrated art.
 - Runtime playback: state changes, frame timing, origin/baseline stability, bbox scale, input-driven movement. Workbench: human inspection; hash-bound GIF/PNG evidence is machine gate.
+- `render_runtime_preview.py` renders the declared manifest with Pillow. Its GIF/PNG files do not prove browser or game-engine integration, state transitions or input-driven movement. Changing the manifest or atlas requires a fresh render and evidence.
+- GIF evidence lists decoded delays in `durations_ms`; requested timings stay in the manifest. [GIF89a](https://www.w3.org/Graphics/GIF/spec-gif89a.txt) stores delays in hundredths of a second. The encoder can merge identical images, so this array need not align one-to-one with the source indices in `frames`. A zero delay leaves timing to the viewer; encoded delays are not measured playback timing. PNG evidence keeps the selected frame's manifest timing as context.
 - Pose-sensitive rows: visually review `qa/pose-scale-review.png` when present. Metrics necessary, not sufficient; if pose reads wrong, row fails when `frames-manifest.json.ok` is true.
 - Visual review: pose readability, silhouette, line of action, center of mass, grounded contact, plausible joints, and whether state communicates its gameplay purpose.
 - Fighting/combat: clear startup/active/recovery or impact/reaction; pretty poses that are ambiguous as gameplay frames fail.
@@ -128,6 +130,9 @@ batch-completion-report.json  # beside a multi-identity batch manifest
 
 Use `manifest.json.frame_layout` as runtime SSoT. Don't recover frame rectangles from alpha at runtime.
 
+Use a separate `--report` destination. Core run documents and existing non-aggregate artifacts are protected; an existing v1 aggregate report can be refreshed.
+`record_visual_review.py --output` also protects run inputs and existing non-review artifacts; it can refresh a v1 visual review.
+
 Run aggregate gate at each useful boundary:
 
 ```bash
@@ -137,6 +142,7 @@ python scripts/validate_run.py --run-dir /abs/run --stage pre-package
 ```
 
 `pre-package` exits `2` if required visual review missing, `1` for contract/quality failures, `3` for operational failures. Partial `--gate` is diagnostic — never aggregate final green.
+Read `complete` separately from the exit code: a quality failure can coexist with incomplete or partial checks.
 
 Complete animation batch: run batch gate after every run passed `pre-package` and runtime candidate packaged:
 

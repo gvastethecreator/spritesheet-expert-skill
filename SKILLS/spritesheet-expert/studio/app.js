@@ -283,8 +283,8 @@ async function loadWorkflowRegistry() {
     selectWorkflow(registry.workflows[0].id);
   } catch (error) {
     elements.workflowDescription.textContent =
-      `Could not load workflows.json (${error.message}). Serve the studio directory through a local HTTP server instead of opening file:// directly.`;
-    elements.workflowOutput.value = "python -m http.server 4173 --directory studio";
+      `Could not load workflows.json (${error.message}). From the installed skill directory, start serve_item_studio.py to provide the workspace API and bundled UI.`;
+    elements.workflowOutput.value = "python scripts/serve_item_studio.py";
     elements.workflowMode.textContent = "blocked";
   }
 }

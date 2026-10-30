@@ -9,17 +9,18 @@ from typing import Any, Mapping, Sequence
 from spritecore.results import CheckResult, CheckStatus
 
 
-def _string_list(value: Any) -> list[str]:
-    if not isinstance(value, (list, tuple)):
-        return []
-    return [item for item in value if isinstance(item, str) and item]
+def _string_list(name: str, value: Any) -> list[str]:
+    if not isinstance(value, (list, tuple)) or any(
+        not isinstance(item, str) or not item for item in value
+    ):
+        raise ValueError(f"report {name} must be an array of nonempty strings")
+    return list(value)
 
 
 def _checked_items(report: Mapping[str, Any]) -> list[str]:
     for key in ("checked_items", "checked_states"):
-        direct = _string_list(report.get(key))
-        if direct or key in report:
-            return direct
+        if key in report:
+            return _string_list(key, report[key])
     for key in ("rows", "results", "records"):
         entries = report.get(key)
         if not isinstance(entries, (list, tuple)):
@@ -44,7 +45,8 @@ def _checked_items(report: Mapping[str, Any]) -> list[str]:
 
 def _report_fingerprint(report: Mapping[str, Any]) -> str:
     payload = json.dumps(
-        dict(report), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        dict(report), ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+        allow_nan=False,
     ).encode("utf-8")
     return sha256(payload).hexdigest()
 
@@ -65,6 +67,8 @@ def check_result_from_report(
     warnings: list[str] = []
     checked: list[str] = []
     fingerprint: str | None = None
+    declared_incomplete = False
+    declared_operational_failure = False
     evidence: dict[str, Any] = {
         "report_path": report_path,
         "process_exit_code": process_exit_code,
@@ -80,21 +84,37 @@ def check_result_from_report(
         errors.append(f"mandatory report must be a JSON object: {report_path}")
         report = None
     else:
-        fingerprint = _report_fingerprint(report)
-        evidence["report_sha256"] = fingerprint
-        checked = _checked_items(report)
-        errors.extend(_string_list(report.get("errors")))
-        warnings.extend(_string_list(report.get("warnings")))
-        if report.get("ok") is False:
-            errors.append("report declared ok:false")
+        try:
+            fingerprint = _report_fingerprint(report)
+        except (TypeError, ValueError) as exc:
+            errors.append(f"report is not finite JSON: {exc}")
+        else:
+            evidence["report_sha256"] = fingerprint
+        try:
+            checked = _checked_items(report)
+            errors.extend(_string_list("errors", report.get("errors", [])))
+            warnings.extend(_string_list("warnings", report.get("warnings", [])))
+        except ValueError as exc:
+            errors.append(str(exc))
+        for name in ("ok", "applicable", "complete"):
+            if name in report:
+                if type(report[name]) is not bool:
+                    errors.append(f"report {name} must be a boolean")
+                elif report[name] is False:
+                    errors.append(f"report declared {name}:false")
+        declared_incomplete = report.get("complete") is False
         declared_status = report.get("status")
         if isinstance(declared_status, str):
             evidence["declared_status"] = declared_status
-            if declared_status in {"fail", "blocked", "operational-error"}:
+            if declared_status in {"fail", "blocked", "operational-error", "skipped"}:
                 errors.append(f"report declared status:{declared_status}")
-            elif declared_status not in {"pass", "skipped"}:
+            elif declared_status != "pass":
                 errors.append(f"report has unknown status:{declared_status}")
-        if report.get("id") not in {None, gate_id}:
+            declared_incomplete |= declared_status == "blocked"
+            declared_operational_failure = declared_status == "operational-error"
+        elif "status" in report:
+            errors.append("report status must be a string")
+        if report.get("id") is not None and report.get("id") != gate_id:
             errors.append(
                 f"report id {report.get('id')!r} does not match gate {gate_id!r}"
             )
@@ -106,13 +126,16 @@ def check_result_from_report(
     if missing:
         errors.append(f"report did not check expected items: {', '.join(missing)}")
 
-    if process_exit_code == 2:
-        errors.append("gate reported blocked/incomplete execution")
-        status = CheckStatus.BLOCKED
-        complete = False
-    elif process_exit_code >= 3 or process_exit_code < 0:
+    if process_exit_code >= 3 or process_exit_code < 0:
         errors.append(f"gate operational failure (exit {process_exit_code})")
         status = CheckStatus.OPERATIONAL_ERROR
+        complete = False
+    elif declared_operational_failure:
+        status = CheckStatus.OPERATIONAL_ERROR
+        complete = False
+    elif process_exit_code == 2 or declared_incomplete:
+        errors.append("gate reported blocked/incomplete execution")
+        status = CheckStatus.BLOCKED
         complete = False
     elif process_exit_code == 1:
         if not errors:

@@ -13,8 +13,8 @@ Expanded editor: fit/zoom/pan, direct drag and scale handles, center/baseline sn
 
 Canonical browser project is JSON v3; IndexedDB for reference and variant blobs. Export `alignment profile v2` when Python correction scripts need the legacy transform schema.
 
-Validate with:
+From the installed skill directory, validate with:
 
 ```powershell
-python SKILLS\spritesheet-expert\scripts\check_workflow_workbenches.py
+python scripts/check_workflow_workbenches.py
 ```

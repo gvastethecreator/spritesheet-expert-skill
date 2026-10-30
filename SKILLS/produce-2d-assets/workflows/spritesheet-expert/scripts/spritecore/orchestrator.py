@@ -283,7 +283,7 @@ def _overall_status(
     if CheckStatus.OPERATIONAL_ERROR in statuses:
         return CheckStatus.OPERATIONAL_ERROR, 3, False
     if CheckStatus.FAIL in statuses:
-        return CheckStatus.FAIL, 1, True
+        return CheckStatus.FAIL, 1, not partial and all(result.complete for result in results)
     if CheckStatus.BLOCKED in statuses or partial:
         return CheckStatus.BLOCKED, 2, False
     return CheckStatus.PASS, 0, True

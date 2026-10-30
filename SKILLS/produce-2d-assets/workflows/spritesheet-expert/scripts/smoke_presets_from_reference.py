@@ -12,11 +12,13 @@ from typing import Any
 
 from PIL import Image, ImageOps
 
-from spritecore.paths import PathSafetyError, create_run_marker, replace_owned_run
+from check_asset_slots import cell_geometry
+from runio import atomic_save_image, atomic_write_text
+from spritecore.locks import acquire_run_lock
+from spritecore.models import is_state_slug
+from spritecore.paths import PathSafetyError, create_run_marker, replace_owned_run, resolve_run_path
 
 
-CHROMA = "#00FF00"
-CHROMA_RGB = (0, 255, 0, 255)
 FULL_CELL_MATTE = (72, 60, 96, 255)
 
 
@@ -26,8 +28,14 @@ def run(script: str, *args: str) -> None:
 
 
 def parse_grid(value: str) -> tuple[int, int]:
-    left, right = value.lower().split("x", 1)
-    return int(left), int(right)
+    try:
+        left, right = value.lower().split("x", 1)
+        columns, rows = int(left), int(right)
+    except ValueError as exc:
+        raise ValueError("source grid must use positive COLUMNSxROWS integers") from exc
+    if columns < 1 or rows < 1:
+        raise ValueError("source grid dimensions must be positive")
+    return columns, rows
 
 
 def nonwhite_bbox(image: Image.Image) -> tuple[int, int, int, int] | None:
@@ -47,10 +55,15 @@ def nonwhite_bbox(image: Image.Image) -> tuple[int, int, int, int] | None:
 
 
 def crop_reference_frames(path: Path, grid: tuple[int, int]) -> list[Image.Image]:
-    source = Image.open(path).convert("RGBA")
+    with Image.open(path) as opened:
+        if getattr(opened, "n_frames", 1) != 1:
+            raise ValueError("use one still reference sheet")
+        source = opened.convert("RGBA")
     cols, rows = grid
-    cell_w = source.width / cols
-    cell_h = source.height / rows
+    if any(type(value) is not int or value < 1 for value in grid) or source.width % cols or source.height % rows:
+        raise ValueError("reference dimensions must divide exactly by a positive source grid")
+    cell_w = source.width // cols
+    cell_h = source.height // rows
     frames: list[Image.Image] = []
     for row in range(rows):
         for col in range(cols):
@@ -83,6 +96,8 @@ def paste_fit(
     cell_h = int(cell["height"])
     margin_x = int(cell.get("safe_margin_x", cell.get("safe_margin", max(4, cell_w // 12))))
     margin_y = int(cell.get("safe_margin_y", cell.get("safe_margin", max(4, cell_h // 12))))
+    if min(margin_x, margin_y) < 0 or 2 * margin_x >= cell_w or 2 * margin_y >= cell_h:
+        raise ValueError("fixture margins must leave a positive cell interior")
     src = ImageOps.mirror(sprite) if flip else sprite
     scale = min((cell_w - 2 * margin_x) / src.width, (cell_h - 2 * margin_y) / src.height, 1.0)
     size = (max(1, round(src.width * scale)), max(1, round(src.height * scale)))
@@ -95,54 +110,43 @@ def paste_fit(
 
 
 def write_raw_rows(run_dir: Path, frames: list[Image.Image]) -> None:
-    request = json.loads((run_dir / "sprite-request.json").read_text(encoding="utf-8"))
-    cell = request["cell"]
-    cell_w = int(cell["width"])
-    cell_h = int(cell["height"])
-    raw_dir = run_dir / "raw"
-    raw_dir.mkdir(exist_ok=True)
-    full_cell_assets = request.get("asset_kind") in {"tileset", "texture"}
-    for state_index, (state, entry) in enumerate(request["states"].items()):
-        count = int(entry["frames"])
-        layout = entry.get("raw_layout", {})
-        columns = int(layout.get("columns", count))
-        rows = int(layout.get("rows", 1))
-        if columns < 1 or rows < 1 or columns * rows < count:
-            raise SystemExit(
-                f"{state}: invalid raw_layout {columns}x{rows} for {count} frames"
-            )
-        strip = Image.new(
-            "RGBA", (columns * cell_w, rows * cell_h), CHROMA_RGB
-        )
-        flip = "left" in state or state.endswith("-sw") or state.endswith("-nw")
-        for index in range(count):
-            if full_cell_assets:
-                column = index % columns
-                row = index // columns
-                strip.paste(
-                    FULL_CELL_MATTE,
-                    (
-                        column * cell_w,
-                        row * cell_h,
-                        (column + 1) * cell_w,
-                        (row + 1) * cell_h,
-                    ),
-                )
-            paste_fit(
-                strip,
-                frames[(state_index + index) % len(frames)],
-                index,
-                columns,
-                cell,
-                flip,
-            )
-        strip.save(raw_dir / f"{state}.png")
+    if not frames:
+        raise ValueError("smoke fixtures require at least one reference frame")
+    with acquire_run_lock(run_dir, "smoke-raw-rows"):
+        request = json.loads(resolve_run_path(run_dir, "sprite-request.json").read_text(encoding="utf-8"))
+        if not isinstance(request, dict) or not isinstance(request.get("states"), dict) or not request["states"]:
+            raise ValueError("smoke request states must be a non-empty object")
+        cell = request["cell"]
+        cell_w, cell_h = cell_geometry(cell)
+        plans = []
+        for state, entry in request["states"].items():
+            if not is_state_slug(state) or not isinstance(entry, dict):
+                raise ValueError("smoke states must use portable names and object entries")
+            count = entry.get("frames")
+            layout = entry.get("raw_layout", {})
+            if not isinstance(layout, dict):
+                raise ValueError(f"{state}: raw_layout must be an object")
+            columns, rows = layout.get("columns", count), layout.get("rows", 1)
+            if any(type(value) is not int or value < 1 for value in (count, columns, rows)) or columns * rows < count:
+                raise ValueError(f"{state}: raw_layout does not cover the declared frames")
+            plans.append((state, count, columns, rows, resolve_run_path(run_dir, f"raw/{state}.png")))
+        resolve_run_path(run_dir, "raw").mkdir(exist_ok=True)
+        full_cell_assets = request.get("asset_kind") in {"tileset", "texture"}
+        for state_index, (state, count, columns, rows, target) in enumerate(plans):
+            strip = Image.new("RGBA", (columns * cell_w, rows * cell_h), (0, 0, 0, 0))
+            flip = "left" in state or state.endswith("-sw") or state.endswith("-nw")
+            for index in range(count):
+                if full_cell_assets:
+                    column, row = index % columns, index // columns
+                    strip.paste(FULL_CELL_MATTE, (column * cell_w, row * cell_h, (column + 1) * cell_w, (row + 1) * cell_h))
+                paste_fit(strip, frames[(state_index + index) % len(frames)], index, columns, cell, flip)
+            atomic_save_image(strip, target)
 
 
 def execute_smoke(reference: Path, out_dir: Path, selected: list[str], frames: list[Image.Image]) -> int:
-    summary: dict[str, Any] = {"ok": True, "reference": str(reference), "out_dir": str(out_dir), "presets": {}}
+    summary: dict[str, Any] = {"ok": True, "fixture": True, "reference": str(reference), "out_dir": str(out_dir), "presets": {}}
     for preset in selected:
-        run_dir = out_dir / preset
+        run_dir = resolve_run_path(out_dir, preset)
         run_dir.mkdir(parents=True, exist_ok=True)
         try:
             create_run_marker(run_dir, run_id=preset)
@@ -209,7 +213,7 @@ def execute_smoke(reference: Path, out_dir: Path, selected: list[str], frames: l
                 "--character-id", preset,
                 "--base-image", str(reference),
                 "--request", str(request_path),
-                "--chroma-key", CHROMA,
+                "--background-removal", "none",
                 "--force",
             )
             write_raw_rows(run_dir, frames)
@@ -219,7 +223,7 @@ def execute_smoke(reference: Path, out_dir: Path, selected: list[str], frames: l
             manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
             summary["presets"][preset] = {
                 "ok": True,
-                "states": list(manifest["animation"]["rows"]),
+                "states": list(manifest["frame_layout"]["rows"]),
                 "atlas": str(run_dir / "sprite-sheet-alpha.png"),
                 "manifest": str(run_dir / "manifest.json"),
                 "qa": str(run_dir / "qa"),
@@ -234,7 +238,7 @@ def execute_smoke(reference: Path, out_dir: Path, selected: list[str], frames: l
             summary["ok"] = False
             summary["presets"][preset] = {"ok": False, "error": str(exc), "run_dir": str(run_dir)}
 
-    (out_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    atomic_write_text(resolve_run_path(out_dir, "summary.json"), json.dumps(summary, ensure_ascii=False, indent=2, allow_nan=False) + "\n")
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 0 if summary["ok"] else 1
 
@@ -253,11 +257,16 @@ def main() -> int:
 
     reference = args.reference.expanduser().resolve()
     out_dir = args.out_dir.expanduser().resolve()
-    frames = crop_reference_frames(reference, parse_grid(args.source_grid))
+    if reference.is_relative_to(out_dir):
+        parser.error("reference must stay outside the output directory")
+    try:
+        frames = crop_reference_frames(reference, parse_grid(args.source_grid))
+    except (OSError, ValueError) as exc:
+        parser.error(str(exc))
 
     presets_path = Path(__file__).parents[1] / "references" / "presets.json"
     presets = json.loads(presets_path.read_text(encoding="utf-8"))["presets"]
-    selected = args.preset or list(presets)
+    selected = list(dict.fromkeys(args.preset or presets))
     unknown_presets = sorted(set(selected) - set(presets))
     if unknown_presets:
         raise SystemExit(f"unknown presets: {', '.join(unknown_presets)}")

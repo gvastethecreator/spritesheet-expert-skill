@@ -18,7 +18,7 @@ This file defines the Grok boundary. Read `video-animation-workflow.md` for fram
 4. Review the dry-run manifest. A real provider call requires explicit current-task consent and `--ack-run`.
 5. Accept only the copied video listed in a completed `invocation.json` whose exact media count is one.
 
-Tests, smoke checks, and fixtures must never call inference. A provider timeout is not permission to retry: inspect the output directory, `invocation.json`, status, and copied `media/` first. Zero Data Retention teams may need a caller-owned `output.upload_url` for video generation.
+Tests, smoke checks, and fixtures must never call inference. A provider timeout is not permission to retry: inspect the output directory, `invocation.json`, status, and copied `media/` first. For Zero Data Retention storage, follow the installed Grok adapter's `references/cli-contract.md`. Missing storage is a blocker, not permission to change account settings or retry generation.
 
 ## First Frame To Video
 
@@ -43,9 +43,9 @@ provider/grok-imagine/walk/job.json
 
 The prompt is structured, not one long prose sentence. It records a `prompt_contract` in `job.json` with anatomy, locomotion, workflow, allowed motion driver, motion plane, early action window, edge margin, and phase semantics. Front-FPS creature preparation fails closed when the camera or movement/attack source is missing.
 
-Prompt keeps camera, projection, framing, ground line, subject scale, center, identity, lighting, neutral background, and existing empty border fixed. Request one continuous 6-second action: no cuts, camera motion, text, extra objects, detached effects, motion blur, or cast shadow. `image-plane` default for frontal sprites: “toward the player” = pose readability, not depth travel, foreshortening, giant foreground limbs, or body enlargement. Do not force an output aspect ratio; image-to-video should inherit the first frame instead of stretching it.
+Prompt keeps camera, projection, framing, ground line, subject scale, center, identity, lighting, neutral background, and existing empty border fixed. Request one continuous action for the selected `--duration-seconds` (integer 1–15; default 6): no cuts, camera motion, text, extra objects, detached effects, motion blur, or cast shadow. `image-plane` default for frontal sprites: “toward the player” = pose readability, not depth travel, foreshortening, giant foreground limbs, or body enlargement. Do not force an output aspect ratio; image-to-video should inherit the first frame instead of stretching it.
 
-First line also instructs the worker to call `image_to_video` exactly once and stop after the requested video exists. The wrapper still rejects extra media. Do not request multiple takes in one call: use the full native-rate timeline as the candidate pool, then regenerate only when no reviewed frame set is usable.
+The first line instructs the worker to call `reference_to_video` exactly once, passing the exact approved image as `first_frame`, and stop after the requested video exists. The wrapper still rejects extra media. Do not request multiple takes in one call: use the full native-rate timeline as the candidate pool, then regenerate only when no reviewed frame set is usable.
 
 Optional state controls live under `states.<state>.video_prompt`:
 
@@ -76,7 +76,7 @@ python scripts/prepare_grok_video_animation.py \
 
 The job records `prompt_contract.provider_action_source: cli-override`. This keeps accepted sibling-state request hashes valid. Prompt-only repair: it cannot change declared anatomy, motion source, camera, or QA policy.
 
-Before a retry, review every frame from the current video. If no selection works, make one state-local repair that names the joints, support/contact relation, centerline limit, and anatomy that must stay fixed. After two failures from the same driver, switch to a safer existing driver instead of repeating the same deformation. Examples: fragile hand attack → lower-shroud lash; unclear whole-body crawl → explicit diagonal paw pairs. Archive the old state under `rejected/<reason>` and do not regenerate its accepted sibling.
+Before a retry, inspect the existing timeline and diagnose the failed state. A wording repair must preserve its approved anatomy, motion driver and gameplay action. A different attack or locomotion driver changes the design: propose it for approval instead of switching automatically. Keep the failed attempt and accepted sibling-state evidence; any overwrite or move needs authority.
 
 For `gesture-loop`, prompt preparation adds a planted-body lock. Pelvis, legs, knees, ankles, both feet, and the contact footprint stay pixel-for-pixel fixed; only the waving shoulder, arm, wrist, and hand carry the gesture, with minimal torso/head motion. Post-extraction QA still measures lower-body silhouette and center-x travel. A clean loop closure does not waive movement in the middle frames.
 
@@ -142,7 +142,7 @@ Review the workbench on checker, black, gray, and white. Reject identity morphin
 
 ## Optional Grok Still Images
 
-For a Grok-generated first frame or row, use `$grok-imagine image-generate` or `image-edit` with the same flat neutral background contract. Start with dry-run; accept only copied media from a completed invocation manifest. Keep that provider manifest with the run evidence; source intake alone does not prove inference occurred.
+For a Grok-generated still, use `$grok-imagine image-generate` or `image-edit`. Preserve valid native alpha for isolated rows; a video first frame follows its declared neutral-background contract. Start with dry-run; accept only copied media from a completed invocation manifest. Keep that provider manifest with the run evidence; source intake alone does not prove inference occurred.
 
 Copy the selected image into the run, create a `source-intake-v1` document, then ingest it:
 

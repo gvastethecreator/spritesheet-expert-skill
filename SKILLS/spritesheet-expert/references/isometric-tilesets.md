@@ -63,7 +63,7 @@ Ask `$imagegen` for grouped rows, not a finished scene:
 
 Prompt constraints:
 
-- transparent or simple matte background;
+- reviewed native transparency, with a neutral matte only when alpha is unavailable or fails review;
 - no scene background, labels, shadows crossing slot borders, or overlapping slots;
 - all tiles on the same 2:1 isometric grid;
 - follow the generated layout guide's diamond and floor/contact pivot as placement guides only; never draw the guide marks into final art;
@@ -83,11 +83,14 @@ Auto-detect is diagnostic only. If generated dimensions do not divide the grid, 
 
 ## QA Gates
 
-Run:
+This example imports an approved existing atlas into a new run. The importer
+creates its source record before the provenance check. Retain the source rights
+and provider receipt when applicable; the import record does not prove inference.
+Run from the installed skill directory:
 
 ```bash
-python scripts/check_generation_provenance.py --run-dir /abs/run
-python scripts/unpack_atlas_run.py --atlas /abs/source.png --grid 8x4 --asset-kind tileset --extraction-mode slots --asset-labels-file /abs/labels.json --asset-catalog-file /abs/catalog.json --out-dir /abs/run --force
+python scripts/unpack_atlas_run.py --atlas /abs/source.png --grid 8x4 --asset-kind tileset --extraction-mode slots --asset-labels-file /abs/labels.json --asset-catalog-file /abs/catalog.json --out-dir /abs/run
+python scripts/check_generation_provenance.py --run-dir /abs/run --allow-imported-source
 python scripts/compose_sprite_atlas.py --run-dir /abs/run
 python scripts/check_asset_slots.py --run-dir /abs/run
 python scripts/check_isometric_tiles.py --run-dir /abs/run
@@ -101,7 +104,7 @@ Review:
 - `qa/isometric-pivot-overlay.png`: 2:1 footprint and pivot match the visual floor.
 - `qa/isometric-map-review.png`: tiles compose into a coherent map.
 - `qa/isometric-depth-review.png`: height/depth sorting reads correctly.
-- `qa/isometric-runtime-metadata.json`: calibrated runtime footprint, pivots, and placement formula for prototypes/importers.
+- `qa/isometric-runtime-metadata.json`: footprint/pivot candidates and placement formula; approve visually before runtime import. Alpha-bbox medians do not prove the logical floor footprint.
 - `qa/isometric-calibrated-catalog.json`: human-review candidate catalog; copy approved footprint/pivots back into the source catalog before final packaging.
 
 Hard failures:
@@ -110,7 +113,7 @@ Hard failures:
 - missing or generic labels;
 - missing catalog metadata;
 - `runtimeCell` does not match the actual cut cell;
-- footprint ratio is not 2:1 unless the request explicitly chooses another projection;
+- footprint ratio is not 2:1 within the configured tolerance. This checker supports 2:1; another projection needs its own matching validation;
 - pivots outside the cell or placed away from the floor/contact point;
 - missing base/edge/corner roles for terrain;
 - props touching/crossing slot borders;
@@ -140,7 +143,7 @@ tie_breakers = base row/col depth, then creation/source order
 
 Tall props and characters share the same ground-contact sorting rule. Prototype placement by top-left cell coordinates invalidates isometric review.
 
-When importing generated art, calibrate the real grid from extracted frames first. If the catalog says `128x64` but alpha bboxes show ~`206x104`, renderer and QA must use the calibrated footprint and block the stale catalog.
+Compare the catalog grid with the extracted art before import. Bbox-derived suggestions include visible sides, props and shadows, so confirm the logical floor and contact pivot visually. Copy approved values into the source catalog and rerun QA before using them in a runtime.
 
 `check_isometric_tiles.py` writes two handoff artifacts:
 

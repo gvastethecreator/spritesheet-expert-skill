@@ -37,6 +37,34 @@ def _run(name: str, *args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def test_extraction_rejects_invalid_state_contracts_before_writing(tmp_path: Path) -> None:
+    base = {
+        "asset_kind": "asset", "extraction_mode": "slots",
+        "cell": {"width": 32, "height": 32, "safe_margin": 2},
+        "generation_background": {"rgb": [17, 17, 17]},
+    }
+    cases = [
+        ({}, []),
+        ({"idle": {"frames": 1}}, ["--states", ""]),
+        ({"../escaped": {"frames": 1}}, []),
+        ({"idle": {"frames": 1.5}}, []),
+        ({"idle": {"frames": True}}, []),
+        ({"idle": {"frames": 2, "raw_layout": {"columns": 1, "rows": 1}}}, []),
+    ]
+    for index, (states, extra) in enumerate(cases):
+        run_dir = tmp_path / str(index)
+        run_dir.mkdir()
+        request_path = run_dir / "sprite-request.json"
+        request_bytes = json.dumps({**base, "states": states}).encode()
+        request_path.write_bytes(request_bytes)
+        result = _run("extract_sprite_row_frames.py", "--run-dir", str(run_dir), *extra)
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert request_path.read_bytes() == request_bytes
+        assert not (run_dir / "frames").exists()
+        assert not (run_dir / "qa").exists()
+        assert not (run_dir / "escaped").exists()
+
+
 def test_pose_geometry_ignores_forbidden_pose_words() -> None:
     assert inferred_pose_geometry(
         "attack",
@@ -72,6 +100,72 @@ def test_winged_flight_idle_step_is_not_treated_as_grounded() -> None:
     }
 
     assert row_kind("idle-step", {"state": "idle-step"}, request) == "airborne"
+
+
+def test_alignment_requires_inspectable_inputs_and_preserves_source_paths(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    frame = run_dir / "frames" / "idle" / "frame-0.png"
+    frame.parent.mkdir(parents=True)
+    image = Image.new("RGBA", (32, 32))
+    ImageDraw.Draw(image).rectangle((9, 5, 22, 27), fill=(180, 180, 180, 255))
+    image.save(frame)
+    frame_bytes = frame.read_bytes()
+    request = {"states": {"idle": {"frames": 1, "fps": 1}}, "cell": {"width": 32, "height": 32}}
+    manifest = {
+        "ok": True, "rows": [{"state": "idle", "files": ["frames/idle/frame-0.png"]}],
+        "sprite_registration": {"baseline_y": 28},
+    }
+    request_path = run_dir / "sprite-request.json"
+    manifest_path = run_dir / "frames" / "frames-manifest.json"
+    request_path.write_text(json.dumps(request), encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    assert _run("check_frame_alignment.py", "--run-dir", str(run_dir)).returncode == 0
+
+    request["states"]["idle"]["frames"] = 2
+    request_path.write_text(json.dumps(request), encoding="utf-8")
+    missing = _run("check_frame_alignment.py", "--run-dir", str(run_dir), "--warn-only")
+    assert missing.returncode == 1
+    assert "expected 2 frames" in missing.stdout
+    request["states"]["idle"]["frames"] = 1
+    request_path.write_text(json.dumps(request), encoding="utf-8")
+
+    del manifest["sprite_registration"]
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    no_baseline = _run("check_frame_alignment.py", "--run-dir", str(run_dir), "--warn-only")
+    assert no_baseline.returncode == 1
+    assert json.loads(no_baseline.stdout)["complete"] is False
+    request["creature_motion"] = {"anatomy": "winged", "locomotion": "fly"}
+    request_path.write_text(json.dumps(request), encoding="utf-8")
+    airborne = _run("check_frame_alignment.py", "--run-dir", str(run_dir))
+    assert airborne.returncode == 0, airborne.stdout + airborne.stderr
+    assert json.loads(airborne.stdout)["complete"] is True
+    del request["creature_motion"]
+    request_path.write_text(json.dumps(request), encoding="utf-8")
+    manifest["sprite_registration"] = {"baseline_y": 28}
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    Image.new("RGBA", (32, 32)).save(frame)
+    empty = _run("check_frame_alignment.py", "--run-dir", str(run_dir), "--warn-only")
+    assert empty.returncode == 1
+    assert json.loads(empty.stdout)["complete"] is False
+    frame.write_bytes(frame_bytes)
+
+    external_report = tmp_path / "operator-report.json"
+    explicit = _run("check_frame_alignment.py", "--run-dir", str(run_dir), "--report", str(external_report))
+    assert explicit.returncode == 0, explicit.stdout + explicit.stderr
+    assert json.loads(external_report.read_text(encoding="utf-8"))["ok"] is True
+    alias = _run("check_frame_alignment.py", "--run-dir", str(run_dir), "--report", str(frame))
+    assert alias.returncode == 3
+    assert "cannot overwrite sources" in alias.stdout
+    assert frame.read_bytes() == frame_bytes
+
+    state = "../../outside"
+    request["states"] = {state: {"frames": 1, "fps": 1}}
+    manifest["rows"][0]["state"] = state
+    request_path.write_text(json.dumps(request), encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    unsafe = _run("check_frame_alignment.py", "--run-dir", str(run_dir))
+    assert unsafe.returncode == 3
+    assert not (tmp_path / "outside-onion.png").exists()
 
 
 def test_amorphous_pulse_uses_declared_motion_thresholds_without_weakening_default() -> None:
@@ -162,6 +256,14 @@ def test_source_foreground_recovery_restores_black_torso_not_matte_hole() -> Non
     assert count > 400
     assert restored.getpixel((18, 20)) == (18, 18, 20, 255)
     assert restored.getpixel((48, 20))[3] == 0
+
+    source.putpixel((18, 20), (240, 50, 80, 0))
+    source.putpixel((18, 21), (18, 18, 20, 128))
+    alpha_preserved, _count = restore_source_foreground_regions(
+        source, cutout, [(128, 128, 128)], min_source_pixels=32
+    )
+    assert alpha_preserved.getpixel((18, 20))[3] == 0
+    assert alpha_preserved.getpixel((18, 21))[3] == 128
 
 
 def test_source_foreground_recovery_handles_black_void_open_between_horns() -> None:
@@ -293,6 +395,63 @@ def test_identity_fails_when_manifest_is_missing_and_zero_rows_are_checked(tmp_p
     assert report["ok"] is False
     assert report["results"] == []
     assert report["errors"]
+
+
+def test_identity_rejects_incomplete_metrics_and_preserves_sources(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    (run_dir / "frames").mkdir(parents=True)
+    request_path = run_dir / "sprite-request.json"
+    manifest_path = run_dir / "frames/frames-manifest.json"
+    report_path = run_dir / "qa/identity-consistency-report.json"
+    request = {"states": {"idle": {"frames": 2, "fps": 8}}}
+    records = [dict.fromkeys((
+        "head_width_vs_reference", "upper_width_vs_reference",
+        "body_mass_width_80_vs_reference", "opaque_area_vs_reference",
+    ), 1.0) for _ in range(2)]
+    row = {"state": "idle", "frame_records": records}
+    manifest = {"ok": True, "rows": [row]}
+    request_path.write_text(json.dumps(request), encoding="utf-8")
+
+    def run(*extra: str) -> subprocess.CompletedProcess[str]:
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        return _run("check_identity_consistency.py", "--run-dir", str(run_dir), *extra)
+
+    baseline = run()
+    assert baseline.returncode == 0, baseline.stdout + baseline.stderr
+    assert json.loads(report_path.read_text())["complete"] is True
+    row["frame_records"] = records[:1]
+    incomplete = run("--warn-only")
+    assert incomplete.returncode == 1
+    assert json.loads(incomplete.stdout)["complete"] is False
+    row["frame_records"] = records
+    del records[1]["head_width_vs_reference"]
+    partial = run("--warn-only")
+    assert partial.returncode == 1
+    assert json.loads(partial.stdout)["complete"] is False
+    diagnostic = run("--allow-missing-proxies")
+    assert diagnostic.returncode == 0
+    assert json.loads(diagnostic.stdout)["complete"] is False
+    records[1]["head_width_vs_reference"] = 1.0
+    for invalid in (True, float("nan")):
+        records[0]["head_width_vs_reference"] = invalid
+        result = run("--warn-only")
+        assert result.returncode == 3
+        assert "finite non-negative number" in result.stdout
+    records[0]["head_width_vs_reference"] = 1.0
+    original = request_path.read_bytes()
+    alias = run("--report", "sprite-request.json")
+    assert alias.returncode == 3
+    assert request_path.read_bytes() == original
+    onion = run_dir / "qa/idle-onion.png"
+    onion.write_bytes(b"review evidence")
+    alias = run("--report", str(onion))
+    assert alias.returncode == 3
+    assert onion.read_bytes() == b"review evidence"
+    previous_report = report_path.read_bytes()
+    invalid = run("--max-head", "nan")
+    assert invalid.returncode == 2
+    assert "finite" in invalid.stderr
+    assert report_path.read_bytes() == previous_report
 
 
 def test_identity_inflation_and_excessive_spread_block_by_default(tmp_path: Path) -> None:
@@ -768,6 +927,9 @@ def test_animation_gate_rejects_unknown_explicit_workflow(tmp_path: Path) -> Non
     report = json.loads((run_dir / "qa" / "animation-contract-report.json").read_text())
     assert report["ok"] is False
     assert any("typo-workflow" in error for error in report["errors"])
+    diagnostic = _run("check_animation_contracts.py", "--run-dir", str(run_dir), "--warn-only")
+    assert diagnostic.returncode == 1
+    assert json.loads(diagnostic.stdout)["complete"] is False
 
 
 def test_static_variants_do_not_infer_temporal_workflow_from_nouns() -> None:
@@ -869,6 +1031,79 @@ def test_gesture_contract_rejects_leg_and_contact_footprint_drift(tmp_path: Path
     planted = report["results"][0]["metrics"]["gesture_planted_lower_body"]
     assert planted["ok"] is False
     assert planted["lower_center_x_range"] > planted["max_center_x_range"]
+
+
+def test_animation_and_motion_reject_incomplete_inputs_and_preserve_sources(tmp_path: Path) -> None:
+    for script in ("check_animation_contracts.py", "check_motion_variation.py"):
+        run_dir = tmp_path / script.removesuffix(".py")
+        _write_gesture_run(run_dir, drifting_lower_body=False)
+        request_path = run_dir / "sprite-request.json"
+        original_request = request_path.read_bytes()
+        manifest = json.loads((run_dir / "frames/frames-manifest.json").read_text())
+        frames = [run_dir / relative for relative in manifest["rows"][0]["files"]]
+        originals = {frame: frame.read_bytes() for frame in frames}
+        args = ("--run-dir", str(run_dir), "--states", "all", "--warn-only")
+        baseline = _run(script, *args)
+        assert baseline.returncode == 0, baseline.stdout + baseline.stderr
+
+        request = json.loads(original_request)
+        request["states"]["wave"]["frames"] = 7
+        request_path.write_text(json.dumps(request), encoding="utf-8")
+        missing = _run(script, *args)
+        assert missing.returncode == 1
+        assert "expected 7 frames" in missing.stdout
+        assert json.loads(missing.stdout)["complete"] is False
+        request_path.write_bytes(original_request)
+        unknown = _run(script, "--run-dir", str(run_dir), "--states", "absent", "--warn-only")
+        assert unknown.returncode == 1
+
+        for relative in ("sprite-request.json", manifest["rows"][0]["files"][0]):
+            protected = run_dir / relative
+            before = protected.read_bytes()
+            aliased = _run(script, *args, "--report", relative)
+            assert aliased.returncode == 3
+            assert "cannot overwrite a source" in aliased.stdout
+            assert protected.read_bytes() == before
+
+        Image.new("RGBA", (32, 32)).save(frames[0])
+        mismatched = _run(script, *args)
+        assert mismatched.returncode == 1
+        assert "frame sizes differ" in mismatched.stdout
+        frames[0].write_bytes(originals[frames[0]])
+        for frame in frames:
+            Image.new("RGBA", (64, 64)).save(frame)
+        empty = _run(script, *args)
+        assert empty.returncode == 1
+        assert json.loads(empty.stdout)["complete"] is False
+        for frame, original in originals.items():
+            frame.write_bytes(original)
+        invalid_threshold = _run(script, *args, "--min-pair-lower-diff", "nan")
+        assert invalid_threshold.returncode == 2
+        assert "must be finite" in invalid_threshold.stderr
+
+
+def test_vfx_contract_allows_transparent_fade_endpoints(tmp_path: Path) -> None:
+    run_dir = tmp_path / "vfx"
+    (run_dir / "frames").mkdir(parents=True)
+    files = []
+    for index, radius in enumerate((0, 8, 16, 0)):
+        frame = Image.new("RGBA", (64, 64))
+        if radius:
+            ImageDraw.Draw(frame).ellipse((32-radius, 32-radius, 32+radius, 32+radius), fill=(240, 170, 40, 255))
+        path = run_dir / "frames" / f"frame-{index}.png"
+        frame.save(path)
+        files.append(path.relative_to(run_dir).as_posix())
+    request = {
+        "asset_kind": "vfx", "frame_semantics": "effects", "cell": {"width": 64, "height": 64},
+        "states": {"spark": {"frames": 4, "fps": 8, "loop": False, "animation_workflows": ["vfx-buildup-peak-decay"]}},
+    }
+    (run_dir / "sprite-request.json").write_text(json.dumps(request), encoding="utf-8")
+    (run_dir / "frames/frames-manifest.json").write_text(json.dumps({"ok": True, "rows": [{"state": "spark", "files": files}]}), encoding="utf-8")
+
+    result = _run("check_animation_contracts.py", "--run-dir", str(run_dir))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout)["complete"] is True
 
 
 def test_environment_wave_still_infers_water_loop() -> None:

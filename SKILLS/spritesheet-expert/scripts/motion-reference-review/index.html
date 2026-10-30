@@ -9,11 +9,11 @@
     /* tool-theme:start (generated from spritecore/tool_theme.py by sync_tool_theme.py; do not edit) */
 :root {
   color-scheme: dark;
-  --bg:#111211; --surface:#181918; --raised:#202120; --sunken:#0b0c0b;
-  --line:#2f312e; --line-strong:#464944; --ink:#ebebe6; --muted:#9a9c94; --faint:#6c6e67;
-  --accent:#7aa2ff; --accent-ink:#0b1430; --accent-soft:#7aa2ff22;
+  --bg:#111; --surface:#181818; --raised:#202020; --sunken:#0b0b0b;
+  --line:#303030; --line-strong:#474747; --ink:#ebebeb; --muted:#9a9a9a; --faint:#6c6c6c;
+  --accent:#d4d4d4; --accent-ink:#111; --accent-soft:#ffffff14;
   --ok:#5fbf83; --warn:#e2b443; --bad:#ef6a5f;
-  --checker-a:#2a2b29; --checker-b:#363834; --checker-size:16px;
+  --checker-a:#2a2a2a; --checker-b:#363636; --checker-size:16px;
   --matte-black:#000; --matte-gray:#808080; --matte-white:#fff;
   --scroll-track:var(--sunken);
   --radius:4px; --radius-lg:6px;
@@ -22,20 +22,20 @@
 }
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg:#f4f4f1; --surface:#fbfbf9; --raised:#ffffff; --sunken:#e8e8e3;
-  --line:#d9d9d2; --line-strong:#b9b9b0; --ink:#1b1c1a; --muted:#5e605a; --faint:#8b8d85;
-  --accent:#2f5bd3; --accent-ink:#ffffff; --accent-soft:#2f5bd31f;
+  --bg:#f4f4f4; --surface:#fbfbfb; --raised:#ffffff; --sunken:#e8e8e8;
+  --line:#d9d9d9; --line-strong:#b9b9b9; --ink:#1b1b1b; --muted:#5e5e5e; --faint:#8b8b8b;
+  --accent:#444; --accent-ink:#ffffff; --accent-soft:#00000014;
   --ok:#23824a; --warn:#9a6a00; --bad:#c2392f;
-  --checker-a:#dcdcd6; --checker-b:#f2f2ee;
+  --checker-a:#dcdcdc; --checker-b:#f2f2f2;
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
     color-scheme: light;
-    --bg:#f4f4f1; --surface:#fbfbf9; --raised:#ffffff; --sunken:#e8e8e3;
-    --line:#d9d9d2; --line-strong:#b9b9b0; --ink:#1b1c1a; --muted:#5e605a; --faint:#8b8d85;
-    --accent:#2f5bd3; --accent-ink:#ffffff; --accent-soft:#2f5bd31f;
+    --bg:#f4f4f4; --surface:#fbfbfb; --raised:#ffffff; --sunken:#e8e8e8;
+    --line:#d9d9d9; --line-strong:#b9b9b9; --ink:#1b1b1b; --muted:#5e5e5e; --faint:#8b8b8b;
+    --accent:#444; --accent-ink:#ffffff; --accent-soft:#00000014;
     --ok:#23824a; --warn:#9a6a00; --bad:#c2392f;
-    --checker-a:#dcdcd6; --checker-b:#f2f2ee;
+    --checker-a:#dcdcdc; --checker-b:#f2f2f2;
   }
 }
 * { box-sizing:border-box; scrollbar-width:thin; scrollbar-color:var(--line) var(--scroll-track); }
@@ -440,7 +440,7 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid va
         <div class="button-row"><button id="resetFrame" class="quiet" type="button">Reset frame</button><button id="copyTransform" class="quiet" type="button">Copy adjustment</button></div>
         <button id="pasteTransform" class="quiet full" type="button" disabled>Paste adjustment</button>
         <label class="check stack-gap"><input id="frameLocked" type="checkbox">Lock frame</label>
-        <p class="status">Drag to move · blue handle to scale · arrow keys 1 px · Shift 10 px.</p>
+        <p class="status">Drag to move · corner handle to scale · arrow keys 1 px · Shift 10 px.</p>
       </section>
       <section class="panel-group">
         <h3>Technical guides</h3>
@@ -501,6 +501,7 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid va
         <div class="button-stack stack-gap">
           <button id="queueCorrection" class="accent" type="button">Send selection to queue</button>
           <button id="exportPacket" class="primary" type="button">Export frame packet</button>
+          <div id="packetDownloads" class="button-stack" aria-label="Prepared packet downloads"></div>
           <button id="replaceFrame" class="quiet" type="button">Import Image Gen return</button>
           <input id="replaceFrameFile" class="hidden-input" type="file" accept="image/png,image/jpeg,image/webp">
         </div>
@@ -592,6 +593,7 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid va
     let frameCount = 6;
     let cellWidth = 0;
     let cellHeight = 0;
+    let loadedSheet = null;
     let timer = null;
     let clipboardTransform = null;
     let transforms = [];
@@ -603,8 +605,10 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid va
     let selectedFrames = new Set([0]);
     let lastSelectedFrame = 0;
     let correctionQueue = [];
+    let currentProjectId = "sideview-walk-six-frame";
+    try { currentProjectId = localStorage.getItem(CURRENT_PROJECT_KEY) || currentProjectId; } catch { /* Report unavailable storage when loading or saving. */ }
     let projectState = {
-      id: localStorage.getItem(CURRENT_PROJECT_KEY) || "sideview-walk-six-frame",
+      id: currentProjectId,
       name: "Side-view walk · 6 frames",
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -632,11 +636,15 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid va
     if (params.get("phases")) phases = params.get("phases").split(",").map(value => value.trim());
 
     function settings() {
-      const columns = Number.parseInt(controls.columns.value, 10);
-      const rows = Number.parseInt(controls.rows.value, 10);
-      const fps = Number.parseInt(controls.fps.value, 10);
-      if (![columns, rows, fps].every(Number.isInteger) || columns < 1 || rows < 1 || fps < 1) throw new Error("Grid values and FPS must be positive integers.");
+      const columns = Number(controls.columns.value);
+      const rows = Number(controls.rows.value);
+      const fps = Number(controls.fps.value);
+      if (![columns, rows, fps].every(Number.isSafeInteger) || columns < 1 || rows < 1 || columns > 32 || rows > 32 || fps < 1 || fps > 60) throw new Error("Grid values must be integers from 1 to 32; FPS must be an integer from 1 to 60.");
       return { columns, rows, fps };
+    }
+
+    function loadedSheetMatches() {
+      return Boolean(loadedSheet && image.complete && image.naturalWidth && controls.url.value === loadedSheet.source && image.currentSrc === loadedSheet.imageSrc && Number(controls.columns.value) === loadedSheet.columns && Number(controls.rows.value) === loadedSheet.rows);
     }
 
     function blankTransform() { return { x: 0, y: 0, scale: 1 }; }
@@ -686,7 +694,7 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid va
       const output = new Image();
       const objectUrl = URL.createObjectURL(blob);
       output.src = objectUrl;
-      await output.decode();
+      try { await output.decode(); } catch (error) { URL.revokeObjectURL(objectUrl); throw error; }
       output.dataset.objectUrl = objectUrl;
       return output;
     }
@@ -694,11 +702,11 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid va
       const output = new Image(); output.src = url; await output.decode(); return output;
     }
     function referenceImage(role, index = frame) {
-      if (role === "mechanics" && referenceSlots.mechanics.frame_images?.[index]) return referenceSlots.mechanics.frame_images[index];
+      if (role === "mechanics" && referenceSlots.mechanics.frame_urls?.length) return referenceSlots.mechanics.frame_images?.[index] || null;
       return referenceSlots[role]?.image || null;
     }
     function referencesReady() {
-      const mechanicsReady = referenceSlots.mechanics.frame_urls?.length ? referenceSlots.mechanics.frame_images.filter(Boolean).length === frameCount : Boolean(referenceSlots.mechanics.image);
+      const mechanicsReady = referenceSlots.mechanics.frame_urls?.length ? referenceSlots.mechanics.frame_urls.length === frameCount && referenceSlots.mechanics.frame_images.length === frameCount && referenceSlots.mechanics.frame_images.every(Boolean) : Boolean(referenceSlots.mechanics.image);
       return Boolean(referenceSlots.identity.image) && mechanicsReady;
     }
 
@@ -719,7 +727,7 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid va
         name: String(value?.name || "Variante importada"),
         created_at: String(value?.created_at || new Date().toISOString()),
         asset_key: value?.asset_key ? String(value.asset_key) : null,
-        provenance: String(value?.provenance || "imported-imagegen-return"),
+        provenance: String(value?.provenance || "imported-unverified"),
         image: null
       };
     }
@@ -736,8 +744,8 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid va
     }
 
     function applyProjectPayload(stored) {
-      if (!stored || !Array.isArray(stored.transforms) || stored.transforms.length !== frameCount) return false;
-      transforms = stored.transforms.map(value => ({ x: Number(value.x) || 0, y: Number(value.y) || 0, scale: Number(value.scale) || 1 }));
+      if (!validProjectTransforms(stored)) return false;
+      transforms = stored.transforms.map(value => ({ x: value.x, y: value.y, scale: value.scale }));
       if (Array.isArray(stored.frame_meta) && stored.frame_meta.length === frameCount) frameMeta = stored.frame_meta.map(normalizeMeta);
       if (stored.kind === PROJECT_KIND) {
         projectState = { ...projectState, ...(stored.project || {}) };
@@ -758,6 +766,10 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid va
       }
       if (Number.isFinite(stored.baseline_ratio)) controls.baseline.value = String(stored.baseline_ratio * 100);
       return true;
+    }
+
+    function validProjectTransforms(stored) {
+      return Array.isArray(stored?.transforms) && stored.transforms.length === frameCount && stored.transforms.every(value => value && [value.x, value.y, value.scale].every(item => typeof item === "number" && Number.isFinite(item)) && value.scale > 0);
     }
 
     async function restoreDurableAssets() {
@@ -834,6 +846,9 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid va
     }
 
     function saveProject(explicit = false) {
+      if (!loadedSheetMatches() || transforms.length !== frameCount || frameMeta.length !== frameCount) {
+        setStatus("Load the selected sheet and grid before saving its project.", "error"); setSessionStatus("No matching loaded sheet", true); return false;
+      }
       try {
         projectState.name = controls.projectName.value.trim() || projectState.name;
         projectState.updated_at = new Date().toISOString();
@@ -844,7 +859,8 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid va
         localStorage.setItem(PROJECT_INDEX_KEY, JSON.stringify(index.slice(0, 20)));
         projectDirty = false;
         setSessionStatus(explicit ? `Guardado · ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Autoguardado local", false);
-      } catch { setStatus("The browser could not persist the project.", "error"); setSessionStatus("No local persistence", true); }
+        return true;
+      } catch { setStatus("The browser could not persist the project. Export its JSON to retain metadata.", "error"); setSessionStatus("No local persistence", true); return false; }
     }
     function markDirty() { projectDirty = true; setSessionStatus("Pending changes", true); }
     function setStatus(message, kind = "") { const node = $("#status"); node.textContent = message; node.className = `status ${kind}`.trim(); }
@@ -1007,9 +1023,11 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid va
       const node = $("#readinessSummary");
       const assessments = frameMeta.flatMap(meta => quality_gates.map(gate => meta.gates?.[gate.id] || "pending"));
       const unresolvedJobs = correctionQueue.filter(job => !["accepted", "rejected"].includes(job.status)).length;
-      const ready = assessments.length > 0 && assessments.every(value => value === "pass") && unresolvedJobs === 0 && referencesReady();
-      node.textContent = ready ? "Manual gates complete · convert the review into hash-bound CLI evidence." : `Draft blocked · ${assessments.filter(value => value !== "pass").length} pending/failed gates · ${unresolvedJobs} open jobs.`;
-      node.style.borderColor = ready ? "var(--pass)" : "var(--danger)";
+      const contractMatches = loadedSheetMatches() && frameCount === animation_contract.frame_count;
+      const hasReferences = referencesReady();
+      const ready = contractMatches && assessments.length > 0 && assessments.every(value => value === "pass") && unresolvedJobs === 0 && hasReferences;
+      node.textContent = ready ? "Manual gates complete · convert the review into hash-bound CLI evidence." : `Draft blocked · ${assessments.filter(value => value !== "pass").length} pending/failed gates · ${unresolvedJobs} open jobs${hasReferences ? "" : " · missing references"}${contractMatches ? "" : " · requires six-frame contract"}.`;
+      node.style.borderColor = ready ? "var(--ok)" : "var(--bad)";
     }
 
     function syncFrameOverrides(index = null) {
@@ -1146,8 +1164,10 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid va
     image.addEventListener("load", async () => {
       try {
         const { columns, rows } = settings();
+        if (image.currentSrc !== new URL(controls.url.value, location.href).href) throw new Error("The sheet URL changed while loading. Load the intended source again.");
         if (image.naturalWidth % columns || image.naturalHeight % rows) throw new Error("The dimensions are not divisible by the declared grid.");
         frameCount = columns * rows; cellWidth = image.naturalWidth / columns; cellHeight = image.naturalHeight / rows;
+        loadedSheet = { source: controls.url.value, imageSrc: image.currentSrc, columns, rows };
         frameCanvas.width = guideCanvas.width = cellWidth; frameCanvas.height = guideCanvas.height = cellHeight;
         controls.scrubber.max = String(frameCount - 1); frame = 0;
         const projectLoadState = await loadStoredProject(); rebuildFilmstrip(); updateInspector(); drawStage(); updateHistoryButtons(); requestAnimationFrame(fitView);
@@ -1197,7 +1217,7 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid va
     }));
 
     controls.projectName.addEventListener("input", () => { projectState.name = controls.projectName.value; markDirty(); });
-    $("#saveProject").addEventListener("click", () => { saveProject(true); setStatus("Project and metadata saved locally.", "success"); });
+    $("#saveProject").addEventListener("click", () => { if (saveProject(true)) setStatus("Project metadata saved locally; binary references remain in IndexedDB or the current session.", "success"); });
     $("#newProject").addEventListener("click", () => {
       if (!window.confirm("Create a clean project? The original sheet will not change, and the current project will remain in local storage.")) return;
       stop(); projectState = { id: uniqueId("walk-project"), name: "Side-view walk · new candidate", created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
@@ -1213,13 +1233,21 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid va
 
     async function loadReference(role, file) {
       if (!file) return;
+      const projectFrames = frameMeta;
+      const projectId = projectState.id;
       try {
-        const assetKey = `${projectState.id}:reference:${role}`;
+        const assetKey = `${projectId}:reference:${role}:${uniqueId("asset")}`;
         const referenceImage = await imageFromBlob(file);
-        referenceSlots[role] = { role, name: file.name, image: referenceImage, asset_key: assetKey, source_url: null, frame_urls: [], frame_images: [] };
-        try { await putAsset(assetKey, file); } catch { setStatus("Reference loaded for this session; IndexedDB is unavailable.", "error"); }
+        if (frameMeta !== projectFrames || projectState.id !== projectId) return setStatus("The project changed while reading the reference. Import it again in the intended project.", "error");
+        let persisted = true;
+        try { await putAsset(assetKey, file); } catch { persisted = false; }
+        if (frameMeta !== projectFrames || projectState.id !== projectId) return setStatus("The project changed while reading the reference. Import it again in the intended project.", "error");
+        referenceSlots[role] = { role, name: file.name, image: referenceImage, asset_key: persisted ? assetKey : null, source_url: null, frame_urls: [], frame_images: [] };
+        frameMeta.forEach((_, index) => invalidateFrameGates(index, `${role} reference changed`));
         correctionQueue.forEach(job => { if (!["accepted", "rejected"].includes(job.status)) { job.status = "stale"; job.stale_reason = `${role} reference changed`; } });
-        markDirty(); saveProject(); updateReferenceSlots(); renderCorrectionQueue(); updateFilmstripState(); setStatus(`${role === "identity" ? "Identity" : "Mechanics"} reference ready.`, "success");
+        markDirty(); const saved = saveProject(); updateReferenceSlots(); renderGateChecklist(); renderCorrectionQueue(); updateFilmstripState();
+        if (!saved) return;
+        setStatus(`${role === "identity" ? "Identity" : "Mechanics"} reference ready.${persisted ? "" : " Available for this session only; its binary asset was not saved."}`, persisted ? "success" : "error");
       } catch { setStatus("The reference could not be read.", "error"); }
     }
     $("#referenceIdentity").addEventListener("click", () => $("#referenceIdentityFile").click());
@@ -1228,28 +1256,42 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid va
     $("#referenceMechanicsFile").addEventListener("change", async event => { await loadReference("mechanics", event.target.files[0]); event.target.value = ""; });
     $("#useWorkbenchTemplates").addEventListener("click", async () => {
       if (frameCount !== animation_contract.frame_count) return setStatus("The versioned templates belong to the six-frame walk contract.", "error");
+      const projectFrames = frameMeta; const projectId = projectState.id;
       try {
         setStatus("Loading versioned templates…");
         const identityImage = await imageFromUrl(defaultIdentityReference);
         const mechanicsImages = await Promise.all(defaultMechanicsReferences.map(url => imageFromUrl(url)));
+        if (frameMeta !== projectFrames || projectState.id !== projectId) return setStatus("The project changed while loading templates; load them again in the intended project.", "error");
+        if (!defaultIdentityReference || mechanicsImages.length !== frameCount) throw new Error("Incomplete template references");
         referenceSlots.identity = { role: "identity", name: "Character transfer · identity anchor", image: identityImage, asset_key: null, source_url: defaultIdentityReference };
         referenceSlots.mechanics = { role: "mechanics", name: "Articulated mannequin · frame mapped", image: null, asset_key: null, source_url: null, frame_urls: [...defaultMechanicsReferences], frame_images: mechanicsImages };
+        frameMeta.forEach((_, index) => invalidateFrameGates(index, "workbench references changed"));
         correctionQueue.forEach(job => { if (!["accepted", "rejected"].includes(job.status)) { job.status = "stale"; job.stale_reason = "workbench references changed"; } });
-        markDirty(); saveProject(); updateReferenceSlots(); renderCorrectionQueue(); updateFilmstripState(); setStatus("Identity and mechanics templates linked without regeneration.", "success");
+        markDirty(); const saved = saveProject(); updateReferenceSlots(); renderGateChecklist(); renderCorrectionQueue(); updateFilmstripState();
+        if (saved) setStatus("Identity and mechanics templates linked without regeneration.", "success");
       } catch { setStatus("The workbench could not load the versioned templates.", "error"); }
     });
 
-    async function importVariant(file, provenance = "imported-imagegen-return") {
+    async function importVariant(file, provenance = "imported-unverified") {
       if (!file) return;
+      const targetFrame = frame; const projectFrames = frameMeta; const projectId = projectState.id;
+      if (!frameMeta[targetFrame] || frameMeta[targetFrame].locked) return setStatus("Unlock the target frame before importing a variant.", "error");
+      const revision = frameMeta[targetFrame].revision;
       try {
-        const variantImage = await imageFromBlob(file); const id = uniqueId(`f${frame + 1}-variant`); const assetKey = `${projectState.id}:frame:${frame + 1}:${id}`;
+        const variantImage = await imageFromBlob(file); const id = uniqueId(`f${targetFrame + 1}-variant`); const assetKey = `${projectId}:frame:${targetFrame + 1}:${id}`;
+        if (frameMeta !== projectFrames || projectState.id !== projectId || frameMeta[targetFrame].locked || frameMeta[targetFrame].revision !== revision) return setStatus("The target changed while reading the variant. Import it again in the intended frame.", "error");
         const expectedRatio = cellWidth / cellHeight; const actualRatio = variantImage.naturalWidth / variantImage.naturalHeight;
         if (Math.abs(expectedRatio - actualRatio) > .01) throw new Error("The variant does not preserve the frame aspect ratio.");
         const variant = { id, name: file.name, created_at: new Date().toISOString(), asset_key: assetKey, provenance, image: variantImage };
-        try { await putAsset(assetKey, file); } catch { setStatus("Variant available for this session only.", "error"); }
-        recordHistory(); frameVariants[frame].push(variant); activeVariantIds[frame] = id; selectedVariantId = id; syncFrameOverrides(frame); invalidateFrameGates(frame, "active variant changed");
-        correctionQueue.forEach(job => { if (job.target_frame === frame + 1 && !["accepted", "rejected"].includes(job.status)) job.status = "returned"; });
-        markDirty(); saveProject(); drawStage(); refreshThumbnail(frame); updateInspector(); updateFilmstripState(); setStatus(`Variant imported and activated for F${frame + 1}. The original remains intact.`, "success");
+        let persisted = true;
+        try { await putAsset(assetKey, file); } catch { persisted = false; variant.asset_key = null; }
+        if (frameMeta !== projectFrames || projectState.id !== projectId || frameMeta[targetFrame].locked || frameMeta[targetFrame].revision !== revision) return setStatus("The target changed while reading the variant. Import it again in the intended frame.", "error");
+        recordHistory(); frameVariants[targetFrame].push(variant); activeVariantIds[targetFrame] = id;
+        if (frame === targetFrame) selectedVariantId = id;
+        syncFrameOverrides(targetFrame); invalidateFrameGates(targetFrame, "active variant changed");
+        if (provenance === "imagegen-return") correctionQueue.forEach(job => { if (job.target_frame === targetFrame + 1 && !["accepted", "rejected"].includes(job.status)) job.status = "returned"; });
+        markDirty(); const saved = saveProject(); drawStage(); refreshThumbnail(targetFrame); updateInspector(); updateFilmstripState();
+        if (saved) setStatus(`Variant imported and activated for F${targetFrame + 1}.${persisted ? "" : " Session only; its binary asset was not saved."}`, persisted ? "success" : "error");
       } catch (error) { setStatus(error.message || "The variant could not be loaded.", "error"); }
     }
     $("#addVariant").addEventListener("click", () => $("#variantFile").click());
@@ -1319,6 +1361,7 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid va
     }
 
     function packetForFrame(index) {
+      if (!loadedSheetMatches() || frameCount !== animation_contract.frame_count || !Number.isInteger(index) || index < 0 || index >= frameCount) throw new Error("Load the intended sheet and grid for the six-frame walk contract before preparing corrections.");
       const meta = frameMeta[index];
       const failedGates = quality_gates.filter(gate => ["fail", "stale"].includes(meta.gates[gate.id])).map(gate => gate.id);
       return {
@@ -1357,6 +1400,7 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid va
 
     function queueSelectedCorrections() {
       if (!selectedFrames.size) return setStatus("Select at least one frame.", "error");
+      if (!loadedSheetMatches() || frameCount !== animation_contract.frame_count) return setStatus("Load the intended sheet and grid for the six-frame walk contract before preparing corrections.", "error");
       recordHistory();
       const ordered = animation_contract.generation_order.map(value => value - 1).filter(index => selectedFrames.has(index));
       ordered.forEach(index => {
@@ -1385,6 +1429,7 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid va
     });
 
     $("#exportCorrectionQueue").addEventListener("click", () => {
+      if (!loadedSheetMatches() || frameCount !== animation_contract.frame_count) return setStatus("Load the intended sheet and grid for the six-frame walk contract before preparing corrections.", "error");
       const order = new Map(animation_contract.generation_order.map((value, index) => [value, index]));
       const manifest = {
         version: 1, kind: "sprite-imagegen-correction-queue", project_id: projectState.id,
@@ -1394,16 +1439,18 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid va
     });
 
     function downloadBlob(blob, filename) { const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = filename; link.click(); window.setTimeout(() => URL.revokeObjectURL(link.href), 1000); }
-    function canvasBlob(canvas) { return new Promise(resolve => canvas.toBlob(resolve, "image/png")); }
+    function canvasBlob(canvas) { return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("The browser could not export the PNG.")), "image/png")); }
     function renderedFrameCanvas(index) { const output = document.createElement("canvas"); output.width = cellWidth; output.height = cellHeight; drawSourceFrame(output.getContext("2d"), index, transforms[index], 1); return output; }
-    $("#exportJson").addEventListener("click", () => { downloadBlob(new Blob([JSON.stringify(correctionPayload(), null, 2) + "\n"], { type: "application/json" }), `${safeName(projectState.name)}-project-v3.json`); setStatus("Project v3 exported. Binary assets remain in IndexedDB and ship separately.", "success"); });
-    $("#exportAlignment").addEventListener("click", () => { downloadBlob(new Blob([JSON.stringify(alignmentProfilePayload(), null, 2) + "\n"], { type: "application/json" }), `${safeName(projectState.name)}-alignment-profile.json`); setStatus("Alignment profile v2 exported for the current scripts.", "success"); });
+    $("#exportJson").addEventListener("click", () => { if (!loadedSheetMatches()) return setStatus("Load the selected sheet and grid before exporting.", "error"); downloadBlob(new Blob([JSON.stringify(correctionPayload(), null, 2) + "\n"], { type: "application/json" }), `${safeName(projectState.name)}-project-v3.json`); setStatus("Project v3 exported. Binary assets remain in IndexedDB and ship separately.", "success"); });
+    $("#exportAlignment").addEventListener("click", () => { if (!loadedSheetMatches()) return setStatus("Load the selected sheet and grid before exporting.", "error"); downloadBlob(new Blob([JSON.stringify(alignmentProfilePayload(), null, 2) + "\n"], { type: "application/json" }), `${safeName(projectState.name)}-alignment-profile.json`); setStatus("Alignment profile v2 exported for the current scripts.", "success"); });
     $("#importJson").addEventListener("click", () => $("#importFile").click());
     $("#importFile").addEventListener("change", async event => {
       try {
+        if (!loadedSheetMatches()) throw new Error("Load the intended sheet and grid before importing its project.");
         const payload = JSON.parse(await event.target.files[0].text());
-        if (![PROJECT_KIND, "sprite-frame-registration-corrections"].includes(payload?.kind) || payload?.transforms?.length !== frameCount) throw new Error("The JSON does not belong to this sheet.");
+        if (![PROJECT_KIND, "sprite-frame-registration-corrections"].includes(payload?.kind) || !validProjectTransforms(payload)) throw new Error("The JSON does not contain valid transforms for this sheet.");
         if (payload.source && payload.source !== controls.url.value) throw new Error("The project points to another sheet. Load that source first to avoid applying transforms to the wrong candidate.");
+        if (payload.grid && (payload.grid.columns !== settings().columns || payload.grid.rows !== settings().rows)) throw new Error("The project grid differs from this sheet.");
         recordHistory(); initializeProjectFrames();
         if (!applyProjectPayload(payload)) throw new Error("The project could not be migrated.");
         localStorage.setItem(CURRENT_PROJECT_KEY, projectState.id); await restoreDurableAssets(); saveProject(true); updateInspector(); drawStage(); rebuildFilmstrip(); renderCorrectionQueue(); setStatus(payload.kind === PROJECT_KIND ? "Project v3 imported." : "Project v2 migrated to v3.", "success");
@@ -1417,27 +1464,48 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid va
     });
     $("#clearReplacement").addEventListener("click", () => { if (activeVariantIds[frame] === "original") return; recordHistory(); activeVariantIds[frame] = "original"; selectedVariantId = "original"; syncFrameOverrides(frame); invalidateFrameGates(frame, "returned to original"); markDirty(); saveProject(); drawStage(); refreshThumbnail(frame); updateInspector(); updateFilmstripState(); setStatus(`F${frame + 1} returned to the original; its variants remain available.`, "success"); });
     $("#exportPacket").addEventListener("click", async () => {
-      const previousIndex = (frame - 1 + frameCount) % frameCount; const nextIndex = (frame + 1) % frameCount;
-      const contextSheet = document.createElement("canvas"); contextSheet.width = cellWidth * 5; contextSheet.height = cellHeight + 42; const context = contextSheet.getContext("2d");
-      context.fillStyle = "#171714"; context.fillRect(0, 0, contextSheet.width, 42); context.font = "700 18px system-ui"; context.textAlign = "center"; context.fillStyle = "#fffdf8";
-      ["IDENTITY", "MECHANICS", "PREVIOUS", "TARGET", "NEXT"].forEach((label, index) => context.fillText(label, cellWidth * (index + .5), 27));
-      function drawReferenceImage(referenceImage, column) {
-        context.save(); context.translate(column * cellWidth, 42); context.fillStyle = "#f4f0e7"; context.fillRect(0, 0, cellWidth, cellHeight);
-        if (referenceImage?.naturalWidth) { const ratio = Math.min(cellWidth / referenceImage.naturalWidth, cellHeight / referenceImage.naturalHeight) * .94; context.drawImage(referenceImage, (cellWidth - referenceImage.naturalWidth * ratio) / 2, (cellHeight - referenceImage.naturalHeight * ratio) / 2, referenceImage.naturalWidth * ratio, referenceImage.naturalHeight * ratio); }
-        else { context.fillStyle = "#6d6b63"; context.font = "700 16px system-ui"; context.fillText("MISSING REFERENCE", cellWidth / 2, cellHeight / 2); }
-        context.restore();
-      }
-      drawReferenceImage(referenceImage("identity", frame), 0); drawReferenceImage(referenceImage("mechanics", frame), 1);
-      [previousIndex, frame, nextIndex].forEach((index, offset) => { context.save(); context.translate((offset + 2) * cellWidth, 42); context.beginPath(); context.rect(0, 0, cellWidth, cellHeight); context.clip(); drawSourceFrame(context, index, transforms[index], 1); context.restore(); });
-      const packet = packetForFrame(frame);
-      const prefix = `frame-${String(frame + 1).padStart(2, "0")}-correction`;
-      downloadBlob(await canvasBlob(renderedFrameCanvas(frame)), `${prefix}-target.png`);
-      downloadBlob(await canvasBlob(contextSheet), `${prefix}-context.png`);
-      downloadBlob(new Blob([JSON.stringify(packet, null, 2) + "\n"], { type: "application/json" }), `${prefix}.json`);
-      const job = correctionQueue.find(item => item.target_frame === frame + 1 && !["accepted", "rejected"].includes(item.status)); if (job) { job.status = "exported"; job.exported_at = new Date().toISOString(); saveProject(); renderCorrectionQueue(); updateFilmstripState(); }
-      setStatus(`Context packet for frame ${frame + 1} exported.`, "success");
+      try {
+        const targetFrame = frame; const projectFrames = frameMeta; const projectId = projectState.id; const revision = frameMeta[targetFrame]?.revision;
+        const packet = packetForFrame(targetFrame);
+        const previousIndex = (targetFrame - 1 + frameCount) % frameCount; const nextIndex = (targetFrame + 1) % frameCount;
+        const contextFrames = [previousIndex, targetFrame, nextIndex];
+        const revisions = contextFrames.map(index => frameMeta[index].revision);
+        const packetJson = JSON.stringify(packet, null, 2) + "\n";
+        const stillCurrent = () => loadedSheetMatches() && frameMeta === projectFrames && projectState.id === projectId && frameMeta[targetFrame].revision === revision && contextFrames.every((index, offset) => frameMeta[index].revision === revisions[offset]) && JSON.stringify(packetForFrame(targetFrame), null, 2) + "\n" === packetJson;
+        const columnWidth = Math.max(160, cellWidth); const previewHeight = Math.round(cellHeight * columnWidth / cellWidth);
+        const contextSheet = document.createElement("canvas"); contextSheet.width = columnWidth * 5; contextSheet.height = previewHeight + 42; const context = contextSheet.getContext("2d"); context.imageSmoothingEnabled = false;
+        context.fillStyle = "#111"; context.fillRect(0, 0, contextSheet.width, 42); context.font = "700 18px system-ui"; context.textAlign = "center"; context.fillStyle = "#ebebeb";
+        ["IDENTITY", "MECHANICS", "PREVIOUS", "TARGET", "NEXT"].forEach((label, index) => context.fillText(label, columnWidth * (index + .5), 27));
+        function drawReferenceImage(referenceImage, column) {
+          context.save(); context.translate(column * columnWidth, 42); context.beginPath(); context.rect(0, 0, columnWidth, previewHeight); context.clip(); context.fillStyle = "#eee"; context.fillRect(0, 0, columnWidth, previewHeight);
+          if (referenceImage?.naturalWidth) { const ratio = Math.min(columnWidth / referenceImage.naturalWidth, previewHeight / referenceImage.naturalHeight) * .94; context.drawImage(referenceImage, (columnWidth - referenceImage.naturalWidth * ratio) / 2, (previewHeight - referenceImage.naturalHeight * ratio) / 2, referenceImage.naturalWidth * ratio, referenceImage.naturalHeight * ratio); }
+          else { context.fillStyle = "#666"; context.font = "700 16px system-ui"; context.fillText("MISSING", columnWidth / 2, previewHeight / 2 - 4); context.fillText("REFERENCE", columnWidth / 2, previewHeight / 2 + 18); }
+          context.restore();
+        }
+        drawReferenceImage(referenceImage("identity", targetFrame), 0); drawReferenceImage(referenceImage("mechanics", targetFrame), 1);
+        [previousIndex, targetFrame, nextIndex].forEach((index, offset) => { context.drawImage(renderedFrameCanvas(index), (offset + 2) * columnWidth, 42, columnWidth, previewHeight); });
+        const prefix = `frame-${String(targetFrame + 1).padStart(2, "0")}-correction`;
+        const [targetBlob, contextBlob] = await Promise.all([canvasBlob(renderedFrameCanvas(targetFrame)), canvasBlob(contextSheet)]);
+        if (!stillCurrent()) return setStatus("The target or its context changed during export. Prepare its packet again.", "error");
+        const downloads = $("#packetDownloads"); downloads.replaceChildren();
+        const note = document.createElement("p"); note.className = "mini-note"; note.textContent = `Prepared F${targetFrame + 1} snapshot. Download all three files separately.`; downloads.append(note);
+        for (const [label, filename, blob] of [
+          ["Download target PNG", `${prefix}-target.png`, targetBlob],
+          ["Download context PNG", `${prefix}-context.png`, contextBlob],
+          ["Download packet JSON", `${prefix}.json`, new Blob([packetJson], { type: "application/json" })]
+        ]) {
+          const button = document.createElement("button"); button.type = "button"; button.className = "quiet"; button.textContent = label;
+          button.addEventListener("click", () => {
+            if (!stillCurrent()) { downloads.replaceChildren(); return setStatus("The frame or its context changed. Prepare a fresh packet.", "error"); }
+            downloadBlob(blob, filename); setStatus(`Download requested: ${filename}. Verify all three files before using the packet.`);
+          });
+          downloads.append(button);
+        }
+        setStatus(`Packet for frame ${targetFrame + 1} prepared. Use its three download buttons.`);
+      } catch (error) { setStatus(error.message, "error"); }
     });
     $("#exportPng").addEventListener("click", () => {
+      if (!loadedSheetMatches()) return setStatus("Load the selected sheet and grid before exporting.", "error");
       const { columns, rows } = settings(); const output = document.createElement("canvas"); output.width = cellWidth * columns; output.height = cellHeight * rows; const context = output.getContext("2d");
       for (let index = 0; index < frameCount; index += 1) { const column = index % columns; const row = Math.floor(index / columns); context.save(); context.translate(column * cellWidth, row * cellHeight); context.beginPath(); context.rect(0, 0, cellWidth, cellHeight); context.clip(); drawSourceFrame(context, index, transforms[index], 1); context.restore(); }
       output.toBlob(blob => { if (!blob) return setStatus("The browser could not export the PNG.", "error"); downloadBlob(blob, "sideview-walk-corrected.png"); setStatus("Corrected sheet exported; keep the project JSON as well.", "success"); }, "image/png");

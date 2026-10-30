@@ -9,9 +9,9 @@ never rewritten — the atlas/GIF compose steps read this sidecar and apply the
 transform at compose time, so a curation decision is always reversible by
 editing or deleting `curation.json`.
 
-This module is the single source of truth for the curation schema and for how a
-transform is applied, so the webview server and the compose scripts can never
-drift apart.
+Compose and export share the sidecar parser and transform implementation here.
+Keep the browser's preview matrix aligned with ``transform_matrix``; browser and
+Pillow resampling can differ.
 
 Schema (`curation.json`):
 
@@ -31,7 +31,8 @@ Schema (`curation.json`):
 Defaults when absent (explicit, not a silent fallback):
 - no `curation.json`           -> every state uses all extracted frames in order, identity transform.
 - state missing from sidecar   -> same all-frames default for that state.
-- `selected` missing/empty     -> all frames in extraction order.
+- `selected` missing           -> all frames in extraction order.
+- `selected: []`                -> no frames selected.
 - frame missing from transforms -> identity transform.
 
 `rotate` is in degrees, counter-clockwise positive (PIL convention).
@@ -86,8 +87,7 @@ def normalize_transform(raw: Any) -> dict[str, float]:
         "dy": float(raw.get("dy", 0)),
         "shx": float(raw.get("shx", 0.0)),
         "shy": float(raw.get("shy", 0.0)),
-        # (Alex 2026-05-28) flipX: 0 | 1 — horizontal mirror. Image-gen 결과가 좌우
-        # 반대로 나올 때 frame 별로 거울 반전. matrix 마지막에 diag(-1, 1) 곱.
+        # Alex, 2026-05-28: flipX mirrors the source before the other transforms.
         "flipX": 1 if raw.get("flipX") else 0,
     }
 
@@ -108,9 +108,8 @@ def transform_matrix(t: dict[str, float]) -> tuple[float, float, float, float]:
     """Forward 2x2 linear matrix (M00, M01, M10, M11) = Rotate · Shear · Scale · FlipX.
 
     Screen y-down. Positive `rotate` is counter-clockwise. This exact matrix is
-    mirrored in the webview (CSS `matrix()` + canvas), so what the user aligns to
-    the ground grid is what bakes — no preview/bake drift. flipX (when set)
-    multiplies the right-most diag(-1, 1) so column-0 의 부호가 반전된다.
+    mirrored in the webview (CSS `matrix()` + canvas). flipX multiplies the
+    right-most diag(-1, 1), which negates the first column.
     """
     rr = math.radians(t["rotate"])
     c, sn = math.cos(rr), math.sin(rr)
@@ -141,10 +140,8 @@ def state_plan(
         return default_order, {}
 
     selected = entry.get("selected")
-    if isinstance(selected, list) and selected:
+    if isinstance(selected, list):
         ordered = [int(i) for i in selected if 0 <= int(i) < default_count]
-        if not ordered:
-            ordered = default_order
     else:
         ordered = default_order
 
@@ -174,8 +171,7 @@ def apply_transform(
     Rendered with one inverse-affine `Image.transform` into the cell, so cell
     size is preserved and the atlas layout never changes. Non-destructive: the
     source frame is not modified. The forward matrix matches `transform_matrix`,
-    which the webview uses for its preview, so alignment to the ground grid is
-    faithful to the bake.
+    which the webview also uses for its preview geometry.
     """
     transform = normalize_transform(transform) if transform else dict(IDENTITY)
     policy = policy or ResizePolicy(mode=ArtMode.ILLUSTRATED)

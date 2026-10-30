@@ -5,6 +5,7 @@ from __future__ import annotations
 from base64 import b64encode
 from hashlib import sha256
 import html
+from io import BytesIO, StringIO
 import json
 from pathlib import Path, PurePosixPath
 import posixpath
@@ -14,6 +15,7 @@ from PIL import Image
 
 from spritecore.contracts import load_manifest
 from spritecore.paths import PathSafetyError, resolve_run_path
+from spritecore.runtime_preview import RuntimePreviewError, manifest_durations_ms
 from spritecore.tool_theme import THEME_SCRIPT, TOOL_CSS
 
 
@@ -53,38 +55,37 @@ def _portable_output(run_dir: Path, value: str, suffix: str) -> Path:
 
 
 def _durations(manifest: Mapping[str, Any], state: str, count: int) -> list[int]:
-    animation = manifest.get("animation")
-    row: Mapping[str, Any] = {}
-    if isinstance(animation, Mapping):
-        rows = animation.get("rows")
-        if isinstance(rows, Mapping) and isinstance(rows.get(state), Mapping):
-            row = rows[state]
-    explicit = row.get("durations_ms")
-    if (
-        isinstance(explicit, list)
-        and len(explicit) == count
-        and all(isinstance(value, int) and not isinstance(value, bool) and value > 0 for value in explicit)
-    ):
-        return list(explicit)
-    fps = row.get("fps", 8)
-    if isinstance(fps, bool) or not isinstance(fps, (int, float)) or fps <= 0:
-        raise PreviewWorkbenchError(f"animation row {state!r} has invalid fps")
-    return [max(1, round(1000 / fps))] * count
+    try:
+        return list(manifest_durations_ms(manifest, state, count))
+    except RuntimePreviewError as exc:
+        raise PreviewWorkbenchError(str(exc)) from exc
 
 
-def _gate_status(path: Path) -> str:
+def _gate_status(path: Path, content: bytes) -> str:
     """Read pass/fail/warn from a QA JSON report; other files are plain evidence."""
     if path.suffix.lower() != ".json":
         return "file"
     try:
-        report = json.loads(path.read_text(encoding="utf-8"))
+        report = json.loads(content)
     except (OSError, ValueError):
         return "fail"
     if not isinstance(report, Mapping):
-        return "file"
+        return "fail"
+    errors, warnings = report.get("errors", []), report.get("warnings", [])
+    if not isinstance(errors, list) or not isinstance(warnings, list) or errors:
+        return "fail"
+    for name in ("ok", "complete", "applicable"):
+        if name in report and type(report[name]) is not bool:
+            return "fail"
+    if report.get("ok") is False:
+        return "fail"
+    if report.get("complete") is False or report.get("applicable") is False:
+        return "warn"
     status = report.get("status")
     if status in ("pass", "fail", "warn"):
-        return status
+        return "warn" if status == "pass" and warnings else status
+    if "status" in report:
+        return "warn" if status == "skipped" else "fail"
     ok = report.get("ok")
     if isinstance(ok, bool):
         if not ok:
@@ -101,8 +102,9 @@ def _relative_href(output_path: Path, target: Path) -> str:
     return str(PurePosixPath(relative))
 
 
-def _source_record(run_dir: Path, path: Path, role: str) -> dict[str, Any]:
-    content = path.read_bytes()
+def _source_record(run_dir: Path, path: Path, role: str, *, content: bytes | None = None) -> dict[str, Any]:
+    if content is None:
+        content = path.read_bytes()
     return {
         "role": role,
         "path": path.relative_to(run_dir).as_posix(),
@@ -146,7 +148,8 @@ def prepare_workbench(
     if not manifest_path.is_file():
         raise PreviewWorkbenchError(f"manifest does not exist: {manifest_name}")
     try:
-        manifest = load_manifest(manifest_path).data
+        manifest_bytes = manifest_path.read_bytes()
+        manifest = load_manifest(StringIO(manifest_bytes.decode("utf-8-sig"))).data
     except ValueError as exc:
         raise PreviewWorkbenchError(str(exc)) from exc
 
@@ -158,9 +161,10 @@ def prepare_workbench(
     if not atlas_path.is_file() or atlas_path == manifest_path:
         raise PreviewWorkbenchError(f"atlas does not exist: {atlas_name}")
     try:
-        with Image.open(atlas_path) as opened:
+        atlas_bytes = atlas_path.read_bytes()
+        with Image.open(BytesIO(atlas_bytes)) as opened:
             opened.verify()
-        with Image.open(atlas_path) as opened:
+        with Image.open(BytesIO(atlas_bytes)) as opened:
             actual_dimensions = opened.size
             image_format = (opened.format or "PNG").lower()
     except (OSError, ValueError) as exc:
@@ -173,7 +177,7 @@ def prepare_workbench(
 
     output_path = _portable_output(run_root, output_name, ".html")
     report_path = _portable_output(run_root, report_name, ".json")
-    if output_path == report_path or output_path in {atlas_path, manifest_path}:
+    if output_path == report_path or {output_path, report_path} & {atlas_path, manifest_path}:
         raise PreviewWorkbenchError("preview workbench outputs cannot overwrite sources")
     if not force:
         collisions = [path for path in (output_path, report_path) if path.exists()]
@@ -197,18 +201,21 @@ def prepare_workbench(
         }
 
     evidence: list[dict[str, str]] = []
+    evidence_records: dict[str, dict[str, Any]] = {}
     for label, relative in KNOWN_EVIDENCE:
         try:
             target = resolve_run_path(run_root, relative)
         except PathSafetyError:
             continue
         if target.is_file():
+            content = target.read_bytes()
+            evidence_records[relative] = _source_record(run_root, target, "evidence", content=content)
             evidence.append(
                 {
                     "label": label,
                     "path": relative,
                     "href": _relative_href(output_path, target),
-                    "status": _gate_status(target),
+                    "status": _gate_status(target, content),
                 }
             )
         else:
@@ -223,6 +230,7 @@ def prepare_workbench(
             except PathSafetyError:
                 continue
             if target.is_file():
+                evidence_records[relative] = _source_record(run_root, target, "evidence")
                 evidence.append(
                     {
                         "label": label,
@@ -234,6 +242,9 @@ def prepare_workbench(
     runtime_dir = run_root / "qa" / "runtime-preview"
     if runtime_dir.is_dir():
         for target in sorted(runtime_dir.glob("*.evidence.json")):
+            relative = target.relative_to(run_root).as_posix()
+            target = resolve_run_path(run_root, relative)
+            evidence_records[relative] = _source_record(run_root, target, "evidence")
             evidence.append(
                 {
                     "label": f"Runtime: {target.stem.removesuffix('.evidence')}",
@@ -243,7 +254,6 @@ def prepare_workbench(
                 }
             )
 
-    atlas_bytes = atlas_path.read_bytes()
     mime = "image/png" if image_format == "png" else f"image/{image_format}"
     atlas_data_uri = f"data:{mime};base64,{b64encode(atlas_bytes).decode('ascii')}"
     preview_data = {
@@ -255,15 +265,14 @@ def prepare_workbench(
     }
     html_bytes = _render_html(preview_data, atlas_data_uri).encode("utf-8")
     sources = [
-        _source_record(run_root, atlas_path, "atlas"),
-        _source_record(run_root, manifest_path, "manifest"),
+        _source_record(run_root, atlas_path, "atlas", content=atlas_bytes),
+        _source_record(run_root, manifest_path, "manifest", content=manifest_bytes),
     ]
     evidence_sources = []
     for entry in evidence:
         if entry["status"] == "missing":
             continue
-        target = resolve_run_path(run_root, entry["path"])
-        record = _source_record(run_root, target, "evidence")
+        record = dict(evidence_records[entry["path"]])
         record["label"] = entry["label"]
         evidence_sources.append(record)
     fingerprint_payload = json.dumps(

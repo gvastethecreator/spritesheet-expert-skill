@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Serve the sprite-gen curation webview for a single run directory.
 
-Standalone, dependency-free (Python standard library + the PIL already used by
-the pipeline). Launch it against any sprite-gen run folder and open the printed
+Uses the skill's Python runtime and dependencies. Launch it against a sprite-gen
+run folder and open the printed
 URL in a browser to compare frames per state, select/reject frames, and apply a
 non-destructive per-frame transform (rotate/scale/move). All edits are persisted
 to `curation.json` in the run directory; the original frame PNGs are never
@@ -125,9 +125,9 @@ def write_curation_atomic(run_dir: Path, payload: dict) -> None:
         raise
 
 
-def _run_script(name: str, run_dir: Path) -> dict:
+def _run_script(name: str, run_dir: Path, *arguments: str) -> dict:
     proc = subprocess.run(
-        [sys.executable, str(SCRIPTS_DIR / name), "--run-dir", str(run_dir)],
+        [sys.executable, str(SCRIPTS_DIR / name), "--run-dir", str(run_dir), *arguments],
         capture_output=True,
         text=True,
     )
@@ -146,7 +146,7 @@ def run_compose(run_dir: Path) -> dict:
 
 def run_export(run_dir: Path) -> dict:
     """Export curated frames back to named PNGs under <run-dir>/curated/."""
-    result = _run_script("export_curated_pngs.py", run_dir)
+    result = _run_script("export_curated_pngs.py", run_dir, "--selected-only")
     if result["ok"] and result["stdout"]:
         try:
             result["export"] = json.loads(result["stdout"])

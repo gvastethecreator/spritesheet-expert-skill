@@ -207,6 +207,8 @@ def test_motion_locomotion_selector_respects_declared_attack_workflow(
         (run_dir / "qa" / "motion-variation-report.json").read_text(encoding="utf-8")
     )
     assert report["checked_states"] == ["walk"]
+    assert report["results"][0]["metrics"]["average_lower_body_diff"] is None
+    assert report["results"][0]["metrics"]["min_lower_body_diff"] is None
 
 
 def test_motion_all_selector_fails_when_zero_states_are_checked(tmp_path: Path) -> None:
@@ -636,6 +638,66 @@ def test_asset_slots_rejects_a_label_with_a_trailing_newline(tmp_path: Path) -> 
     assert any("kebab-case" in message for message in report["errors"])
 
 
+def test_isometric_tiles_preserves_sources_and_checks_counts_dimensions_and_numbers(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    request = _isometric_request()
+    labels = list(request["asset_catalog"]["items"])
+    request["states"] = {"terrain": {"frames": len(labels), "fps": 1, "labels": labels}}
+    files = []
+    for index in range(len(labels)):
+        frame = run_dir / f"frames/terrain/frame-{index}.png"
+        _write_iso_tile(frame)
+        files.append(frame.relative_to(run_dir).as_posix())
+    manifest = {"ok": True, "rows": [{"state": "terrain", "files": files}]}
+    _write_json(run_dir / "manifest.json", {})
+
+    def run(*extra: str) -> subprocess.CompletedProcess[str]:
+        _write_json(run_dir / "sprite-request.json", request)
+        _write_json(run_dir / "frames/frames-manifest.json", manifest)
+        return _run_check("check_isometric_tiles.py", "--run-dir", str(run_dir), *extra)
+
+    baseline = run()
+    assert baseline.returncode == 0, baseline.stdout + baseline.stderr
+    report_path = run_dir / "qa/isometric-tile-review.json"
+    report_bytes = report_path.read_bytes()
+    invalid = run("--ratio-tolerance", "nan")
+    assert invalid.returncode == 2
+    assert "finite" in invalid.stderr
+    assert report_path.read_bytes() == report_bytes
+    request["states"]["terrain"]["frames"] -= 1
+    wrong_count = run()
+    assert wrong_count.returncode == 3
+    assert "frame count does not match request" in wrong_count.stdout
+    request["states"]["terrain"]["frames"] += 1
+    request["asset_catalog"]["items"]["grass-flat"]["pivot"] = [True, 12]
+    invalid_pivot = run()
+    assert invalid_pivot.returncode == 1
+    assert "missing pivot" in invalid_pivot.stdout
+    request["asset_catalog"]["items"]["grass-flat"]["pivot"] = [8, 12]
+    frame = run_dir / files[0]
+    original = frame.read_bytes()
+    with Image.open(frame) as opened:
+        enlarged = Image.new("RGBA", (32, 32))
+        enlarged.paste(opened, (0, 0))
+    enlarged.save(frame)
+    wrong_size = run()
+    assert wrong_size.returncode == 1
+    assert "frame dimensions" in wrong_size.stdout
+    frame.write_bytes(original)
+    labels[1] = labels[0]
+    duplicate = run()
+    assert duplicate.returncode == 3
+    assert "duplicate extracted label" in duplicate.stdout
+    labels[1] = "north-edge"
+    alias = run_dir / "qa/isometric-pivot-overlay.png"
+    alias.write_bytes(original)
+    files[0] = alias.relative_to(run_dir).as_posix()
+    blocked = run()
+    assert blocked.returncode == 3
+    assert "cannot overwrite a source" in blocked.stdout
+    assert alias.read_bytes() == original
+
+
 def test_isometric_tiles_rejects_an_upstream_frames_manifest_marked_not_ok(
     tmp_path: Path,
 ) -> None:
@@ -768,8 +830,8 @@ def test_isometric_tiles_fails_when_an_expected_request_state_has_no_manifest_ro
         _write_iso_tile(frame)
         files.append(str(frame.relative_to(run_dir)))
     request["states"] = {
-        "terrain": {"asset_labels": labels},
-        "bonus": {"asset_labels": []},
+        "terrain": {"frames": len(labels), "asset_labels": labels},
+        "bonus": {"frames": 1, "asset_labels": []},
     }
     _write_json(run_dir / "sprite-request.json", request)
     _write_json(run_dir / "manifest.json", {})

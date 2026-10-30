@@ -9,6 +9,8 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
+from spritecore.paths import PathSafetyError, resolve_run_path
+
 
 class ClassificationPreparationError(ValueError):
     pass
@@ -55,13 +57,10 @@ def _taxonomy(path: Path | None) -> dict[str, Any]:
 
 
 def _portable_asset(root: Path, relative: str) -> Path:
-    if "\\" in relative or relative.startswith("/") or ".." in Path(relative).parts:
-        raise ClassificationPreparationError(f"unsafe artifact path: {relative}")
-    candidate = (root / relative).resolve()
     try:
-        candidate.relative_to(root)
-    except ValueError as exc:
-        raise ClassificationPreparationError(f"artifact escapes run root: {relative}") from exc
+        candidate = resolve_run_path(root, relative)
+    except PathSafetyError as exc:
+        raise ClassificationPreparationError(f"unsafe artifact path: {relative}: {exc}") from exc
     if not candidate.is_file():
         raise ClassificationPreparationError(f"artifact does not exist: {relative}")
     return candidate

@@ -2,7 +2,7 @@
   "version": 1,
   "presets": {
     "codex-pet": {
-      "description": "Codex custom pet atlas compatible with hatch-pet output.",
+      "description": "Codex-style custom pet atlas layout; verify the consuming client before claiming compatibility.",
       "camera": "mascot",
       "art_profiles": ["pixel-core", "pixel-character", "pixel-motion"],
       "cell": { "width": 192, "height": 208, "safe_margin_x": 18, "safe_margin_y": 16 },

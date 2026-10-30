@@ -1,6 +1,8 @@
 # Creature Animation Contract
 
-For non-human creatures, frontal retro-FPS enemies, compact `2x2` cycles, and anatomy-specific registration.
+For anatomy-specific creature motion and registration. Camera, cycle length and
+neutral-pose rules come from the accepted project contract. The frontal retro-FPS
+and compact `2x2` guidance below applies only when that contract selects it.
 
 ## Request Contract
 
@@ -40,7 +42,9 @@ Use `screen_side_labels: true` for frontal work. Name the advancing screen-side 
 
 ## Compact Four-Frame Cycles
 
-One coherent `2x2` Imagegen sheet per state.
+When the runtime explicitly requires four frames with a shared idle, use one
+ordered `2x2` sheet per state through the selected provider. These phase layouts
+serve that contract; other cycle lengths and motion designs keep their own timing.
 
 - Movement: exact idle, phase A, exact idle, phase B.
 - Attack: exact idle, anticipation, active contact, exact idle.
@@ -52,7 +56,8 @@ Generate complete active sprites separately only after a whole-sheet attempt rep
 
 ## Video Prompt Contract
 
-First-frame-to-video: provider prompt must include all of these before inference:
+For first-frame-to-video, declare anatomy, motion driver, identity and source
+bounds before inference. For the frontal retro-FPS contract, also include:
 
 - exact creature anatomy and locomotion family;
 - the only allowed movement or attack driver from `creature_motion`;
@@ -72,10 +77,10 @@ Do not default every creature to a right-hand strike. Anticipation and contact m
 
 ## Background And Segmentation
 
-Black by default for creature grids. Gray or white when the creature loses contrast against black. White-eyed or shadow creatures often need neutral gray.
-
-Keep verified native alpha; run Lucida before adaptive segmentation only when the
-source requires matte removal. Review variable source boxes before registration.
+Request and preserve verified native transparency for isolated stills. If alpha
+is unavailable or fails review, choose a neutral gray, black or white matte that
+separates the creature from its background. Use Lucida before adaptive
+segmentation only when the source requires matte removal. Review variable source boxes before registration.
 A fixed `2x2` layout defines frame order, not one fixed crop size.
 
 ## Registration

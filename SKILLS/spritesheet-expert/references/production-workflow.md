@@ -21,7 +21,7 @@ Record project, asset kind, consumer engine/version, native display size, textur
 
 The brief must contain a reusable **style lock**: camera/projection and orientation; apparent scale; silhouette/outline treatment; palette and material rendering; lighting; detail budget; background/alpha; accepted reference images with paths and hashes; explicit rejection examples. A phrase such as “match the previous sheet” is insufficient for a portable handoff.
 
-A project profile is data, not a global policy. Black Flag restrictions must not leak into unrelated UI kits, monsters, isometric scenes, illustration or animation. For a Black Flag cohort, freeze the current approved shallow map-compatible inclination and compare every piece to the same accepted reference. Do not mix flat objects with strong three-quarter pallets simply because each isolated object looks good. Floor, wall and vertical assets may need separately declared cohorts; never change their camera implicitly inside a batch.
+A project profile is data, not a global policy. Keep its camera and style restrictions in that project. Within a cohort, compare every piece to the same accepted projection and reference set. Floor, wall and vertical assets may need separately declared cohorts; never change their camera implicitly inside a batch.
 
 The brief and batch ledger described here are agent-authored production documents. This revision does **not** claim a new universal brief parser or automatic batch-ledger service is implemented.
 

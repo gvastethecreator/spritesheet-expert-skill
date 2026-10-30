@@ -8,7 +8,7 @@ portable handoffs applied after extraction.
 from __future__ import annotations
 
 from array import array
-from collections import defaultdict, deque
+from collections import deque
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from hashlib import sha256
@@ -412,14 +412,11 @@ def segment_items(
         )
 
     provisional.sort(key=lambda entry: (entry[1][1], entry[1][0], entry[1][3], entry[1][2]))
-    occurrences: defaultdict[str, int] = defaultdict(int)
+    used_ids: set[str] = set()
     extracted: list[ExtractedItem] = []
     for fingerprint, bbox, crop, strong, assigned, weak, flags in provisional:
-        occurrence = occurrences[fingerprint]
-        occurrences[fingerprint] += 1
-        item_id = f"item_{fingerprint[:12]}"
-        if occurrence:
-            item_id += f"_{occurrence + 1:02d}"
+        item_id = unique_item_id(fingerprint, used_ids)
+        used_ids.add(item_id)
         extracted.append(
             ExtractedItem(
                 item_id=item_id,

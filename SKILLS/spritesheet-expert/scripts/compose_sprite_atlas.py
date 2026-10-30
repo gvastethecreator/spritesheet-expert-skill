@@ -22,6 +22,7 @@ from spritecore.image_ops import (
     resize_policy_from_sampling_policy,
     validate_frame,
 )
+from spritecore.paths import PathSafetyError, resolve_run_path
 
 
 FULL_CELL_ASSET_KINDS = {"tileset", "texture", "ui"}
@@ -178,6 +179,23 @@ def main() -> int:
     allow_full_cell = request.get("asset_kind") in FULL_CELL_ASSET_KINDS
     output_formats = output_formats_for_request(request)
     atlas_gutter, atlas_extrusion = atlas_packing_for_request(request)
+    try:
+        atlas_paths = {fmt: resolve_run_path(run_dir, output_path_for_format(args.atlas, fmt))
+                       for fmt in output_formats}
+        manifest_path = resolve_run_path(run_dir, args.manifest)
+        report_path = resolve_run_path(run_dir, args.report)
+        inputs = {run_dir / name for name in ("sprite-request.json", "curation.json", "unpack-source.json", ".sprite-gen-run.json")}
+        if request["character"].get("base_image"):
+            inputs.add(resolve_run_path(run_dir, request["character"]["base_image"]))
+    except PathSafetyError as exc:
+        raise SystemExit(str(exc)) from exc
+    outputs = [*atlas_paths.values(), manifest_path, report_path]
+    if len(set(outputs)) != len(outputs):
+        raise SystemExit("atlas, manifest and report outputs must use distinct paths")
+    for target in outputs:
+        if target in inputs or any(target.is_relative_to(run_dir / name)
+                                   for name in ("frames", "raw", "source", "references")):
+            raise SystemExit(f"output cannot replace a source artifact: {target}")
 
     # curation.json is an optional non-destructive sidecar. When absent, every
     # state uses all extracted frames in order with identity transform.
@@ -187,6 +205,8 @@ def main() -> int:
         for state in states
     }
 
+    if any(not ordered for ordered, _transforms in plans.values()):
+        raise SystemExit("curation has no selected frames for one or more states")
     max_frames = max(len(ordered) for ordered, _transforms in plans.values())
     atlas_padding = atlas_gutter + atlas_extrusion
     slot_width = cell_width + atlas_padding * 2
@@ -300,7 +320,7 @@ def main() -> int:
         "frame_layout": frame_layout,
     }
 
-    report_path = run_dir / args.report
+    report_path.parent.mkdir(parents=True, exist_ok=True)
     if errors:
         atomic_write_text(report_path, json.dumps(report, ensure_ascii=False, indent=2) + "\n")
         print(json.dumps({k: v for k, v in report.items() if k != "cells"}, ensure_ascii=False, indent=2))
@@ -309,8 +329,8 @@ def main() -> int:
     output_paths: dict[str, tuple[Path, Path]] = {}
     atlas_outputs: dict[str, dict[str, Any]] = {}
     for fmt in output_formats:
-        relative_path = output_path_for_format(args.atlas, fmt)
-        atlas_path = run_dir / relative_path
+        atlas_path = atlas_paths[fmt]
+        relative_path = atlas_path.relative_to(run_dir)
         atlas_path.parent.mkdir(parents=True, exist_ok=True)
         save_kwargs = {"lossless": True, "method": 6} if fmt == "webp" else {}
         atomic_save_image(atlas, atlas_path, **save_kwargs)
@@ -353,14 +373,15 @@ def main() -> int:
     ):
         if key in request:
             manifest[key] = request[key]
-    atomic_write_text(run_dir / args.manifest, json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(manifest_path, json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
     print(
         json.dumps(
             {
                 "ok": True,
                 "atlas": str(atlas_path),
                 "atlas_outputs": atlas_outputs,
-                "manifest": str(run_dir / args.manifest),
+                "manifest": str(manifest_path),
             },
             ensure_ascii=False,
             indent=2,

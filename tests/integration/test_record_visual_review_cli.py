@@ -95,6 +95,29 @@ def test_recorder_hashes_artifacts_and_writes_a_valid_atomic_review(
     assert load_visual_review(output, run_dir=run_dir) == recorded
     assert list(output.parent.glob(".visual-review.json.*.tmp")) == []
 
+    # Refreshing the review is allowed; replacing run inputs or other evidence is not.
+    from record_visual_review import record_visual_review
+    from spritecore.visual_review import VisualReviewValidationError
+
+    refreshed = record_visual_review(review_draft(), run_dir=run_dir)
+    assert load_visual_review(output, run_dir=run_dir) == refreshed
+    for relative, content in (
+        ("sprite-request.json", b'{"states":{}}'),
+        ("source-provenance.json", b'{"accepted_sources":[]}'),
+        ("manifest.json", b'{"atlas":{}}'),
+        ("raw/source.png", b"source bitmap"),
+        ("frames/idle/unreviewed.png", b"unreviewed frame"),
+        ("qa/other-evidence.json", b'{"kind":"sprite-screenshot-evidence"}'),
+        ("qa/contact.png", b"contact sheet"),
+    ):
+        target = run_dir / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
+        with pytest.raises(VisualReviewValidationError, match="run input|non-review"):
+            record_visual_review(review_draft(), run_dir=run_dir, output=relative)
+        assert target.read_bytes() == content
+    assert load_visual_review(output, run_dir=run_dir) == refreshed
+
 
 @pytest.mark.parametrize(
     "artifact_path",

@@ -53,6 +53,7 @@ Source import can link to a saved job ID, but that link is not provider provenan
 Prepared CLI paths are relative to the installed skill directory, or absolute.
 Workspace records locate their artifacts relative to the workspace. Historical
 absolute paths inside logs remain evidence; they do not locate current artifacts.
+Retrying a run appends to its process log so earlier failures remain available.
 
 Exports are stored under `exports/` with archive and manifest hashes. Downloading
 checks the archive bytes again. Saved ZIPs are limited to 256 MiB; run copying is
@@ -136,10 +137,10 @@ review-workspace/
 └── item_002.png
 ```
 
-Then apply it into a new run:
+From the installed skill directory, apply it into a new run:
 
 ```powershell
-python SKILLS/spritesheet-expert/scripts/apply_item_review.py `
+python scripts/apply_item_review.py `
   --manifest build/item-atlas/manifest.json `
   --review review-workspace/item-review.json `
   --output-dir build/item-atlas-reviewed
@@ -155,6 +156,8 @@ requires fresh review. Every atlas page and native crop is hash-verified before
 the Atlas Lab enables editing. Original runs are never overwritten by review.
 
 ## Validate the Studio bundle
+
+From the repository root:
 
 ```powershell
 pnpm run validate:studio
@@ -173,4 +176,4 @@ The Studio vertical slice deliberately does not include:
 - Tauri packaging;
 - collaborative review services.
 
-Those features belong to later product stages described in `docs/architecture/agent-first-studio.md`.
+See [production workflow](../references/production-workflow.md) for the current processing and delivery boundaries.

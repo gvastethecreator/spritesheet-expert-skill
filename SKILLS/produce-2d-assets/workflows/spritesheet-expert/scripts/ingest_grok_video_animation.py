@@ -14,17 +14,9 @@ from spritecore.locks import RunLockError, acquire_run_lock
 from spritecore.video_animation import (
     VideoAnimationError,
     ingest_video,
+    parse_sample_indices,
     revalidate_video_sources,
 )
-
-
-def parse_sample_indices(raw: str | None) -> list[int] | None:
-    if raw is None:
-        return None
-    try:
-        return [int(value.strip()) for value in raw.split(",") if value.strip()]
-    except ValueError as exc:
-        raise ValueError("--sample-indices must be comma-separated integers") from exc
 
 
 def main() -> int:

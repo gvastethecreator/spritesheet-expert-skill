@@ -77,6 +77,17 @@ def test_preset_converter_writes_a_valid_v2_contract(tmp_path: Path) -> None:
     assert request["grid_segmentation"] == "adaptive"
     assert request["states"]["run"]["raw_layout"]["columns"] >= 1
 
+    catalog = tmp_path / "presets.json"
+    catalog.write_bytes(PRESETS.read_bytes())
+    original = catalog.read_bytes()
+    collision = subprocess.run(
+        [sys.executable, str(CONVERTER), "platformer-character", "--presets", str(catalog), "--out", str(catalog)],
+        cwd=REPO_ROOT, capture_output=True, text=True, check=False,
+    )
+    assert collision.returncode != 0
+    assert "cannot replace" in collision.stderr
+    assert catalog.read_bytes() == original
+
 
 @pytest.mark.parametrize("preset_id", PRESET_SEMANTICS)
 def test_every_builtin_preset_emits_complete_family_contract(
@@ -150,9 +161,18 @@ def test_every_builtin_preset_emits_complete_family_contract(
         assert len(adjacency_roles) == len(set(adjacency_roles))
 
 
-def test_builtin_preset_catalog_passes_semantic_validation() -> None:
+@pytest.mark.parametrize("native_alpha", [False, True])
+def test_builtin_preset_catalog_passes_semantic_validation(
+    tmp_path: Path, native_alpha: bool,
+) -> None:
+    catalog = PRESETS
+    if native_alpha:
+        data = json.loads(PRESETS.read_text(encoding="utf-8"))
+        data["presets"]["platformer-character"]["background_removal"] = {"method": "alpha"}
+        catalog = tmp_path / "native-alpha-presets.json"
+        catalog.write_text(json.dumps(data), encoding="utf-8")
     completed = subprocess.run(
-        [sys.executable, str(VALIDATOR), str(PRESETS)],
+        [sys.executable, str(VALIDATOR), str(catalog)],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -160,6 +180,11 @@ def test_builtin_preset_catalog_passes_semantic_validation() -> None:
     )
 
     assert completed.returncode == 0, completed.stderr
+    if native_alpha:
+        converted = convert_preset(tmp_path, "platformer-character", "--presets", str(catalog))
+        assert converted.returncode == 0, converted.stderr
+        request = json.loads((tmp_path / "platformer-character.json").read_text(encoding="utf-8"))
+        assert request["background_removal"]["method"] == "alpha"
 
 
 @pytest.mark.parametrize("preset_id", ["custom-atlas", "custom-asset-atlas"])

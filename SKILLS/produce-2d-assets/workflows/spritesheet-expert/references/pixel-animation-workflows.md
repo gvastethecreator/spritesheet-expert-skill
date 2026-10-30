@@ -107,12 +107,7 @@ Side-view walk/run/platformer/run-and-gun motion.
 4. Swing/up.
 5. Mirrored contact/down/pass/swing for second half when frame count allows.
 
-Frame economy:
-
-- 8 frames: fluid full cycle.
-- 6 frames: strong default.
-- 4 frames: preserve contact/pass essence.
-- 3 frames: stride, pass, stride, with pass reused mentally.
+Keep the declared frame budget; use the [shared budget guidance](atlas-reference.md#frame-budget) when selecting one. More frames do not establish fluid motion. Compact cycles must still show both support phases and their transitions.
 
 opposite arm/leg momentum, triangle-like head/body bob, no same-leg
 repetition, no foot sliding, loop seam stable at playback speed.
@@ -125,7 +120,7 @@ Top-down 4-dir/8-dir character motion.
 2. Build front/up/side first; diagonals last.
 3. Use rotation playback to reveal projection, thickness, and limb-length
  errors.
-4. Prefer 6-frame variable bounce: down, down, faster up/pass.
+4. Time down and up/pass accents within the declared cycle; avoid uniform bobbing.
 5. For 4-frame walk rows, lock row to contact A, pass/down, contact B,
  pass/up. Contact and contact B read as opposite support legs in that
  direction, not as shifted silhouette.
@@ -178,7 +173,7 @@ Top-down melee and weapon attacks.
 4. Follow-through.
 5. Recover.
 
-Six frames is practical default. Timing encodes weight: quick sword-like
+Use the declared frame count. Timing conveys weight: quick sword-like
 weapons, medium spear-like commitment, slow hammer-like commitment. Smears
 only belong to forward strike.
 
@@ -276,7 +271,7 @@ pickup doesn't read as hazard, projectile, or environmental VFX.
 8x8, 8x16, NES-like, and other tiny sprites.
 
 1. One pixel is large motion; use 1px shifts or cluster swaps.
-2. Prefer 2-4 strong frames over weak smooth transitions.
+2. Protect strong key poses within the accepted budget; remove no required phase.
 3. Remove detail that flickers at playback size.
 4. Use outline/local contrast when backgrounds can swallow sprite.
 
@@ -297,6 +292,6 @@ Before done, map every animated row to its active workflow:
 - VFX/water/wind: loop math, emitter/flow anchors, focus discipline;
 - tiny/pickup: no over-detail, no excessive frames, immediate readability.
 
-If row can't show workflow phases in allotted frames, lower promise or
-regenerate with a different frame budget. Don't accept a pretty row that
-fails its phase contract.
+If the allotted frames cannot show the required phases, record the conflict and
+propose a budget or action change for approval. Preserve the accepted contract
+until that decision; visual polish cannot replace a required phase.

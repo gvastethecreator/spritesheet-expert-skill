@@ -1,11 +1,11 @@
 /* tool-theme:start (generated from spritecore/tool_theme.py by sync_tool_theme.py; do not edit) */
 :root {
   color-scheme: dark;
-  --bg:#111211; --surface:#181918; --raised:#202120; --sunken:#0b0c0b;
-  --line:#2f312e; --line-strong:#464944; --ink:#ebebe6; --muted:#9a9c94; --faint:#6c6e67;
-  --accent:#7aa2ff; --accent-ink:#0b1430; --accent-soft:#7aa2ff22;
+  --bg:#111; --surface:#181818; --raised:#202020; --sunken:#0b0b0b;
+  --line:#303030; --line-strong:#474747; --ink:#ebebeb; --muted:#9a9a9a; --faint:#6c6c6c;
+  --accent:#d4d4d4; --accent-ink:#111; --accent-soft:#ffffff14;
   --ok:#5fbf83; --warn:#e2b443; --bad:#ef6a5f;
-  --checker-a:#2a2b29; --checker-b:#363834; --checker-size:16px;
+  --checker-a:#2a2a2a; --checker-b:#363636; --checker-size:16px;
   --matte-black:#000; --matte-gray:#808080; --matte-white:#fff;
   --scroll-track:var(--sunken);
   --radius:4px; --radius-lg:6px;
@@ -14,20 +14,20 @@
 }
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg:#f4f4f1; --surface:#fbfbf9; --raised:#ffffff; --sunken:#e8e8e3;
-  --line:#d9d9d2; --line-strong:#b9b9b0; --ink:#1b1c1a; --muted:#5e605a; --faint:#8b8d85;
-  --accent:#2f5bd3; --accent-ink:#ffffff; --accent-soft:#2f5bd31f;
+  --bg:#f4f4f4; --surface:#fbfbfb; --raised:#ffffff; --sunken:#e8e8e8;
+  --line:#d9d9d9; --line-strong:#b9b9b9; --ink:#1b1b1b; --muted:#5e5e5e; --faint:#8b8b8b;
+  --accent:#444; --accent-ink:#ffffff; --accent-soft:#00000014;
   --ok:#23824a; --warn:#9a6a00; --bad:#c2392f;
-  --checker-a:#dcdcd6; --checker-b:#f2f2ee;
+  --checker-a:#dcdcdc; --checker-b:#f2f2f2;
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
     color-scheme: light;
-    --bg:#f4f4f1; --surface:#fbfbf9; --raised:#ffffff; --sunken:#e8e8e3;
-    --line:#d9d9d2; --line-strong:#b9b9b0; --ink:#1b1c1a; --muted:#5e605a; --faint:#8b8d85;
-    --accent:#2f5bd3; --accent-ink:#ffffff; --accent-soft:#2f5bd31f;
+    --bg:#f4f4f4; --surface:#fbfbfb; --raised:#ffffff; --sunken:#e8e8e8;
+    --line:#d9d9d9; --line-strong:#b9b9b9; --ink:#1b1b1b; --muted:#5e5e5e; --faint:#8b8b8b;
+    --accent:#444; --accent-ink:#ffffff; --accent-soft:#00000014;
     --ok:#23824a; --warn:#9a6a00; --bad:#c2392f;
-    --checker-a:#dcdcd6; --checker-b:#f2f2ee;
+    --checker-a:#dcdcdc; --checker-b:#f2f2f2;
   }
 }
 * { box-sizing:border-box; scrollbar-width:thin; scrollbar-color:var(--line) var(--scroll-track); }

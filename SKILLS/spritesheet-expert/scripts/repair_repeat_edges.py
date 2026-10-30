@@ -12,15 +12,19 @@ from __future__ import annotations
 import argparse
 from copy import deepcopy
 from hashlib import sha256
+from io import BytesIO
 import json
+import math
 from pathlib import Path
 import re
-import shutil
+import sys
 from typing import Any
 
 from PIL import Image
 
-from runio import atomic_save_image, atomic_write_text
+from runio import atomic_save_image, atomic_write_bytes, atomic_write_text
+from check_asset_slots import row_labels
+from check_animation_contracts import frame_rows_by_state
 from spritecore.contracts import load_provenance, load_sprite_request
 from spritecore.locks import acquire_run_lock
 from spritecore.paths import resolve_run_path
@@ -43,6 +47,17 @@ def digest(path: Path) -> str:
     return sha256(path.read_bytes()).hexdigest()
 
 
+def repair_widths(size: tuple[int, int], blend_width: int, edge_strip: int) -> tuple[int, int]:
+    if min(size) < 8:
+        raise ValueError("repeat-edge repair requires frames of at least 8x8")
+    if any(type(value) is not int or value <= 0 for value in (blend_width, edge_strip)):
+        raise ValueError("blend width and edge strip must be positive integers")
+    maximum = min(size) // 3
+    if edge_strip > maximum:
+        raise ValueError("edge strip cannot exceed one third of either frame dimension")
+    return max(edge_strip, min(blend_width, maximum)), edge_strip
+
+
 def harmonize_repeat_edges(
     image: Image.Image,
     *,
@@ -51,10 +66,7 @@ def harmonize_repeat_edges(
 ) -> Image.Image:
     result = image.convert("RGBA")
     width, height = result.size
-    if width < 8 or height < 8:
-        raise ValueError("repeat-edge repair requires frames of at least 8x8")
-    blend_width = max(edge_strip, min(blend_width, width // 3, height // 3))
-    edge_strip = max(1, min(edge_strip, blend_width))
+    blend_width, edge_strip = repair_widths(result.size, blend_width, edge_strip)
     strengths = [
         255
         if distance < edge_strip
@@ -162,7 +174,16 @@ def _best_repeat_bounds(
     prefer_dark: bool = False,
 ) -> dict[str, float | int]:
     length = image.width if axis == "x" else image.height
-    max_trim = max(2, min(round(length * max_trim_ratio), length // 3))
+    max_trim = min(math.floor(length * max_trim_ratio), length // 3)
+    if max_trim == 0:
+        start = image.crop((0, 0, 1, image.height) if axis == "x" else (0, 0, image.width, 1)).convert("RGB").tobytes()
+        end = image.crop((image.width - 1, 0, image.width, image.height) if axis == "x" else (0, image.height - 1, image.width, image.height)).convert("RGB").tobytes()
+        error = _feature_error(start, end)
+        mean = (sum(start) + sum(end)) / (2 * len(start) * 255)
+        return {"start": 0, "end": length, "span": length, "boundary_error": round(error, 6),
+                "boundary_mean": round(mean, 6), "trim_ratio": 0.0,
+                "score": round(error + (mean * 0.04 if prefer_dark else 0.0), 6)}
+    band = min(band, max_trim)
     step = max(1, length // 640)
     starts = list(range(band, max_trim + 1, step))
     ends = list(range(length - max_trim, length - band + 1, step))
@@ -256,8 +277,8 @@ def periodic_phase_crop(
     }
 
 
-def load_object(path: Path) -> dict[str, Any]:
-    value = json.loads(path.read_text(encoding="utf-8"))
+def load_object(path: Path, content: bytes | None = None) -> dict[str, Any]:
+    value = json.loads((path.read_bytes() if content is None else content).decode("utf-8-sig"))
     if not isinstance(value, dict):
         raise ValueError(f"expected JSON object: {path}")
     return value
@@ -278,6 +299,8 @@ def merge_provider_provenance(
 
     if provider not in PROVIDER_ART_ENGINES:
         raise ValueError(f"unsupported provider source type: {provider}")
+    load_provenance(provenance)
+    load_sprite_request(request)
     merged = deepcopy(provenance)
     updated_request = deepcopy(request)
     prior_type = str(merged.get("source_type"))
@@ -300,10 +323,12 @@ def merge_provider_provenance(
         str(item.get("path")): item for item in accepted if isinstance(item, dict)
     }
     for addition in additions:
+        if addition.get("source_type") != provider or addition.get("art_engine") != PROVIDER_ART_ENGINES[provider]:
+            raise ValueError("provider source metadata does not match the selected provider")
         path = str(addition.get("path"))
         existing = known.get(path)
         if existing is not None:
-            for field in ("sha256", "size_bytes", "states"):
+            for field in ("sha256", "size_bytes", "states", "source_type", "art_engine"):
                 if existing.get(field) != addition.get(field):
                     raise ValueError(
                         f"accepted provider source {path!r} changed {field}"
@@ -382,25 +407,46 @@ def main() -> int:
     )
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
+    if any(value <= 0 for value in (args.blend_width, args.edge_strip, args.phase_blend_width)):
+        parser.error("blend widths and edge strip must be positive integers")
+    if not math.isfinite(args.phase_max_trim_ratio) or not 0 <= args.phase_max_trim_ratio <= 0.3:
+        parser.error("--phase-max-trim-ratio must be finite and between 0 and 0.3")
     run_dir = args.run_dir.expanduser().resolve()
-    request = load_sprite_request(run_dir / "sprite-request.json").to_dict()
-    manifest = load_object(run_dir / "frames" / "frames-manifest.json")
-    provenance = load_provenance(run_dir / "source-provenance.json").to_dict()
+    request_path = resolve_run_path(run_dir, "sprite-request.json")
+    provenance_path = resolve_run_path(run_dir, "source-provenance.json")
+    manifest_path = resolve_run_path(run_dir, "frames/frames-manifest.json")
+    snapshots = {path: path.read_bytes() for path in (request_path, provenance_path, manifest_path)}
+    request = load_sprite_request(load_object(request_path, snapshots[request_path])).to_dict()
+    manifest = load_object(manifest_path, snapshots[manifest_path])
+    provenance = load_provenance(load_object(provenance_path, snapshots[provenance_path])).to_dict()
     if provenance.get("source_type") not in ALLOWED_PROVIDER_TYPES:
         raise SystemExit("repeat-edge repair requires provider-generated source provenance")
     catalog = request.get("asset_catalog", {}).get("items", {})
     states = request.get("states", {})
-    rows = manifest.get("rows", [])
+    rows = list(frame_rows_by_state(manifest).values())
+    protected = set(snapshots) | {resolve_run_path(run_dir, source["path"]) for source in provenance["accepted_sources"]}
+    report_path = resolve_run_path(run_dir, "qa/repeat-edge-repair-report.json")
+    if report_path in protected or (report_path.exists() and not report_path.is_file()):
+        raise ValueError("repeat-edge report output cannot overwrite a source or directory")
+    if report_path.is_file():
+        snapshots[report_path] = report_path.read_bytes()
+        if load_object(report_path, snapshots[report_path]).get("kind") != "repeat-edge-repair":
+            raise ValueError("repeat-edge report output cannot overwrite an unrelated file")
     explicit_labels = {
         item.strip() for item in str(args.labels or "").split(",") if item.strip()
     }
+    if args.labels is not None and not explicit_labels:
+        parser.error("--labels must contain at least one self-repeat label")
     if args.phase_source_dir and (not explicit_labels or not args.provider):
         raise SystemExit("--phase-source-dir requires --labels and --provider")
     if args.provider and not args.phase_source_dir:
         raise SystemExit("--provider requires --phase-source-dir")
     failing_labels: set[str] | None = explicit_labels or None
     if failing_labels is None and not args.all_self:
-        prior_review = load_object(run_dir / "qa" / "asset-slot-review.json")
+        review_path = resolve_run_path(run_dir, "qa/asset-slot-review.json")
+        snapshots[review_path] = review_path.read_bytes()
+        protected.add(review_path)
+        prior_review = load_object(review_path, snapshots[review_path])
         repeat = prior_review.get("repeat_validation", {})
         maximum = float(repeat.get("max_edge_error", 0.12))
         minimum_coverage = float(repeat.get("min_edge_coverage", 0.98))
@@ -420,21 +466,33 @@ def main() -> int:
     plans: list[dict[str, Any]] = []
     matched_labels: set[str] = set()
     phase_root = args.phase_source_dir.expanduser().resolve() if args.phase_source_dir else None
+    claimed = {report_path}
 
     # Preflight and render every selected repair before mutating the run. This
     # prevents a missing later source from leaving an earlier frame half-repaired.
     for row in rows:
-        state = str(row.get("state", ""))
-        entry = states.get(state, {}) if isinstance(states, dict) else {}
-        labels = entry.get("asset_labels", []) if isinstance(entry, dict) else []
-        for index, relative in enumerate(row.get("files", [])):
+        state = row["state"]
+        if state not in states:
+            raise ValueError(f"unknown extracted state: {state}")
+        entry = states[state]
+        files = row.get("files", [])
+        if not isinstance(files, list) or any(not isinstance(relative, str) for relative in files) or len(files) != entry["frames"]:
+            raise ValueError(f"{state}: extracted files do not match the requested frame count")
+        labels = row_labels(request, row)
+        if labels and len(labels) != len(files):
+            raise ValueError(f"{state}: label count does not match extracted frames")
+        for index, relative in enumerate(files):
             label = str(labels[index]) if index < len(labels) else f"{state}-{index}"
             metadata = catalog.get(label, {}) if isinstance(catalog, dict) else {}
             if not isinstance(metadata, dict) or metadata.get("repeat_mode") != "self":
                 continue
             if failing_labels is not None and label not in failing_labels:
                 continue
+            if label in matched_labels:
+                raise ValueError(f"duplicate selected repeat label: {label}")
             target = resolve_run_path(run_dir, str(relative))
+            if target in protected:
+                raise ValueError(f"repair target cannot overwrite a source: {relative}")
             if not target.is_file():
                 raise SystemExit(f"missing frame for repeat-edge repair: {relative}")
             backup_relative = (
@@ -450,19 +508,28 @@ def main() -> int:
                     f"repeat-edge backup already exists for {label}; pass --force to reproduce"
                 )
             prior_frame = backup if backup.exists() else target
-            with Image.open(prior_frame) as opened:
+            snapshots[target] = target.read_bytes()
+            snapshots[prior_frame] = prior_frame.read_bytes()
+            prior_bytes = snapshots[prior_frame]
+            with Image.open(BytesIO(prior_bytes)) as opened:
                 output_size = opened.size
+                original = opened.convert("RGBA")
+            if output_size != (request["cell"]["width"], request["cell"]["height"]):
+                raise ValueError(f"{label}: frame dimensions do not match request.cell")
             phase_report: dict[str, Any] | None = None
             provider_source: Path | None = None
             external: Path | None = None
             source_hash: str | None = None
+            source_bytes: bytes | None = None
             if phase_root is not None:
                 external = resolve_run_path(phase_root, f"{label}.png")
                 if not external.is_file():
                     raise SystemExit(
                         f"missing provider phase source for {label}: {external}"
                     )
-                source_hash = digest(external)
+                source_bytes = external.read_bytes()
+                snapshots[external] = source_bytes
+                source_hash = sha256(source_bytes).hexdigest()
                 provider_relative = (
                     Path("provider")
                     / "repeat-edge-repair"
@@ -475,7 +542,7 @@ def main() -> int:
                     raise SystemExit(
                         f"stored provider source hash changed for {label}: {provider_source}"
                     )
-                with Image.open(external) as opened:
+                with Image.open(BytesIO(source_bytes)) as opened:
                     normalized, phase_report = periodic_phase_crop(
                         opened,
                         output_size=output_size,
@@ -493,13 +560,15 @@ def main() -> int:
                     blend_width=args.phase_blend_width,
                     edge_strip=2,
                 )
+                applied_blend, applied_strip = repair_widths(output_size, args.phase_blend_width, 2)
             else:
-                with Image.open(prior_frame) as opened:
-                    repaired = harmonize_repeat_edges(
-                        opened,
-                        blend_width=args.blend_width,
-                        edge_strip=args.edge_strip,
-                    )
+                repaired = harmonize_repeat_edges(original, blend_width=args.blend_width, edge_strip=args.edge_strip)
+                applied_blend, applied_strip = repair_widths(output_size, args.blend_width, args.edge_strip)
+            for output in (target, backup, *([provider_source] if provider_source else [])):
+                if output in claimed or (output in protected and not output.is_file()):
+                    raise ValueError(f"repair outputs alias another output or protected source: {output}")
+                claimed.add(output)
+            center = (applied_blend, applied_blend, output_size[0] - applied_blend, output_size[1] - applied_blend)
             plans.append(
                 {
                     "state": state,
@@ -507,10 +576,15 @@ def main() -> int:
                     "label": label,
                     "target": target,
                     "backup": backup,
-                    "prior_frame_sha256": digest(prior_frame),
+                    "prior_frame_sha256": sha256(prior_bytes).hexdigest(),
+                    "prior_bytes": prior_bytes,
                     "external": external,
                     "provider_source": provider_source,
                     "source_sha256": source_hash,
+                    "source_bytes": source_bytes,
+                    "effective_blend_width": applied_blend,
+                    "effective_edge_strip": applied_strip,
+                    "center_preserved": phase_root is None and original.crop(center).tobytes() == repaired.crop(center).tobytes(),
                     "phase_report": phase_report,
                     "repaired": repaired,
                 }
@@ -525,31 +599,38 @@ def main() -> int:
             )
     if not plans:
         raise SystemExit("no self-repeat frames selected for repair")
+    immutable_inputs = {plan["external"] for plan in plans if plan["external"] is not None}
+    if immutable_inputs & claimed or any(plan["target"] in {other["backup"], other["provider_source"]} for plan in plans for other in plans):
+        raise ValueError("repair outputs cannot overwrite immutable repair inputs")
+    updated_request = request
+    if phase_root is not None:
+        additions = [{
+            "path": plan["provider_source"].relative_to(run_dir).as_posix(),
+            "sha256": plan["source_sha256"], "size_bytes": len(plan["source_bytes"]),
+            "states": [plan["state"]], "source_type": args.provider,
+            "art_engine": PROVIDER_ART_ENGINES[args.provider],
+        } for plan in plans]
+        provenance, updated_request = merge_provider_provenance(provenance, request, additions, provider=args.provider)
 
     with acquire_run_lock(run_dir, "repair-repeat-edges"):
         # Recheck all inputs under the run lock before the first write.
-        for plan in plans:
-            prior_frame = plan["backup"] if plan["backup"].exists() else plan["target"]
-            if digest(prior_frame) != plan["prior_frame_sha256"]:
-                raise SystemExit(f"repair input changed during preflight: {plan['label']}")
-            if plan["external"] is not None and digest(plan["external"]) != plan["source_sha256"]:
-                raise SystemExit(
-                    f"provider phase source changed during preflight: {plan['label']}"
-                )
+        for path, expected_bytes in snapshots.items():
+            if path.read_bytes() != expected_bytes:
+                raise ValueError(f"repair input changed during preflight: {path}")
 
         # Materialize and verify every immutable input before changing a frame.
         for plan in plans:
             backup: Path = plan["backup"]
             backup.parent.mkdir(parents=True, exist_ok=True)
             if not backup.exists():
-                shutil.copy2(plan["target"], backup)
+                atomic_write_bytes(backup, plan["prior_bytes"])
             if digest(backup) != plan["prior_frame_sha256"]:
                 raise SystemExit(f"repeat-edge backup hash mismatch: {plan['label']}")
             provider_source: Path | None = plan["provider_source"]
             if provider_source is not None:
                 provider_source.parent.mkdir(parents=True, exist_ok=True)
                 if not provider_source.exists():
-                    shutil.copy2(plan["external"], provider_source)
+                    atomic_write_bytes(provider_source, plan["source_bytes"])
                 if digest(provider_source) != plan["source_sha256"]:
                     raise SystemExit(f"provider source hash mismatch: {plan['label']}")
 
@@ -572,6 +653,9 @@ def main() -> int:
                 "prior_output_sha256": prior_output,
                 "output": target.relative_to(run_dir).as_posix(),
                 "output_sha256": digest(target),
+                "effective_blend_width": plan["effective_blend_width"],
+                "effective_edge_strip": plan["effective_edge_strip"],
+                "center_preserved": plan["center_preserved"],
                 "normalization": (
                     "provider-phase-crop+narrow-edge-harmonization"
                     if provider_source
@@ -583,34 +667,14 @@ def main() -> int:
             records.append(record)
 
         if phase_root is not None and records:
-            provider_art_engine = PROVIDER_ART_ENGINES[str(args.provider)]
-            additions = []
-            for record in records:
-                source_path = resolve_run_path(run_dir, str(record["source"]))
-                additions.append(
-                    {
-                        "path": record["source"],
-                        "sha256": digest(source_path),
-                        "size_bytes": source_path.stat().st_size,
-                        "states": [str(record["state"])],
-                        "source_type": args.provider,
-                        "art_engine": provider_art_engine,
-                    }
-                )
-            provenance, updated_request = merge_provider_provenance(
-                provenance,
-                request,
-                additions,
-                provider=str(args.provider),
-            )
             atomic_write_text(
-                run_dir / "source-provenance.json",
-                json.dumps(provenance, indent=2, ensure_ascii=False) + "\n",
+                provenance_path,
+                json.dumps(provenance, indent=2, ensure_ascii=False, allow_nan=False) + "\n",
             )
             if updated_request != request:
                 atomic_write_text(
-                    run_dir / "sprite-request.json",
-                    json.dumps(updated_request, indent=2, ensure_ascii=False) + "\n",
+                    request_path,
+                    json.dumps(updated_request, indent=2, ensure_ascii=False, allow_nan=False) + "\n",
                 )
                 request = updated_request
         report = {
@@ -623,17 +687,21 @@ def main() -> int:
             "edge_strip": args.edge_strip,
             "semantic_generation": False,
             "semantic_source_replaced": bool(args.phase_source_dir),
-            "center_preserved": not bool(args.phase_source_dir),
+            "center_preserved": all(record["center_preserved"] for record in records),
             "provider_slot_retry": bool(args.phase_source_dir),
             "visual_review_required": True,
             "records": records,
         }
-        report_path = run_dir / "qa" / "repeat-edge-repair-report.json"
         report_path.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write_text(report_path, json.dumps(report, indent=2, ensure_ascii=False) + "\n")
+        atomic_write_text(report_path, json.dumps(report, indent=2, ensure_ascii=False, allow_nan=False) + "\n")
     print(json.dumps({"ok": bool(records), "repaired": len(records), "report": "qa/repeat-edge-repair-report.json"}))
     return 0 if records else 1
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (OSError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+        print(json.dumps({"ok": False, "status": "operational-error", "errors": [str(exc)]}))
+        raise SystemExit(3)

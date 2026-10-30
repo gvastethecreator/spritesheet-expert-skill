@@ -6,28 +6,29 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import statistics
+import sys
 from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageDraw
 
 from runio import atomic_save_image, atomic_write_text
+from check_asset_slots import cell_geometry, pivot_ok, review_output, row_labels
+from check_animation_contracts import frame_rows_by_state
+from spritecore.paths import resolve_run_path
 
 
 def load_json(path: Path, fallback: Any = None) -> Any:
     if not path.is_file():
         return fallback
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def cell_geometry(request: dict[str, Any]) -> tuple[int, int]:
-    cell = request.get("cell", {})
-    width = int(cell.get("width", cell.get("size", 0)))
-    height = int(cell.get("height", cell.get("size", 0)))
-    if width <= 0 or height <= 0:
-        raise SystemExit("sprite-request.json cell width/height must be positive")
-    return width, height
+    def invalid_constant(value: str):
+        raise ValueError(f"nonfinite JSON number: {value}")
+    data = json.loads(path.read_text(encoding="utf-8-sig"), parse_constant=invalid_constant)
+    if not isinstance(data, dict):
+        raise ValueError(f"{path.name} must be a JSON object")
+    return data
 
 
 def catalog_from(request: dict[str, Any], manifest: dict[str, Any]) -> dict[str, Any]:
@@ -47,9 +48,7 @@ def catalog_items(catalog: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 def pivot(meta: dict[str, Any]) -> tuple[float, float] | None:
     value = meta.get("pivot")
-    if not isinstance(value, list) or len(value) != 2:
-        return None
-    if not all(isinstance(item, (int, float)) for item in value):
+    if not pivot_ok(value):
         return None
     return float(value[0]), float(value[1])
 
@@ -59,33 +58,32 @@ def round_even(value: float) -> int:
     return rounded if rounded % 2 == 0 else rounded + 1
 
 
-def row_labels(request: dict[str, Any], row: dict[str, Any]) -> list[str]:
-    state = str(row["state"])
-    entry = request.get("states", {}).get(state, {})
-    for source in (row, entry):
-        if not isinstance(source, dict):
-            continue
-        for key in ("labels", "asset_labels", "asset_names"):
-            raw = source.get(key)
-            if isinstance(raw, list):
-                return [str(item) for item in raw]
-    return []
-
-
 def frame_index(run_dir: Path, request: dict[str, Any], frames_manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
     indexed: dict[str, dict[str, Any]] = {}
-    for row in frames_manifest.get("rows", []):
-        state = str(row.get("state", ""))
-        files = [str(path) for path in row.get("files", [])]
+    for state, row in frame_rows_by_state(frames_manifest).items():
+        files = row.get("files", [])
+        if not isinstance(files, list) or any(not isinstance(path, str) for path in files):
+            raise ValueError(f"{state}: files must be an array of relative paths")
+        entry = request.get("states", {}).get(state)
+        if isinstance(entry, dict):
+            expected = entry.get("frames")
+            if type(expected) is not int or expected <= 0 or len(files) != expected:
+                raise ValueError(f"{state}: extracted frame count does not match request")
+            if "frames" in row and (type(row["frames"]) is not int or row["frames"] != expected):
+                raise ValueError(f"{state}: declared extracted count does not match request")
         labels = row_labels(request, row)
+        if labels and len(labels) != len(files):
+            raise ValueError(f"{state}: label count does not match extracted frames")
         for frame, rel in enumerate(files):
             label = labels[frame] if frame < len(labels) else f"{state}-{frame}"
+            if label in indexed:
+                raise ValueError(f"duplicate extracted label: {label}")
             indexed[label] = {
                 "label": label,
                 "state": state,
                 "frame": frame,
                 "file": rel,
-                "path": run_dir / rel,
+                "path": resolve_run_path(run_dir, rel),
             }
     return indexed
 
@@ -152,17 +150,19 @@ def render_pivot_overlay(
 ) -> str:
     scale = 0.62 if max(cell) > 180 else 1.0
     cell_w, cell_h = cell
-    panel_w = max(1, round(cell_w * scale))
+    labels = [label for label in indexed if label in items]
+    measure = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    label_width = max((measure.textbbox((0, 0), label[:28])[2] for label in labels), default=0)
+    panel_w = max(1, round(cell_w * scale), label_width + 8)
     panel_h = max(1, round(cell_h * scale))
     label_h = 18
     gutter = 8
     cols = 4
-    labels = [label for label in indexed if label in items]
     rows = max(1, (len(labels) + cols - 1) // cols)
     overlay = Image.new(
         "RGBA",
         (cols * (panel_w + gutter) + gutter, rows * (panel_h + label_h + gutter) + gutter),
-        (6, 7, 8, 255),
+        (17, 17, 17, 255),
     )
     draw = ImageDraw.Draw(overlay)
     tile_w = float(tile.get("width", 0)) * scale
@@ -172,17 +172,18 @@ def render_pivot_overlay(
         row = index // cols
         x = gutter + col * (panel_w + gutter)
         y = gutter + row * (panel_h + label_h + gutter)
-        draw.text((x, y), label[:28], fill=(232, 238, 234, 255))
+        draw.text((x, y), label[:28], fill=(232, 232, 232, 255))
         panel_y = y + label_h
-        draw.rectangle((x, panel_y, x + panel_w, panel_y + panel_h), outline=(78, 88, 90, 255))
+        draw.rectangle((x, panel_y, x + panel_w, panel_y + panel_h), outline=(110, 110, 110, 255))
         scaled = load_scaled(indexed[label]["path"], scale)
-        safe_composite(overlay, scaled, x, panel_y)
+        image_x = x + (panel_w - scaled.width) // 2
+        safe_composite(overlay, scaled, image_x, panel_y)
         px, py = suggested_pivot_from_record(record_map.get(label, {}), pivot(items[label]) or (cell_w / 2, cell_h / 2))
-        px = x + px * scale
+        px = image_x + px * scale
         py = panel_y + py * scale
         draw_diamond(draw, px, py - tile_h / 2, tile_w, tile_h, None, (247, 209, 95, 220))
-        draw.line((px - 5, py, px + 5, py), fill=(83, 211, 198, 255))
-        draw.line((px, py - 5, px, py + 5), fill=(83, 211, 198, 255))
+        draw.line((px - 5, py, px + 5, py), fill=(220, 220, 220, 255))
+        draw.line((px, py - 5, px, py + 5), fill=(220, 220, 220, 255))
     out = run_dir / "qa" / "isometric-pivot-overlay.png"
     atomic_save_image(overlay, out)
     return str(out.relative_to(run_dir))
@@ -204,7 +205,7 @@ def render_iso_scene(
     record_map: dict[str, dict[str, Any]],
     depth: bool,
 ) -> str:
-    canvas = Image.new("RGBA", (880, 520), (7, 8, 8, 255))
+    canvas = Image.new("RGBA", (880, 520), (17, 17, 17, 255))
     draw = ImageDraw.Draw(canvas)
     tile_w = float(tile.get("width", 128))
     tile_h = float(tile.get("height", 64))
@@ -232,7 +233,7 @@ def render_iso_scene(
         for gx, label in enumerate(row):
             if label:
                 z = 1 if depth and label == ledge else 0
-                placements.append((gx + gy + z * 0.1, gx, gy, label, z))
+                placements.append((gx + gy + z, gx, gy, label, z))
     placements.sort()
 
     for _, gx, gy, label, z in placements:
@@ -247,8 +248,8 @@ def render_iso_scene(
             screen_y,
             tile_w * scale,
             tile_h * scale,
-            (28, 43, 36, 70),
-            (52, 78, 72, 165),
+            (35, 35, 35, 70),
+            (110, 110, 110, 165),
         )
         layer = load_scaled(indexed[label]["path"], scale)
         x = round(screen_x - px * scale)
@@ -256,8 +257,9 @@ def render_iso_scene(
         safe_composite(canvas, layer, x, y)
 
     caption = "isometric depth review: z/height sort" if depth else "isometric map review: pivot-anchored 2:1 grid"
-    draw.rectangle((10, 10, 328, 34), fill=(0, 0, 0, 170), outline=(80, 190, 255, 110))
-    draw.text((18, 18), caption, fill=(232, 238, 234, 255))
+    caption_width = draw.textbbox((0, 0), caption)[2]
+    draw.rectangle((10, 10, 26 + caption_width, 34), fill=(17, 17, 17, 255), outline=(110, 110, 110, 220))
+    draw.text((18, 18), caption, fill=(232, 232, 232, 255))
     out = run_dir / "qa" / ("isometric-depth-review.png" if depth else "isometric-map-review.png")
     atomic_save_image(canvas, out)
     return str(out.relative_to(run_dir))
@@ -291,7 +293,9 @@ def collect_records(
         if not meta.get("collision"):
             item_errors.append("missing collision")
         with Image.open(frame["path"]) as opened:
-            bbox = opened.convert("RGBA").getbbox()
+            if opened.size != cell:
+                item_errors.append(f"frame dimensions {opened.size} do not match cell {cell}")
+            bbox = opened.convert("RGBA").getchannel("A").getbbox()
         if not bbox:
             item_errors.append("empty frame")
         suggested = [round((bbox[0] + bbox[2]) / 2), bbox[3]] if bbox else None
@@ -342,7 +346,7 @@ def infer_grid_calibration(records: list[dict[str, Any]]) -> dict[str, Any]:
         if item.get("suggested_pivot")
     }
     return {
-        "source": "alpha-bbox median of floor-like tiles",
+        "source": "alpha-bbox median heuristic; visual footprint approval required",
         "ok": True,
         "tile": {"width": footprint_w, "height": footprint_h},
         "pivot": [pivot_x, pivot_y],
@@ -408,7 +412,7 @@ def build_runtime_metadata(
         "projection": catalog.get("projection", "2:1 isometric"),
         "placement_model": "center-plus-bottom-anchor",
         "manual_review_required": True,
-        "quality_gate_note": "Runtime importers should use this calibrated tile footprint and per-slot pivots instead of declared rectangular cell centers.",
+        "quality_gate_note": "These alpha-bbox footprint/pivot candidates need visual approval before runtime import; passing numeric checks does not prove the logical floor geometry.",
         "cell": {"width": cell[0], "height": cell[1]},
         "tile": tile,
         "defaultPivot": default_pivot,
@@ -470,8 +474,8 @@ def write_runtime_artifacts(
 ) -> dict[str, str]:
     runtime_path = run_dir / "qa" / "isometric-runtime-metadata.json"
     catalog_path = run_dir / "qa" / "isometric-calibrated-catalog.json"
-    atomic_write_text(runtime_path, json.dumps(runtime_metadata, ensure_ascii=False, indent=2) + "\n")
-    atomic_write_text(catalog_path, json.dumps(calibrated_catalog, ensure_ascii=False, indent=2) + "\n")
+    atomic_write_text(runtime_path, json.dumps(runtime_metadata, ensure_ascii=False, indent=2, allow_nan=False) + "\n")
+    atomic_write_text(catalog_path, json.dumps(calibrated_catalog, ensure_ascii=False, indent=2, allow_nan=False) + "\n")
     return {
         "runtime_metadata": str(runtime_path.relative_to(run_dir)),
         "calibrated_catalog": str(catalog_path.relative_to(run_dir)),
@@ -483,22 +487,36 @@ def main() -> int:
     parser.add_argument("--run-dir", required=True, type=Path)
     parser.add_argument("--ratio-tolerance", type=float, default=0.12)
     args = parser.parse_args()
+    if not math.isfinite(args.ratio_tolerance) or args.ratio_tolerance < 0:
+        parser.error("--ratio-tolerance must be finite and non-negative")
 
     run_dir = args.run_dir.expanduser().resolve()
-    qa_dir = run_dir / "qa"
+    qa_dir = resolve_run_path(run_dir, "qa")
     qa_dir.mkdir(parents=True, exist_ok=True)
-    request = load_json(run_dir / "sprite-request.json", {})
-    manifest_path = run_dir / "manifest.json"
+    request = load_json(resolve_run_path(run_dir, "sprite-request.json"), {})
+    if not isinstance(request.get("states", {}), dict):
+        raise ValueError("sprite-request.json.states must be an object")
+    manifest_path = resolve_run_path(run_dir, "manifest.json")
     manifest = load_json(manifest_path, {})
-    frames_manifest = load_json(run_dir / "frames" / "frames-manifest.json", {})
-    segmentation = load_json(run_dir / "qa" / "segmentation-report.json", {})
-    asset_slot_report = load_json(run_dir / "qa" / "asset-slot-review.json", {})
+    frames_manifest = load_json(resolve_run_path(run_dir, "frames/frames-manifest.json"), {})
+    segmentation = load_json(resolve_run_path(run_dir, "qa/segmentation-report.json"), {})
+    asset_slot_report = load_json(resolve_run_path(run_dir, "qa/asset-slot-review.json"), {})
     asset_kind = str(request.get("asset_kind", "sprite"))
-    cell = cell_geometry(request)
+    cell = cell_geometry(request.get("cell", {}))
     catalog = catalog_from(request, manifest)
     items = catalog_items(catalog)
     tile = catalog.get("tile") if isinstance(catalog.get("tile"), dict) else {}
     indexed = frame_index(run_dir, request, frames_manifest)
+    sources = {frame["path"] for frame in indexed.values()} | {
+        resolve_run_path(run_dir, relative) for relative in (
+            "manifest.json", "qa/segmentation-report.json", "qa/asset-slot-review.json"
+        )
+    }
+    for name in (
+        "isometric-tile-review.json", "isometric-pivot-overlay.png", "isometric-map-review.png",
+        "isometric-depth-review.png", "isometric-runtime-metadata.json", "isometric-calibrated-catalog.json",
+    ):
+        review_output(run_dir, f"qa/{name}", sources)
 
     errors: list[str] = []
     warnings: list[str] = []
@@ -518,6 +536,8 @@ def main() -> int:
     if not tile:
         errors.append("asset_catalog.tile must declare isometric footprint width/height")
         tile = {"width": 0, "height": 0}
+    if any(type(tile.get(key, 0)) not in (int, float) for key in ("width", "height")):
+        raise ValueError("asset_catalog.tile width/height must be finite numbers")
     tile_w = float(tile.get("width", 0))
     tile_h = float(tile.get("height", 0))
     if tile_w <= 0 or tile_h <= 0:
@@ -528,12 +548,17 @@ def main() -> int:
             errors.append(f"isometric footprint must be 2:1, got {tile_w:g}x{tile_h:g} ratio {ratio:.2f}")
     runtime_cell = tile.get("runtimeCell") or tile.get("runtime_cell")
     if isinstance(runtime_cell, list) and len(runtime_cell) == 2:
-        expected = [int(runtime_cell[0]), int(runtime_cell[1])]
+        if any(type(value) is not int or value <= 0 for value in runtime_cell):
+            raise ValueError("asset_catalog.tile.runtimeCell must contain positive integers")
+        expected = list(runtime_cell)
         actual = [cell[0], cell[1]]
         if expected != actual:
             errors.append(f"asset_catalog.tile.runtimeCell {expected} does not match actual cut cell {actual}")
     else:
-        warnings.append("asset_catalog.tile.runtimeCell missing; runtime importer must infer atlas cell from request.cell")
+        if runtime_cell is not None:
+            errors.append("asset_catalog.tile.runtimeCell must contain two positive integers")
+        else:
+            warnings.append("asset_catalog.tile.runtimeCell missing; runtime importer must infer atlas cell from request.cell")
     if segmentation and segmentation.get("ok") is False:
         errors.append("segmentation report is marked ok:false")
         for message in segmentation.get("warnings", []) or []:
@@ -606,7 +631,7 @@ def main() -> int:
         "engine": "isometric-tile-review",
         "run_dir": str(run_dir),
         "manual_review_required": True,
-        "quality_gate_note": "Review pivot overlay, map review, and depth review. Rectangular atlas cells are allowed; runtime placement must use the calibrated 2:1 footprint and per-slot floor/contact pivots.",
+        "quality_gate_note": "Review pivot, map and depth previews. This checker targets 2:1 grids. Alpha bboxes only suggest footprint/pivot candidates; approve the logical floor geometry visually before runtime import.",
         "contract": {
             "asset_kind": asset_kind,
             "projection": catalog.get("projection"),
@@ -625,10 +650,15 @@ def main() -> int:
         "warnings": warnings,
         "records": records,
     }
-    atomic_write_text(qa_dir / "isometric-tile-review.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    atomic_write_text(qa_dir / "isometric-tile-review.json", json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False) + "\n")
     print(json.dumps({key: value for key, value in report.items() if key != "records"}, ensure_ascii=False, indent=2))
     return 0 if report["ok"] else 1
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (OSError, ValueError, TypeError) as exc:
+        print(str(exc), file=sys.stderr)
+        print(json.dumps({"ok": False, "complete": False, "status": "operational-error", "errors": [str(exc)]}))
+        raise SystemExit(3)

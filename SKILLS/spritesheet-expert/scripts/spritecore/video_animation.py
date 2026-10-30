@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 from io import BytesIO
 import json
+import math
 from pathlib import Path
 import re
 from typing import Any, Mapping
@@ -21,6 +22,15 @@ class VideoAnimationError(ValueError):
     """Raised before mutation when provider or video evidence is not acceptable."""
 
 
+def parse_sample_indices(raw: str | None) -> list[int] | None:
+    if raw is None:
+        return None
+    try:
+        return [int(value.strip()) for value in raw.split(",") if value.strip()]
+    except ValueError as exc:
+        raise ValueError("--sample-indices must be comma-separated integers") from exc
+
+
 _JOB_SCHEMA = (
     Path(__file__).resolve().parents[2]
     / "references"
@@ -34,7 +44,7 @@ _VIDEO_SOURCE_SCHEMA = (
     / "video-source-v1.schema.json"
 )
 _VIDEO_EXTENSIONS = {".mp4", ".webm", ".mov", ".m4v"}
-_MAX_DECODED_FRAMES = 900
+MAX_DECODED_FRAMES = 900
 _MAX_DIMENSION = 4096
 
 
@@ -83,8 +93,11 @@ def _digest(content: bytes) -> str:
     return sha256(content).hexdigest()
 
 
-def _file_record(path: Path, *, relative_to: Path | None = None) -> dict[str, Any]:
-    content = path.read_bytes()
+def _file_record(
+    path: Path, *, relative_to: Path | None = None, content: bytes | None = None
+) -> dict[str, Any]:
+    if content is None:
+        content = path.read_bytes()
     stored_path = (
         path.relative_to(relative_to).as_posix() if relative_to is not None else str(path)
     )
@@ -101,14 +114,17 @@ def _inside(root: Path, candidate: Path, label: str) -> Path:
     return candidate
 
 
-def _load_object(path: Path, label: str) -> dict[str, Any]:
+def _object_record(
+    path: Path, label: str, *, relative_to: Path | None = None
+) -> tuple[dict[str, Any], dict[str, Any]]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
+        content = path.read_bytes()
+        value = json.loads(content.decode("utf-8"))
     except (OSError, ValueError) as exc:
         raise VideoAnimationError(f"{label} is unreadable: {path}: {exc}") from exc
     if not isinstance(value, dict):
         raise VideoAnimationError(f"{label} must be a JSON object: {path}")
-    return value
+    return value, _file_record(path, relative_to=relative_to, content=content)
 
 
 def _validate_job(job: Mapping[str, Any]) -> None:
@@ -438,10 +454,11 @@ def prepare_video_job(
         raise VideoAnimationError(f"first frame does not exist: {first_frame_name}")
     if first_frame.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}:
         raise VideoAnimationError("first frame must be PNG, JPEG, or WebP")
+    first_bytes = first_frame.read_bytes()
     try:
-        with Image.open(first_frame) as opened:
+        with Image.open(BytesIO(first_bytes)) as opened:
             opened.verify()
-        with Image.open(first_frame) as opened:
+        with Image.open(BytesIO(first_bytes)) as opened:
             width, height = opened.size
     except (OSError, ValueError) as exc:
         raise VideoAnimationError("first frame is not a decodable image") from exc
@@ -451,16 +468,16 @@ def prepare_video_job(
         )
 
     request_path = run_root / "sprite-request.json"
-    request = load_sprite_request(request_path).data
-    request_record = _file_record(request_path, relative_to=run_root)
+    payload, request_record = _object_record(request_path, "sprite request", relative_to=run_root)
+    request = load_sprite_request(payload).data
     if state not in request["states"]:
         raise VideoAnimationError(f"sprite request has no state {state!r}")
     entry = request["states"][state]
     requested_frames = int(entry["frames"])
     if requested_frames < 2:
         raise VideoAnimationError("video animation requires at least two requested frames")
-    if duration_seconds not in {6, 10}:
-        raise VideoAnimationError("Grok video duration must be 6 or 10 seconds")
+    if type(duration_seconds) is not int or not 1 <= duration_seconds <= 15:
+        raise VideoAnimationError("Grok video duration must be an integer from 1 to 15 seconds")
     background = request.get("generation_background")
     if not isinstance(background, Mapping) or background.get("family") != "neutral":
         raise VideoAnimationError(
@@ -476,7 +493,7 @@ def prepare_video_job(
             "Grok video job already exists; pass --force to replace the prompt and job only"
         )
 
-    first_record = _file_record(first_frame, relative_to=run_root)
+    first_record = _file_record(first_frame, relative_to=run_root, content=first_bytes)
     first_record.update({"width": width, "height": height})
     video_prompt = entry.get("video_prompt")
     video_prompt = video_prompt if isinstance(video_prompt, Mapping) else {}
@@ -506,7 +523,8 @@ def prepare_video_job(
     creature_lock = _video_creature_lock(prompt_contract)
     identity_lock = _video_identity_lock(request)
     prompt_text = (
-        "PROVIDER CALL: invoke image_to_video exactly once and produce exactly one video. "
+        "PROVIDER CALL: invoke reference_to_video exactly once with the exact supplied image as first_frame "
+        "and produce exactly one video. "
         "Do not generate alternatives, variants, previews, or a second take after the first successful call.\n"
         f"TASK: Animate the exact supplied full-body first frame for {duration_seconds} seconds. "
         f"One continuous action: {action}. {closure_text}\n"
@@ -680,7 +698,6 @@ def uniform_fallback_metrics(
             {
                 "rank": rank,
                 "indices": candidate,
-                "score": round(1.0 - (rank - 1) * 0.01, 6),
                 "timestamps_ratio": [
                     round(index / total_frames, 6) for index in candidate
                 ],
@@ -939,9 +956,8 @@ def adaptive_sample_indices(
         return signatures[index].source_edge_foreground_ratio > 0.0
 
     def source_edge_penalty(index: int) -> float:
-        # A visually interesting pose is unusable when the source video already
-        # clips it. Keep such frames visible in the editor, but rank every safe
-        # alternative above them.
+        # Penalize detected source-edge contact while keeping those frames
+        # visible for review. Other score terms still affect candidate order.
         return 2.0 if source_edge_contact(index) else 0.0
 
     source_edge_contact_frames = [
@@ -1187,7 +1203,7 @@ def _decode_signatures(
             metadata = next(reader)
         except StopIteration as exc:
             raise VideoAnimationError("video decoder returned no metadata during adaptive analysis") from exc
-        size, _fps, _duration = _reader_metadata(metadata)
+        size, _fps, _duration = read_video_metadata(metadata)
         if size != expected_size:
             raise VideoAnimationError("video decoder dimensions changed during adaptive analysis")
         expected_bytes = size[0] * size[1] * 3
@@ -1204,7 +1220,7 @@ def _decode_signatures(
     return signatures
 
 
-def _reader_metadata(metadata: Any) -> tuple[tuple[int, int], float, float | None]:
+def read_video_metadata(metadata: Any) -> tuple[tuple[int, int], float, float | None]:
     if not isinstance(metadata, Mapping):
         raise VideoAnimationError("video decoder returned invalid metadata")
     size = metadata.get("size")
@@ -1220,10 +1236,17 @@ def _reader_metadata(metadata: Any) -> tuple[tuple[int, int], float, float | Non
             f"decoded video dimensions must be between 1 and {_MAX_DIMENSION}: {(width, height)}"
         )
     fps = metadata.get("fps")
-    if isinstance(fps, bool) or not isinstance(fps, (int, float)) or fps <= 0:
+    if isinstance(fps, bool) or not isinstance(fps, (int, float)) or not math.isfinite(fps) or fps <= 0:
         raise VideoAnimationError("video decoder metadata has no valid fps")
     duration = metadata.get("duration")
-    parsed_duration = float(duration) if isinstance(duration, (int, float)) and duration > 0 else None
+    parsed_duration = (
+        float(duration)
+        if not isinstance(duration, bool)
+        and isinstance(duration, (int, float))
+        and math.isfinite(duration)
+        and duration > 0
+        else None
+    )
     return (width, height), float(fps), parsed_duration
 
 
@@ -1234,16 +1257,16 @@ def _inspect_decoded_video(decoder: Any, video_path: Path) -> tuple[tuple[int, i
             metadata = next(reader)
         except StopIteration as exc:
             raise VideoAnimationError("video decoder returned no metadata") from exc
-        size, fps, duration = _reader_metadata(metadata)
+        size, fps, duration = read_video_metadata(metadata)
         expected_bytes = size[0] * size[1] * 3
         count = 0
         for payload in reader:
             if not isinstance(payload, (bytes, bytearray)) or len(payload) != expected_bytes:
                 raise VideoAnimationError("video decoder returned a malformed RGB frame")
             count += 1
-            if count > _MAX_DECODED_FRAMES:
+            if count > MAX_DECODED_FRAMES:
                 raise VideoAnimationError(
-                    f"video exceeds the {_MAX_DECODED_FRAMES}-frame safety limit"
+                    f"video exceeds the {MAX_DECODED_FRAMES}-frame safety limit"
                 )
     finally:
         close = getattr(reader, "close", None)
@@ -1269,7 +1292,7 @@ def _decode_selected(
             metadata = next(reader)
         except StopIteration as exc:
             raise VideoAnimationError("video decoder returned no metadata on second pass") from exc
-        size, _fps, _duration = _reader_metadata(metadata)
+        size, _fps, _duration = read_video_metadata(metadata)
         if size != expected_size:
             raise VideoAnimationError("video decoder dimensions changed between passes")
         expected_bytes = size[0] * size[1] * 3
@@ -1361,7 +1384,12 @@ def _merged_provenance(
                         f"source provenance already covers {state!r}; pass --force to replace that state"
                     )
                 continue
-            accepted.append(dict(entry))
+            retained = dict(entry)
+            for key in ("source_type", "art_engine"):
+                declared = prior.get(key)
+                if declared and declared != "mixed":
+                    retained.setdefault(key, declared)
+            accepted.append(retained)
     accepted.append(
         {
             "path": f"raw/{state}.png",
@@ -1442,15 +1470,15 @@ def ingest_video(
         job_path = resolve_run_path(run_root, job_name)
     except PathSafetyError as exc:
         raise VideoAnimationError(str(exc)) from exc
-    job = _load_object(job_path, "Grok video job")
+    job, job_record = _object_record(job_path, "Grok video job", relative_to=run_root)
     _validate_job(job)
     if job["state"] != state:
         raise VideoAnimationError(
             f"job state {job['state']!r} does not match requested state {state!r}"
         )
     request_path = run_root / "sprite-request.json"
-    request = load_sprite_request(request_path).data
-    request_record = _file_record(request_path, relative_to=run_root)
+    payload, request_record = _object_record(request_path, "sprite request", relative_to=run_root)
+    request = load_sprite_request(payload).data
     if request_record != job["sprite_request"]:
         raise VideoAnimationError("sprite-request.json changed after job preparation")
     if state not in request["states"]:
@@ -1467,7 +1495,7 @@ def ingest_video(
             f"invocation path does not match job: expected {expected_invocation}"
         )
     _inside(repo_root, supplied_invocation, "invocation")
-    invocation = _load_object(supplied_invocation, "Grok invocation")
+    invocation, invocation_record = _object_record(supplied_invocation, "Grok invocation")
     if invocation.get("provider") != "grok-imagine" or invocation.get("mode") != "video-from-image":
         raise VideoAnimationError("invocation is not a grok-imagine video-from-image run")
     if invocation.get("status") != "completed" or invocation.get("exitCode") != 0:
@@ -1480,7 +1508,8 @@ def ingest_video(
     if not prompt_path.is_file() or not first_frame_path.is_file():
         raise VideoAnimationError("job prompt or exact first frame is missing")
     prompt_record = _file_record(prompt_path, relative_to=run_root)
-    first_record = _file_record(first_frame_path, relative_to=run_root)
+    first_bytes = first_frame_path.read_bytes()
+    first_record = _file_record(first_frame_path, relative_to=run_root, content=first_bytes)
     if prompt_record["sha256"] != job["prompt"]["sha256"]:
         raise VideoAnimationError("Grok prompt changed after job preparation")
     if first_record["sha256"] != job["first_frame"]["sha256"]:
@@ -1525,6 +1554,8 @@ def ingest_video(
         raise VideoAnimationError("accepted video must be the wrapper-owned media/video-01 file")
     if not video_path.is_file() or video_path.stat().st_size < 1:
         raise VideoAnimationError("accepted provider video is missing or empty")
+    video_record = _file_record(video_path)
+    result_record = _file_record(result_path)
 
     raw_path = resolve_run_path(run_root, f"raw/{state}.png")
     report_path = resolve_run_path(
@@ -1599,7 +1630,7 @@ def ingest_video(
             )
         sampling_mode = "reviewed-explicit"
     selected = _decode_selected(decoder, video_path, indices, decoded_size, total_frames)
-    with Image.open(first_frame_path) as opened:
+    with Image.open(BytesIO(first_bytes)) as opened:
         opened.load()
         exact_first = opened.convert("RGBA")
     if exact_first.size != (job["first_frame"]["width"], job["first_frame"]["height"]):
@@ -1632,10 +1663,6 @@ def ingest_video(
         int(raw_layout["columns"]),
         int(raw_layout["rows"]),
     )
-    video_record = _file_record(video_path)
-    invocation_record = _file_record(supplied_invocation)
-    result_record = _file_record(result_path)
-    job_record = _file_record(job_path, relative_to=run_root)
     prior_provenance, prior_provenance_hash = _prior_provenance_snapshot(
         provenance_path
     )
@@ -1740,7 +1767,8 @@ def ingest_imported_video(
     source_video_hash = _digest(video_bytes)
 
     request_path = run_root / "sprite-request.json"
-    request = load_sprite_request(request_path).data
+    payload, request_record = _object_record(request_path, "sprite request", relative_to=run_root)
+    request = load_sprite_request(payload).data
     if state not in request["states"]:
         raise VideoAnimationError(f"sprite request has no state {state!r}")
     entry = request["states"][state]
@@ -1748,7 +1776,6 @@ def ingest_imported_video(
     raw_layout = entry.get("raw_layout")
     if not isinstance(raw_layout, Mapping):
         raise VideoAnimationError(f"state {state!r} has no raw_layout")
-    request_record = _file_record(request_path, relative_to=run_root)
 
     source_dir = resolve_run_path(run_root, f"provider/video/{state}")
     copied_video_path = source_dir / f"source{source_video.suffix.lower()}"
@@ -2024,13 +2051,16 @@ def revalidate_prepared_sources(prepared: PreparedVideoJob) -> None:
 
 
 __all__ = [
+    "MAX_DECODED_FRAMES",
     "PreparedVideoJob",
     "VideoAnimationError",
     "VideoIngestResult",
     "adaptive_sample_indices",
     "ingest_imported_video",
     "ingest_video",
+    "parse_sample_indices",
     "prepare_video_job",
+    "read_video_metadata",
     "revalidate_prepared_sources",
     "revalidate_imported_video_sources",
     "revalidate_video_sources",

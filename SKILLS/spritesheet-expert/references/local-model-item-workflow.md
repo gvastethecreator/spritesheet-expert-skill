@@ -144,8 +144,9 @@ current successor explicitly. Original artifacts and source provenance remain.
 ### Group evaluation
 
 `evaluate_item_atlas.py` compares valid draft manifests with hash-bound external
-annotations. The repository's `evals/item-group-samples.json` records 13 selected
-groups from three external sheets; it contains no images. From the repository:
+annotations. The source repository includes `evals/item-group-samples.json`
+with selected groups from external sheets, but no images. This fixture belongs
+to the repository, not the installed skill. From the source repository root:
 
 ```powershell
 python SKILLS/spritesheet-expert/scripts/evaluate_item_atlas.py --annotations evals/item-group-samples.json --sample gothic-buildings --manifest path/to/manifest.json --out evaluations/buildings-v1.json

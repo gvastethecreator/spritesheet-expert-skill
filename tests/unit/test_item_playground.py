@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from base64 import b64decode
+from hashlib import sha256
 import json
 import re
 from pathlib import Path
@@ -72,6 +74,10 @@ def test_playground_builds_self_contained_artifacts(tmp_path: Path) -> None:
     assert report["kind"] == "item-playground"
     assert report["self_contained"] is True
     assert report["counts"]["items"] == len(manifest["items"])
+    for page in payload["pages"]:
+        assert sha256(b64decode(page["dataUri"].split(",", 1)[1])).hexdigest() == page["sha256"]
+        source = next(source for source in report["sources"] if source["path"] == page["path"])
+        assert source["sha256"] == page["sha256"]
     written_html, _ = _write(root, (output_path, report_path, html_bytes, report))
     assert written_html.is_file()
 
@@ -120,8 +126,17 @@ def test_playground_rejects_foreign_manifest(tmp_path: Path) -> None:
         prepare_playground(run_dir=root)
 
 
-def test_playground_rejects_missing_atlas_page(tmp_path: Path) -> None:
+def test_playground_rejects_changed_or_missing_atlas_page(tmp_path: Path) -> None:
     root = _run(tmp_path)
-    (root / "atlas.png").unlink()
+    atlas = root / "atlas.png"
+    with Image.open(atlas) as opened:
+        changed = opened.copy()
+    changed.putpixel((0, 0), (255, 0, 0, 255))
+    changed.save(atlas)
+    with pytest.raises(ItemPlaygroundError, match="atlas page SHA-256 mismatch"):
+        prepare_playground(run_dir=root)
+    assert not (root / DEFAULT_OUTPUT).exists()
+    assert not (root / DEFAULT_REPORT).exists()
+    atlas.unlink()
     with pytest.raises(ItemPlaygroundError, match="atlas page does not exist"):
         prepare_playground(run_dir=root)

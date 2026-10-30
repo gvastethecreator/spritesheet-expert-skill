@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create the optional portable Python 3.12 local-model environment with uv."""
+"""Create the optional isolated Python 3.12 local-model environment with uv."""
 
 from __future__ import annotations
 

@@ -43,6 +43,9 @@ class _FrozenList(tuple):
             return list(self) == other
         return super().__eq__(other)
 
+    def __ne__(self, other: object) -> bool:
+        return not (self == other)
+
     __hash__ = tuple.__hash__
 
 

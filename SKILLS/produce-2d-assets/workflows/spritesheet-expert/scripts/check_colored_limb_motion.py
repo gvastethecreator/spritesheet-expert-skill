@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Check color-coded mannequin motion without mistaking recoloring for animation.
+"""Heuristic QA for color-coded mannequin trajectories and silhouette changes.
 
 The checker tracks permanent red/blue arm and orange/green leg identities over
 time, measures their trajectories relative to the torso, and separately
 measures the color-independent subject silhouette. It is a mechanical guardrail
 for review candidates, not a replacement for biomechanical visual review.
+RGBA inputs are composited on the white mannequin review background.
 """
 
 from __future__ import annotations
@@ -12,12 +13,14 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import median
 from typing import Iterable
 
 from PIL import Image, ImageChops, ImageStat
+from runio import atomic_write_text
 
 
 LIMBS = ("red_arm", "blue_arm", "orange_leg", "green_leg")
@@ -132,7 +135,11 @@ def select_head(points: list[tuple[int, int]], torso: RegionStats | None, height
 
 
 def analyze_frame(path: Path) -> dict[str, object]:
-    image = Image.open(path).convert("RGB")
+    with Image.open(path) as opened:
+        rgba = opened.convert("RGBA")
+    matte = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
+    matte.alpha_composite(rgba)
+    image = matte.convert("RGB")
     hsv = image.convert("HSV")
     width, height = image.size
     baseline = baseline_row(image)
@@ -229,8 +236,21 @@ def main() -> int:
     parser.add_argument("--max-step-ratio", type=float, default=4.5)
     parser.add_argument("--min-silhouette-delta", type=float, default=0.035)
     args = parser.parse_args()
+    for name in ("min_limb_x_range", "min_transition_distance", "min_silhouette_delta"):
+        value = getattr(args, name)
+        if not math.isfinite(value) or value < 0:
+            parser.error(f"--{name.replace('_', '-')} must be finite and non-negative")
+    if not math.isfinite(args.max_step_ratio) or args.max_step_ratio <= 0:
+        parser.error("--max-step-ratio must be finite and positive")
+    if args.min_active_transitions < 0:
+        parser.error("--min-active-transitions must be non-negative")
 
     paths = [path.expanduser().resolve() for path in args.frame]
+    report_path = args.report.expanduser().resolve()
+    if report_path in paths:
+        raise ValueError("report output cannot overwrite an input frame")
+    if report_path.exists() and not report_path.is_file():
+        raise ValueError("report output is not a file")
     if len(paths) < 2:
         raise SystemExit("at least two --frame inputs are required")
     if args.profile == "sideview-walk-6" and len(paths) != 6:
@@ -264,7 +284,7 @@ def main() -> int:
             steps = distances(points)
             active = sum(step >= args.min_transition_distance for step in steps)
             positive = [step for step in steps if step > 1e-6]
-            step_ratio = max(positive) / median(positive) if positive else float("inf")
+            step_ratio = max(positive) / median(positive) if positive else None
             x_range = max(point[0] for point in points) - min(point[0] for point in points)
             orientation_span = angle_span(region.angle_degrees for region in typed_regions)
             trajectories[limb] = {
@@ -273,7 +293,7 @@ def main() -> int:
                 "total_travel": round(sum(steps), 5),
                 "x_range": round(x_range, 5),
                 "active_transitions": active,
-                "max_to_median_step_ratio": round(step_ratio, 5),
+                "max_to_median_step_ratio": round(step_ratio, 5) if step_ratio is not None else None,
                 "orientation_span_degrees": round(orientation_span, 3),
             }
             if x_range < args.min_limb_x_range:
@@ -284,7 +304,9 @@ def main() -> int:
                 errors.append(
                     f"{limb}: only {active} active transitions; expected at least {args.min_active_transitions}"
                 )
-            if step_ratio > args.max_step_ratio:
+            if step_ratio is None:
+                errors.append(f"{limb}: no nonzero steps for step-ratio analysis")
+            elif step_ratio > args.max_step_ratio:
                 errors.append(
                     f"{limb}: max/median step ratio {step_ratio:.2f} suggests a teleport or recolor jump"
                 )
@@ -377,17 +399,19 @@ def main() -> int:
                 errors.append(f"frame {frame_number}: {message}")
 
     torso_centers = [
-        frame["torso"].centroid if isinstance(frame["torso"], RegionStats) else (0.0, 0.0)
-        for frame in frames
+        frame["torso"].centroid for frame in frames if isinstance(frame["torso"], RegionStats)
     ]
     height = int(frames[0]["height"])
-    torso_x_range = (max(point[0] for point in torso_centers) - min(point[0] for point in torso_centers)) / height
-    if torso_x_range > 0.04:
+    torso_x_range = (
+        (max(point[0] for point in torso_centers) - min(point[0] for point in torso_centers)) / height
+        if len(torso_centers) == len(frames) else None
+    )
+    if torso_x_range is not None and torso_x_range > 0.04:
         errors.append(f"torso/root x drift {torso_x_range:.3f} exceeds 0.040 of frame height")
 
     head_regions = [frame["head"] for frame in frames if isinstance(frame["head"], RegionStats)]
-    head_width_drift = 0.0
-    head_height_drift = 0.0
+    head_width_drift = None
+    head_height_drift = None
     if len(head_regions) == len(frames):
         head_widths = [region.bbox[2] - region.bbox[0] for region in head_regions]
         head_heights = [region.bbox[3] - region.bbox[1] for region in head_regions]
@@ -429,9 +453,9 @@ def main() -> int:
             "max_step_ratio": args.max_step_ratio,
             "min_silhouette_delta": args.min_silhouette_delta,
         },
-        "torso_x_range": round(torso_x_range, 5),
-        "head_width_drift": round(head_width_drift, 5),
-        "head_height_drift": round(head_height_drift, 5),
+        "torso_x_range": round(torso_x_range, 5) if torso_x_range is not None else None,
+        "head_width_drift": round(head_width_drift, 5) if head_width_drift is not None else None,
+        "head_height_drift": round(head_height_drift, 5) if head_height_drift is not None else None,
         "silhouette_deltas": [round(delta, 5) for delta in silhouette_deltas],
         "trajectories": trajectories,
         "phase_checks": phase_checks,
@@ -440,11 +464,17 @@ def main() -> int:
         "warnings": warnings,
         "visual_review_required": True,
     }
-    args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps(report, indent=2))
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(report, indent=2, allow_nan=False)
+    atomic_write_text(report_path, text + "\n")
+    print(text)
     return 0 if report["ok"] else 1
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (OSError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+        print(json.dumps({"ok": False, "status": "operational-error", "errors": [str(exc)]}))
+        raise SystemExit(3)

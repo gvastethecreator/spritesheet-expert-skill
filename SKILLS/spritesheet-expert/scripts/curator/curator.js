@@ -5,7 +5,7 @@
 // mirrors curation.json and is auto-saved (debounced) via POST /api/curation.
 // rotate is degrees, counter-clockwise positive (matches PIL bake). The preview
 // (CSS + canvas) negates it because screen/CSS/canvas positive rotation is
-// clockwise, so what you see is what compose_sprite_atlas.py will bake.
+// clockwise. Browser and Pillow resampling can differ.
 
 const IDENTITY = () => ({ rotate: 0, scale: 1, dx: 0, dy: 0, shx: 0, shy: 0, flipX: 0 });
 const SCALE_MIN = 0.2;
@@ -24,8 +24,7 @@ function matrixOf(t) {
   const m01 = s * (c * shx + sn);
   let m10 = s * (-sn + c * shy);
   const m11 = s * (c - sn * shx);
-  // (Alex 2026-05-28) flipX = horizontal mirror (image-gen 결과가 좌우 반대로
-  // 나올 때). diag(-1, 1) 을 matrix 마지막에 곱 → column-0 부호 반전.
+  // Alex, 2026-05-28: mirror before the other transforms by negating column zero.
   if (t.flipX) {
     m00 = -m00;
     m10 = -m10;
@@ -42,7 +41,7 @@ const STR = {
   exporting: "Exporting…", exportFail: "Export failed: ",
   ready: "Ready", loaded: "Loaded existing curation", runLoadFail: "Could not load the run:",
   tRotate: "Drag to rotate", tShear: "Drag to shear (horizontal = shx, vertical = shy)", tReset: "Reset transform", tFlipX: "Flip horizontally",
-  exportDone: (n) => `Exported ${n} PNGs to curated/`,
+  exportDone: (n) => `Exported ${n} selected PNGs to curated/. Existing files were kept.`,
 };
 const t = (key) => STR[key];
 
@@ -378,7 +377,7 @@ function renderCard(state, frame) {
   return card;
 }
 
-/** Toggle horizontal flip for a single frame (Alex 2026-05-28). */
+/** Toggle horizontal flip for a single frame. */
 function toggleFlipX(stateName, idx, stage) {
   const entry = entries[stateName];
   if (!entry) return;
@@ -561,7 +560,7 @@ function seedEntries() {
     const present = state.frames.filter((f) => f.present).map((f) => f.index);
     const c = curated[state.name];
     let selected;
-    if (c && Array.isArray(c.selected) && c.selected.length) {
+    if (c && Array.isArray(c.selected)) {
       selected = c.selected.filter((i) => present.includes(i));
     } else {
       selected = present.slice();

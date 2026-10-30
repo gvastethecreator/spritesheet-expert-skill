@@ -20,6 +20,28 @@ from spritecore.paths import PathSafetyError, resolve_run_path
 DEFAULT_REPORT = "qa/run-validation-report.json"
 
 
+def _report_target(run_dir: Path, candidate: str) -> Path:
+    target = resolve_run_path(run_dir, candidate)
+    inputs = (
+        "sprite-request.json", "source-provenance.json", "manifest.json",
+        "frames/frames-manifest.json",
+    )
+    if target in {(run_dir / name).resolve() for name in inputs}:
+        raise PathSafetyError("report output would replace a run input")
+    if target.exists():
+        try:
+            previous = json.loads(target.read_text(encoding="utf-8"))
+        except ValueError as exc:
+            raise PathSafetyError(f"report output would replace an unreadable or non-report artifact: {exc}") from exc
+        if (
+            not isinstance(previous, dict)
+            or previous.get("kind") != "sprite-run-validation-report"
+            or previous.get("version") != 1
+        ):
+            raise PathSafetyError("report output would replace a non-aggregate artifact")
+    return target
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-dir", type=Path, required=True)
@@ -36,10 +58,13 @@ def main() -> int:
         print(f"run directory does not exist: {run_dir}", file=sys.stderr)
         return 3
     try:
-        target = resolve_run_path(run_dir, args.report)
+        target = _report_target(run_dir, args.report)
     except PathSafetyError as exc:
         print(str(exc), file=sys.stderr)
         return 1
+    except OSError as exc:
+        print(str(exc), file=sys.stderr)
+        return 3
 
     try:
         lease = acquire_run_lock(run_dir, "validate_run")
@@ -71,10 +96,18 @@ def main() -> int:
             path = ".".join(str(part) for part in error.absolute_path)
             print(f"aggregate report schema error {path}: {error.message}", file=sys.stderr)
         return 3
-    target.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_text(
-        target, json.dumps(report, ensure_ascii=False, indent=2) + "\n"
-    )
+    try:
+        target = _report_target(run_dir, args.report)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_text(
+            target, json.dumps(report, ensure_ascii=False, indent=2) + "\n"
+        )
+    except PathSafetyError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    except OSError as exc:
+        print(str(exc), file=sys.stderr)
+        return 3
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return exit_code
 

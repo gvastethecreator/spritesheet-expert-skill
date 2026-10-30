@@ -6,11 +6,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageChops, ImageDraw, ImageStat
+from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageStat
 
 from runio import atomic_save_image, atomic_write_text
 from spritecore.image_ops import (
@@ -39,6 +41,25 @@ SQUARE_PACK_FORBIDDEN = {
 }
 LABEL_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 GENERIC_LABEL_RE = re.compile(r"^(row|frame|slot|asset|item|tile|prop)-?\d*$")
+REVIEW_BACKGROUND = (17, 17, 17, 255)
+REVIEW_OUTLINE = (180, 180, 180, 220)
+
+
+def review_output(run_dir: Path, relative: str, sources: set[Path]) -> Path:
+    output = resolve_run_path(run_dir, relative)
+    protected = sources | {
+        resolve_run_path(run_dir, "sprite-request.json"),
+        resolve_run_path(run_dir, "frames/frames-manifest.json"),
+    }
+    if output in protected:
+        raise ValueError(f"review output cannot overwrite a source: {relative}")
+    if output.exists() and not output.is_file():
+        raise ValueError(f"review output is not a file: {relative}")
+    return output
+
+
+def repeat_item_name(label: str, index: int) -> str:
+    return re.sub(r"[^a-z0-9-]+", "-", label.lower()).strip("-") or f"item-{index}"
 
 
 def alpha_nonzero_count(image: Image.Image) -> int:
@@ -58,10 +79,12 @@ def edge_alpha_count(image: Image.Image, margin: int) -> int:
 
 
 def cell_geometry(cell: dict[str, Any]) -> tuple[int, int]:
-    width = int(cell.get("width", cell.get("size", 0)))
-    height = int(cell.get("height", cell.get("size", 0)))
-    if width <= 0 or height <= 0:
-        raise SystemExit("sprite-request.json cell width/height must be positive")
+    if not isinstance(cell, dict):
+        raise ValueError("sprite-request.json cell must be an object")
+    width = cell.get("width", cell.get("size", 0))
+    height = cell.get("height", cell.get("size", 0))
+    if any(type(value) is not int or value <= 0 for value in (width, height)):
+        raise ValueError("sprite-request.json cell width/height must be positive integers")
     return width, height
 
 
@@ -87,7 +110,9 @@ def catalog_items(request: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def pivot_ok(value: Any) -> bool:
-    return isinstance(value, list) and len(value) == 2 and all(isinstance(item, (int, float)) for item in value)
+    return isinstance(value, list) and len(value) == 2 and all(
+        type(item) in (int, float) and math.isfinite(item) for item in value
+    )
 
 
 def strategy_class(meta: dict[str, Any]) -> str | None:
@@ -150,42 +175,46 @@ def make_overlay(
     cell_size: tuple[int, int],
     records: list[dict[str, Any]],
 ) -> str:
+    sources = {resolve_run_path(run_dir, rel) for row in rows for rel in row.get("files", [])}
+    out = review_output(run_dir, "qa/asset-slot-overlay.png", sources)
     cell_w, cell_h = cell_size
     label_h = 18
     gutter = 8
-    max_frames = max((int(row.get("frames", 0)) for row in rows), default=1)
-    width = max_frames * (cell_w + gutter) + gutter
-    height = len(rows) * (cell_h + label_h + gutter) + gutter
-    overlay = Image.new("RGBA", (max(1, width), max(1, height)), (8, 8, 8, 255))
+    font = ImageFont.load_default()
+    slot_w = max(cell_w, max((math.ceil(font.getlength(str(item["label"])[:24])) + 4 for item in records), default=0))
+    max_frames = max((len(row.get("files", [])) for row in rows), default=1)
+    width = max_frames * (slot_w + gutter) + gutter
+    height = len(rows) * (cell_h + 2 * label_h + gutter) + gutter
+    overlay = Image.new("RGBA", (max(1, width), max(1, height)), REVIEW_BACKGROUND)
     draw = ImageDraw.Draw(overlay)
     by_state_frame = {(item["state"], item["frame"]): item for item in records}
     for row_index, row in enumerate(rows):
         state = str(row["state"])
-        y = gutter + row_index * (cell_h + label_h + gutter)
+        y = gutter + row_index * (cell_h + 2 * label_h + gutter)
         draw.text((gutter, y), state, fill=(235, 235, 235, 255))
         files = row.get("files", [])
         for frame_index, rel in enumerate(files):
-            x = gutter + frame_index * (cell_w + gutter)
+            x = gutter + frame_index * (slot_w + gutter)
+            frame_y = y + 2 * label_h
             with Image.open(resolve_run_path(run_dir, rel)) as opened:
                 frame = opened.convert("RGBA")
-            tile = Image.new("RGBA", (cell_w, cell_h), (18, 18, 18, 255))
+            tile = Image.new("RGBA", (cell_w, cell_h), REVIEW_BACKGROUND)
             tile.alpha_composite(frame)
-            overlay.alpha_composite(tile, (x, y + label_h))
+            overlay.alpha_composite(tile, (x, frame_y))
             rec = by_state_frame.get((state, frame_index), {})
             label = str(rec.get("label", f"frame-{frame_index}"))
-            color = (132, 204, 22, 255) if rec.get("ok") else (248, 113, 113, 255)
-            draw.rectangle((x, y + label_h, x + cell_w, y + label_h + cell_h), outline=color, width=1)
+            color = (212, 212, 212, 255) if rec.get("ok") else (248, 113, 113, 255)
+            draw.rectangle((x, frame_y, x + cell_w - 1, frame_y + cell_h - 1), outline=color, width=1)
             bbox = rec.get("bbox")
             if bbox:
                 bx0, by0, bx1, by1 = bbox
-                draw.rectangle((x + bx0, y + label_h + by0, x + bx1, y + label_h + by1), outline=(80, 190, 255, 220), width=1)
+                draw.rectangle((x + bx0, frame_y + by0, x + bx1 - 1, frame_y + by1 - 1), outline=REVIEW_OUTLINE, width=1)
             pivot = rec.get("pivot")
-            if isinstance(pivot, list) and len(pivot) == 2:
+            if pivot_ok(pivot):
                 px, py = int(pivot[0]), int(pivot[1])
-                draw.line((x + px - 4, y + label_h + py, x + px + 4, y + label_h + py), fill=(245, 158, 11, 255))
-                draw.line((x + px, y + label_h + py - 4, x + px, y + label_h + py + 4), fill=(245, 158, 11, 255))
-            draw.text((x + 2, y + label_h + 2), label[:24], fill=color)
-    out = run_dir / "qa" / "asset-slot-overlay.png"
+                draw.line((x + px - 4, frame_y + py, x + px + 4, frame_y + py), fill=(245, 158, 11, 255))
+                draw.line((x + px, frame_y + py - 4, x + px, frame_y + py + 4), fill=(245, 158, 11, 255))
+            draw.text((x + 2, y + label_h), label[:24], fill=color, font=font)
     out.parent.mkdir(parents=True, exist_ok=True)
     atomic_save_image(overlay, out)
     return out.relative_to(run_dir).as_posix()
@@ -207,6 +236,11 @@ def make_tile_repeat_review(
             samples.append((str(record.get("label") or record.get("state") or rel), opened.convert("RGBA")))
     if not samples:
         return None
+    sources = {resolve_run_path(run_dir, record["file"]) for record in records if isinstance(record.get("file"), str)}
+    out = review_output(run_dir, "qa/tile-repeat-review.png", sources)
+    item_paths = [review_output(
+        run_dir, f"qa/tile-repeat-items/{repeat_item_name(label, index)}.png", sources
+    ) for index, (label, _sample) in enumerate(samples)]
     cell_w, cell_h = cell_size
     scale = 3
     gutter = 10
@@ -215,9 +249,9 @@ def make_tile_repeat_review(
     panel_h = cell_h * scale + label_h
     cols = min(3, len(samples))
     rows_count = (len(samples) + cols - 1) // cols
-    review = Image.new("RGBA", (cols * (panel_w + gutter) + gutter, rows_count * (panel_h + gutter) + gutter), (8, 8, 8, 255))
+    review = Image.new("RGBA", (cols * (panel_w + gutter) + gutter, rows_count * (panel_h + gutter) + gutter), REVIEW_BACKGROUND)
     draw = ImageDraw.Draw(review)
-    (run_dir / "qa" / "tile-repeat-items").mkdir(parents=True, exist_ok=True)
+    item_paths[0].parent.mkdir(parents=True, exist_ok=True)
     for index, (label, sample) in enumerate(samples):
         col = index % cols
         row = index // cols
@@ -227,9 +261,9 @@ def make_tile_repeat_review(
         for ty in range(scale):
             for tx in range(scale):
                 review.alpha_composite(sample, (x0 + tx * cell_w, y0 + label_h + ty * cell_h))
-        draw.rectangle((x0, y0 + label_h, x0 + panel_w, y0 + label_h + cell_h * scale), outline=(80, 190, 255, 180), width=1)
+        draw.rectangle((x0, y0 + label_h, x0 + panel_w, y0 + label_h + cell_h * scale), outline=REVIEW_OUTLINE, width=1)
         item_review = Image.new(
-            "RGBA", (panel_w, panel_h), (8, 8, 8, 255)
+            "RGBA", (panel_w, panel_h), REVIEW_BACKGROUND
         )
         item_draw = ImageDraw.Draw(item_review)
         item_draw.text((0, 2), label, fill=(235, 235, 235, 255))
@@ -240,15 +274,10 @@ def make_tile_repeat_review(
                 )
         item_draw.rectangle(
             (0, label_h, panel_w - 1, panel_h - 1),
-            outline=(80, 190, 255, 180),
+            outline=REVIEW_OUTLINE,
             width=1,
         )
-        safe_label = re.sub(r"[^a-z0-9-]+", "-", label.lower()).strip("-") or f"item-{index}"
-        atomic_save_image(
-            item_review,
-            run_dir / "qa" / "tile-repeat-items" / f"{safe_label}.png",
-        )
-    out = run_dir / "qa" / "tile-repeat-review.png"
+        atomic_save_image(item_review, item_paths[index])
     out.parent.mkdir(parents=True, exist_ok=True)
     atomic_save_image(review, out)
     return out.relative_to(run_dir).as_posix()
@@ -262,6 +291,8 @@ def make_tile_adjacency_review(
     adjacency = [record for record in records if record.get("repeat_mode") == "adjacency"]
     if not adjacency:
         return None
+    sources = {resolve_run_path(run_dir, record["file"]) for record in records if isinstance(record.get("file"), str)}
+    out = review_output(run_dir, "qa/tile-adjacency-review.png", sources)
     by_role = {
         str(record.get("tile_role") or record.get("label")): record
         for record in adjacency
@@ -290,7 +321,7 @@ def make_tile_adjacency_review(
     review = Image.new(
         "RGBA",
         (columns * preview_w, len(canonical_rows) * (preview_h + label_h)),
-        (18, 18, 18, 255),
+        REVIEW_BACKGROUND,
     )
     draw = ImageDraw.Draw(review)
     for row_index, roles in enumerate(canonical_rows):
@@ -313,10 +344,9 @@ def make_tile_adjacency_review(
             review.alpha_composite(tile, (x, y + label_h))
             draw.rectangle(
                 (x, y + label_h, x + preview_w - 1, y + label_h + preview_h - 1),
-                outline=(80, 190, 255, 180),
+                outline=REVIEW_OUTLINE,
                 width=1,
             )
-    out = run_dir / "qa" / "tile-adjacency-review.png"
     out.parent.mkdir(parents=True, exist_ok=True)
     atomic_save_image(review, out)
     return out.relative_to(run_dir).as_posix()
@@ -344,16 +374,31 @@ def main() -> int:
     parser.add_argument("--strict-catalog", action="store_true", default=True)
     parser.add_argument("--no-strict-catalog", dest="strict_catalog", action="store_false")
     args = parser.parse_args()
+    for name in ("min_repeat_edge_coverage", "max_repeat_edge_error"):
+        value = getattr(args, name)
+        if not math.isfinite(value) or not 0 <= value <= 1:
+            parser.error(f"--{name.replace('_', '-')} must be finite and within 0..1")
+    if args.edge_margin < 0 or args.repeat_edge_strip < 1:
+        parser.error("edge margin must be non-negative and repeat strip must be positive")
+    for name in ("min_used_pixels", "max_prop_edge_pixels"):
+        if getattr(args, name) is not None and getattr(args, name) < 0:
+            parser.error(f"--{name.replace('_', '-')} must be non-negative")
 
     run_dir = args.run_dir.expanduser().resolve()
+    if not run_dir.is_dir():
+        raise ValueError("run directory does not exist")
     request = json.loads((run_dir / "sprite-request.json").read_text(encoding="utf-8"))
     frames_manifest = json.loads((run_dir / "frames" / "frames-manifest.json").read_text(encoding="utf-8"))
+    if not isinstance(request, dict) or not isinstance(frames_manifest, dict):
+        raise ValueError("request and frames manifest must be JSON objects")
     asset_kind = str(request.get("asset_kind", "sprite"))
     resize_policy = resize_policy_from_sampling_policy(request.get("sampling_policy"))
     cell_size = cell_geometry(request["cell"])
     cell_w, cell_h = cell_size
     square_like_cell = abs((cell_w / max(1, cell_h)) - 1.0) <= 0.25
     rows = frames_manifest.get("rows", [])
+    if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+        raise ValueError("frames-manifest rows must be an array of objects")
     static_sprite = asset_kind == "sprite" and request.get("frame_semantics") in {"variants", "still-assets"}
     if asset_kind not in ASSET_KINDS and not static_sprite:
         raise SystemExit(f"check_asset_slots.py requires assets or a non-temporal sprite set, got {asset_kind!r}")
@@ -377,10 +422,22 @@ def main() -> int:
     }
     for state in sorted(expected_states - checked_states):
         errors.append(f"{state}: expected request state has no frames-manifest row")
+    for state in sorted(checked_states - expected_states):
+        errors.append(f"{state}: frames-manifest row is absent from request states")
+    if len(checked_states) != len(rows):
+        errors.append("frames-manifest contains duplicate state rows")
 
     for row in rows:
         state = str(row["state"])
         files = [str(path) for path in row.get("files", [])]
+        entry = request_states.get(state) if isinstance(request_states, dict) else None
+        requested_count = entry.get("frames") if isinstance(entry, dict) else None
+        if type(requested_count) is not int or requested_count < 1:
+            errors.append(f"{state}: request frame count must be a positive integer")
+        elif len(files) != requested_count:
+            errors.append(f"{state}: expected {requested_count} frames, found {len(files)}")
+        if "frames" in row and (type(row["frames"]) is not int or row["frames"] != len(files)):
+            errors.append(f"{state}: manifest frame count does not match its files")
         labels = row_labels(request, row)
         if not labels:
             errors.append(f"{state}: missing per-slot asset_labels")
@@ -401,7 +458,7 @@ def main() -> int:
                     if not meta.get("category"):
                         item_errors.append(f"{label}: missing catalog category")
                     if not pivot_ok(meta.get("pivot")):
-                        item_errors.append(f"{label}: missing catalog pivot [x,y]")
+                        item_errors.append(f"{label}: missing/invalid catalog pivot [x,y]; coordinates must be finite numbers")
                     if asset_kind == "tileset" and not (meta.get("tile_role") or meta.get("edge_role") or meta.get("collision")):
                         item_errors.append(f"{label}: tileset catalog item needs tile_role, edge_role, or collision")
                     if asset_kind == "texture" and meta.get("repeat_mode") != "self":
@@ -429,6 +486,8 @@ def main() -> int:
             frame_path = resolve_run_path(run_dir, rel)
             with Image.open(frame_path) as opened:
                 frame = opened.convert("RGBA")
+            if frame.size != cell_size:
+                item_errors.append(f"{label}: frame size {frame.size} does not match cell {cell_size}")
             repeat_mode = str(meta.get("repeat_mode", ""))
             repeat_metrics: dict[str, Any] | None = None
             if asset_kind in {"tileset", "texture"}:
@@ -521,7 +580,7 @@ def main() -> int:
                 "file": rel,
                 "bbox": list(bbox) if bbox else None,
                 "suggested_pivot": [round((bbox[0] + bbox[2]) / 2), bbox[3]] if bbox else None,
-                "pivot": meta.get("pivot"),
+                "pivot": meta.get("pivot") if pivot_ok(meta.get("pivot")) else None,
                 "category": meta.get("category"),
                 "nontransparent_pixels": nontransparent,
                 "edge_pixels": edge_pixels,
@@ -563,6 +622,8 @@ def main() -> int:
                 "adjacency tile_role values must be unique per item; record distinct runtime roles before approval"
             )
 
+    sources = {resolve_run_path(run_dir, record["file"]) for record in records}
+    report_path = review_output(run_dir, "qa/asset-slot-review.json", sources)
     overlay = make_overlay(run_dir, rows, cell_size, records)
     repeat_review = make_tile_repeat_review(run_dir, records, cell_size) if asset_kind in {"tileset", "texture"} else None
     adjacency_review = make_tile_adjacency_review(run_dir, records, cell_size) if asset_kind == "tileset" else None
@@ -570,9 +631,9 @@ def main() -> int:
         str(record["label"]): (
             Path("qa")
             / "tile-repeat-items"
-            / f"{re.sub(r'[^a-z0-9-]+', '-', str(record['label']).lower()).strip('-')}.png"
+            / f"{repeat_item_name(str(record['label']), index)}.png"
         ).as_posix()
-        for record in records
+        for index, record in enumerate(records)
         if record.get("repeat_mode") == "self" and record.get("label")
     }
     repeat_errors = [
@@ -604,10 +665,15 @@ def main() -> int:
         "warnings": warnings,
         "records": records,
     }
-    atomic_write_text(run_dir / "qa" / "asset-slot-review.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    atomic_write_text(report_path, json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False) + "\n")
     print(json.dumps({key: value for key, value in report.items() if key != "records"}, ensure_ascii=False, indent=2))
     return 0 if report["ok"] else 1
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (OSError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+        print(json.dumps({"ok": False, "status": "operational-error", "errors": [str(exc)]}))
+        raise SystemExit(3)

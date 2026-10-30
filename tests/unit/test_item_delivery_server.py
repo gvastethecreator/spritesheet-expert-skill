@@ -77,13 +77,24 @@ def test_studio_draft_does_not_bypass_hash_validation(studio_bundle):
         studio.export(run_id, {"draft": True})
 
 
-def test_start_completed_run_preserves_review_head(studio_bundle):
-    studio, run_id, _, _ = studio_bundle
+def test_start_preserves_review_head_and_previous_attempt_logs(studio_bundle):
+    studio, run_id, reviewed, _ = studio_bundle
     path = studio.run_root(run_id) / "workflow.json"
     original = path.read_bytes()
     assert studio.start(run_id, {})["status"] == "already-complete"
     assert path.read_bytes() == original
     assert not studio.processes
+
+    retry_id = studio.store.import_image((reviewed / "source.png").read_bytes(), "Retry fixture")["id"]
+    log = studio.workspace / "logs" / f"{retry_id}.log"
+    assert studio.start(retry_id, {})["status"] == "started"
+    assert studio.processes[retry_id].wait(timeout=10) == 1
+    previous = log.read_bytes()
+    assert b"no-model-runtime.json" in previous
+    assert studio.start(retry_id, {})["status"] == "started"
+    assert studio.processes[retry_id].wait(timeout=10) == 1
+    assert log.read_bytes().startswith(previous)
+    assert len(log.read_bytes()) > len(previous)
 
 
 def test_draft_flag_is_not_truthy_text(studio_bundle):

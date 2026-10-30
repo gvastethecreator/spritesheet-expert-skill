@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import base64
+from io import BytesIO
 from pathlib import Path
+import re
 import subprocess
 import sys
 
@@ -49,14 +52,14 @@ def _request() -> dict[str, object]:
 
 def test_imported_video_builds_raw_provenance_and_required_selector(tmp_path: Path) -> None:
     imageio_ffmpeg = pytest.importorskip("imageio_ffmpeg")
-    run_dir = tmp_path / "run"
+    run_dir = tmp_path / "run ' [review] $cash"
     run_dir.mkdir()
     (run_dir / "sprite-request.json").write_text(
         json.dumps(_request()), encoding="utf-8"
     )
     first_frame = tmp_path / "first.png"
     first = Image.new("RGB", (32, 32), "black")
-    ImageDraw.Draw(first).rectangle((7, 8, 18, 25), fill=(190, 90, 45))
+    ImageDraw.Draw(first).rectangle((7, 8, 18, 25), fill=(60, 195, 75))
     first.save(first_frame)
     video_path = tmp_path / "walk.mp4"
     writer = imageio_ffmpeg.write_frames(
@@ -115,7 +118,13 @@ def test_imported_video_builds_raw_provenance_and_required_selector(tmp_path: Pa
     assert "scaleUnsafeFrames" in selector_html
     assert "EDGE" in selector_html
     assert "SCALE" in selector_html
-    assert "safe source margins" in selector_html
+    assert "no source-edge flags" in selector_html
+    payload = json.loads(re.search(r"const data=(\{.*\});", selector_html).group(1))
+    with Image.open(BytesIO(base64.b64decode(payload["idleThumbnail"].split(",", 1)[1]))) as idle:
+        red, green, blue = idle.getpixel((78, 22))
+        assert green > red + 70 and green > blue + 70
+    assert payload["idleThumbnail"] != payload["thumbnails"][0]
+    assert payload["videoUrl"] == "../../provider/video/walk/source.mp4"
     assert "Copy reviewed command" in selector_html
     assert "reviewContract" in selector_html
     assert "confirm all review checks" in selector_html
@@ -141,6 +150,18 @@ def test_imported_video_builds_raw_provenance_and_required_selector(tmp_path: Pa
     assert provenance_gate.returncode == 0, provenance_gate.stdout + provenance_gate.stderr
     gate_report = json.loads(provenance_gate.stdout)
     assert gate_report["evidence"]["video_selectors"][0]["candidate_count"] >= 2
+    for label in ("video", "first_frame", "sprite_request"):
+        source_path = run_dir / report[label]["path"]
+        original = source_path.read_bytes()
+        try:
+            source_path.write_bytes(original + b"\n")
+            changed = subprocess.run(
+                provenance_gate.args, cwd=REPO_ROOT, capture_output=True, text=True, check=False,
+            )
+            assert changed.returncode == 1, changed.stdout + changed.stderr
+            assert f"video source {label} bytes changed" in changed.stdout
+        finally:
+            source_path.write_bytes(original)
     extracted = subprocess.run(
         [
             sys.executable,

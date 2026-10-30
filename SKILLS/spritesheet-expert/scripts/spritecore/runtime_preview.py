@@ -5,13 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from hashlib import sha256
-from io import BytesIO
+from io import BytesIO, StringIO
 import json
+import math
 from pathlib import Path
+from struct import error as StructError
 from typing import Any, Mapping, Sequence
 
 from jsonschema import Draft202012Validator
-from PIL import Image, ImageColor, __version__ as pillow_version
+from PIL import Image, ImageColor, ImageSequence, __version__ as pillow_version
 
 from spritecore.contracts import load_manifest
 from spritecore.paths import PathSafetyError, resolve_run_path
@@ -29,6 +31,8 @@ class PreviewPlan:
     output_path: Path
     report_path: Path
     manifest: Mapping[str, Any]
+    manifest_sha256: str
+    atlas_sha256: str
     state: str
     kind: str
     frame_indices: tuple[int, ...]
@@ -77,7 +81,8 @@ def _qa_output_path(run_dir: Path, value: str, *, suffix: str) -> Path:
     return path
 
 
-def _state_timing(manifest: Mapping[str, Any], state: str, count: int) -> tuple[int, ...]:
+def manifest_durations_ms(manifest: Mapping[str, Any], state: str, count: int) -> tuple[int, ...]:
+    """Read declared frame durations, or derive them from the row's FPS."""
     animation = manifest.get("animation")
     row: Mapping[str, Any] = {}
     if isinstance(animation, Mapping):
@@ -85,13 +90,14 @@ def _state_timing(manifest: Mapping[str, Any], state: str, count: int) -> tuple[
         if isinstance(rows, Mapping) and isinstance(rows.get(state), Mapping):
             row = rows[state]
     durations = row.get("durations_ms")
-    if isinstance(durations, list) and len(durations) == count and all(
-        isinstance(item, int) and not isinstance(item, bool) and item > 0
-        for item in durations
-    ):
+    if "durations_ms" in row:
+        if not isinstance(durations, (list, tuple)) or len(durations) != count or any(
+            type(item) is not int or item <= 0 for item in durations
+        ):
+            raise RuntimePreviewError(f"animation row {state!r} has invalid durations_ms")
         return tuple(durations)
     fps = row.get("fps", 8)
-    if isinstance(fps, bool) or not isinstance(fps, (int, float)) or fps <= 0:
+    if isinstance(fps, bool) or not isinstance(fps, (int, float)) or not math.isfinite(fps) or fps <= 0:
         raise RuntimePreviewError(f"animation row {state!r} has invalid fps")
     duration = max(1, round(1000 / fps))
     return (duration,) * count
@@ -137,7 +143,8 @@ def prepare_preview(
     if not manifest_path.is_file():
         raise RuntimePreviewError(f"manifest does not exist: {manifest_name}")
     try:
-        manifest = load_manifest(manifest_path).data
+        manifest_bytes = manifest_path.read_bytes()
+        manifest = load_manifest(StringIO(manifest_bytes.decode("utf-8-sig"))).data
     except ValueError as exc:
         raise RuntimePreviewError(str(exc)) from exc
     rows = manifest["frame_layout"]["rows"]
@@ -150,7 +157,7 @@ def prepare_preview(
         frame_indices = (frame,)
     else:
         frame_indices = tuple(range(len(rects)))
-    all_durations = _state_timing(manifest, state, len(rects))
+    all_durations = manifest_durations_ms(manifest, state, len(rects))
     durations = tuple(all_durations[index] for index in frame_indices)
 
     atlas_name = manifest["atlas"]["path"]
@@ -161,9 +168,10 @@ def prepare_preview(
     if atlas_path == manifest_path or not atlas_path.is_file():
         raise RuntimePreviewError(f"atlas does not exist: {atlas_name}")
     try:
-        with Image.open(atlas_path) as opened:
+        atlas_bytes = atlas_path.read_bytes()
+        with Image.open(BytesIO(atlas_bytes)) as opened:
             opened.verify()
-        with Image.open(atlas_path) as opened:
+        with Image.open(BytesIO(atlas_bytes)) as opened:
             actual_dimensions = opened.size
     except (OSError, ValueError) as exc:
         raise RuntimePreviewError(f"atlas is not a decodable image: {atlas_name}") from exc
@@ -188,7 +196,7 @@ def prepare_preview(
     report_name = report_name or f"qa/runtime-preview/{stem}.evidence.json"
     output_path = _qa_output_path(run_root, output_name, suffix=suffix)
     report_path = _qa_output_path(run_root, report_name, suffix=".json")
-    if output_path == report_path or output_path in {atlas_path, manifest_path}:
+    if output_path == report_path or {output_path, report_path} & {atlas_path, manifest_path}:
         raise RuntimePreviewError("runtime preview outputs cannot overwrite sources")
     if not force:
         collisions = [path for path in (output_path, report_path) if path.exists()]
@@ -203,6 +211,8 @@ def prepare_preview(
         output_path=output_path,
         report_path=report_path,
         manifest=manifest,
+        manifest_sha256=_digest(manifest_bytes),
+        atlas_sha256=_digest(atlas_bytes),
         state=state,
         kind=kind,
         frame_indices=frame_indices,
@@ -229,7 +239,10 @@ def _render_frames(plan: PreviewPlan) -> tuple[list[Image.Image], list[dict[str,
     )
     frames: list[Image.Image] = []
     placements: list[dict[str, Any]] = []
-    with Image.open(plan.atlas_path) as opened:
+    atlas_bytes = plan.atlas_path.read_bytes()
+    if _digest(atlas_bytes) != plan.atlas_sha256:
+        raise RuntimePreviewError("atlas changed after preview planning; render again")
+    with Image.open(BytesIO(atlas_bytes)) as opened:
         atlas = opened.convert("RGBA")
         rects: Sequence[Mapping[str, int]] = plan.manifest["frame_layout"]["rows"][plan.state]
         for index in plan.frame_indices:
@@ -272,17 +285,24 @@ def encode_preview(plan: PreviewPlan) -> tuple[bytes, list[dict[str, Any]]]:
     else:
         adaptive = getattr(Image, "Palette", Image).ADAPTIVE
         palette_frames = [frame.convert("P", palette=adaptive, colors=255) for frame in frames]
-        palette_frames[0].save(
-            buffer,
-            format="GIF",
-            save_all=True,
-            append_images=palette_frames[1:],
-            duration=list(plan.durations_ms),
-            loop=0,
-            disposal=2,
-            optimize=False,
-        )
+        try:
+            palette_frames[0].save(
+                buffer,
+                format="GIF",
+                save_all=True,
+                append_images=palette_frames[1:],
+                duration=list(plan.durations_ms),
+                loop=0,
+                disposal=2,
+                optimize=False,
+            )
+        except (StructError, OverflowError) as exc:
+            raise RuntimePreviewError(f"GIF cannot encode the requested frame durations: {exc}") from exc
     return buffer.getvalue(), placements
+
+
+def _gif_durations_ms(image: Image.Image) -> list[int]:
+    return [frame.info.get("duration", 0) for frame in ImageSequence.Iterator(image)]
 
 
 def build_evidence(
@@ -292,6 +312,12 @@ def build_evidence(
 ) -> dict[str, Any]:
     manifest_bytes = plan.manifest_path.read_bytes()
     atlas_bytes = plan.atlas_path.read_bytes()
+    if _digest(manifest_bytes) != plan.manifest_sha256 or _digest(atlas_bytes) != plan.atlas_sha256:
+        raise RuntimePreviewError("preview sources changed during rendering; render again")
+    durations = list(plan.durations_ms)
+    if plan.kind == "runtime-playback":
+        with Image.open(BytesIO(artifact_bytes)) as playback:
+            durations = _gif_durations_ms(playback)
     sources = [
         {
             "role": "manifest",
@@ -311,7 +337,7 @@ def build_evidence(
         "kind": plan.kind,
         "state": plan.state,
         "frames": list(plan.frame_indices),
-        "durations_ms": list(plan.durations_ms),
+        "durations_ms": durations,
         "viewport": [*plan.viewport, plan.dpr],
         "scale": plan.scale,
         "background": plan.background,
@@ -341,7 +367,7 @@ def build_evidence(
         "input_fingerprint": f"sha256:{fingerprint}",
         "state": plan.state,
         "frames": list(plan.frame_indices),
-        "durations_ms": list(plan.durations_ms),
+        "durations_ms": durations,
         "viewport": {"width": plan.viewport[0], "height": plan.viewport[1], "dpr": plan.dpr},
         "renderer": {
             "name": "spritesheet-expert-pillow-runtime-preview",
@@ -428,6 +454,7 @@ def load_screenshot_evidence(
         with Image.open(artifact_path) as opened:
             dimensions = opened.size
             media = opened.format
+            durations = _gif_durations_ms(opened) if media == "GIF" else None
     except (OSError, ValueError) as exc:
         raise RuntimePreviewError("screenshot evidence artifact is not decodable") from exc
     if dimensions != (artifact["width"], artifact["height"]):
@@ -435,6 +462,8 @@ def load_screenshot_evidence(
     expected_media = "PNG" if artifact["media_type"] == "image/png" else "GIF"
     if media != expected_media:
         raise RuntimePreviewError("screenshot evidence media type is incorrect")
+    if durations is not None and document["durations_ms"] != durations:
+        raise RuntimePreviewError("screenshot evidence durations do not match the encoded GIF")
     source_roles = [record["role"] for record in document["sources"]]
     if source_roles.count("manifest") != 1 or source_roles.count("atlas") != 1:
         raise RuntimePreviewError("runtime evidence requires exactly one manifest and atlas source")

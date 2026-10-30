@@ -6,7 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageSequence
+import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -112,6 +113,9 @@ def test_runtime_preview_renders_hash_bound_deterministic_playback(
 ) -> None:
     run_dir = tmp_path / "run"
     atlas_path, manifest_path = _write_run(run_dir)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["animation"]["rows"]["idle"]["durations_ms"] = [111, 237]
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
     completed = _run(
         run_dir,
@@ -143,7 +147,10 @@ def test_runtime_preview_renders_hash_bound_deterministic_playback(
     assert report["viewport"] == {"width": 32, "height": 24, "dpr": 2.0}
     assert report["sampling"] == "nearest"
     assert report["frames"] == [0, 1]
-    assert report["durations_ms"] == [200, 200]
+    assert report["durations_ms"] == [110, 230]
+    with Image.open(artifact_path) as playback:
+        assert [frame.info["duration"] for frame in ImageSequence.Iterator(playback)] == [110, 230]
+    assert json.loads(manifest_path.read_text())["animation"]["rows"]["idle"]["durations_ms"] == [111, 237]
     sources = {source["role"]: source for source in report["sources"]}
     assert sources["atlas"]["sha256"] == sha256(atlas_path.read_bytes()).hexdigest()
     assert sources["manifest"]["sha256"] == sha256(manifest_path.read_bytes()).hexdigest()
@@ -180,6 +187,10 @@ def test_runtime_preview_renders_one_runtime_still(tmp_path: Path) -> None:
         "1",
         "--viewport",
         "16x16",
+        "--out",
+        "qa/runtime-preview/images/still.png",
+        "--report",
+        "qa/runtime-preview/evidence/still.json",
     )
 
     assert completed.returncode == 0, completed.stdout + completed.stderr
@@ -188,6 +199,12 @@ def test_runtime_preview_renders_one_runtime_still(tmp_path: Path) -> None:
     report = json.loads((run_dir / response["report_path"]).read_text(encoding="utf-8"))
     assert report["frames"] == [1]
     assert report["durations_ms"] == [200]
+    from spritecore.runtime_preview import RuntimePreviewError, load_screenshot_evidence
+    report["durations_ms"] = [0]
+    report_path = run_dir / response["report_path"]
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+    with pytest.raises(RuntimePreviewError, match="invalid screenshot evidence"):
+        load_screenshot_evidence(report_path, run_dir=run_dir)
 
 
 def test_runtime_preview_auto_fits_manifest_cell(tmp_path: Path) -> None:
@@ -224,6 +241,14 @@ def test_runtime_preview_rejects_stale_or_wrong_atlas_before_mutation(
     assert "dimensions" in response["errors"][0]
     assert not (run_dir / "qa" / "runtime-preview").exists()
 
+    manifest["atlas"]["width"] = 16
+    manifest["animation"]["rows"]["idle"]["durations_ms"] = [100]
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    invalid_timing = _run(run_dir)
+    assert invalid_timing.returncode == 3
+    assert "durations_ms" in json.loads(invalid_timing.stdout)["errors"][0]
+    assert not (run_dir / "qa" / "runtime-preview").exists()
+
 
 def test_runtime_preview_rejects_unsafe_or_source_output_paths(
     tmp_path: Path,
@@ -240,6 +265,44 @@ def test_runtime_preview_rejects_unsafe_or_source_output_paths(
     assert not sentinel.exists()
     assert not (run_dir / "raw").exists()
 
+    manifest = run_dir / "qa/runtime-preview/source-manifest.json"
+    manifest.parent.mkdir(parents=True)
+    original = (run_dir / "manifest.json").read_bytes()
+    manifest.write_bytes(original)
+    collision = _run(
+        run_dir, "--manifest", "qa/runtime-preview/source-manifest.json",
+        "--report", "qa/runtime-preview/source-manifest.json", "--force",
+    )
+    assert collision.returncode == 3
+    assert "cannot overwrite sources" in json.loads(collision.stdout)["errors"][0]
+    assert manifest.read_bytes() == original
+    assert not (run_dir / "qa/runtime-preview/idle-playback.gif").exists()
+
+
+def test_runtime_preview_rejects_source_changes_between_planning_and_recording(tmp_path: Path) -> None:
+    from spritecore.runtime_preview import (
+        RuntimePreviewError, build_evidence, encode_preview, prepare_preview,
+    )
+
+    run_dir = tmp_path / "run"
+    atlas_path, manifest_path = _write_run(run_dir)
+    plan = prepare_preview(
+        run_dir=run_dir, manifest_name="manifest.json", state="idle",
+        kind="runtime-playback", frame=0, output_name=None, report_name=None,
+        viewport="auto", dpr=1.0, scale=1, background="#111111", force=False,
+    )
+    encoded, placements = encode_preview(plan)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["animation"]["rows"]["idle"]["fps"] = 10
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(RuntimePreviewError, match="sources changed"):
+        build_evidence(plan, encoded, placements)
+    atlas_path.write_bytes(atlas_path.read_bytes() + b"changed source bytes")
+    with pytest.raises(RuntimePreviewError, match="atlas changed"):
+        encode_preview(plan)
+    assert not plan.output_path.exists()
+    assert not plan.report_path.exists()
+
 
 def test_runtime_preview_refuses_overwrite_without_force(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
@@ -253,6 +316,56 @@ def test_runtime_preview_refuses_overwrite_without_force(tmp_path: Path) -> None
 
     assert second.returncode == 3
     assert artifact.read_bytes() == before
+
+    from spritecore.locks import acquire_run_lock
+    with acquire_run_lock(run_dir, "preview-test-holder"):
+        locked = _run(run_dir, "--force")
+    assert locked.returncode == 3
+    assert "locked" in " ".join(json.loads(locked.stdout)["errors"])
+    assert artifact.read_bytes() == before
+
+
+def test_runtime_preview_records_the_encoded_gif_timeline(tmp_path: Path) -> None:
+    from spritecore.runtime_preview import RuntimePreviewError, load_screenshot_evidence
+
+    run_dir = tmp_path / "run"
+    atlas_path, manifest_path = _write_run(run_dir)
+    manifest = json.loads(manifest_path.read_text())
+    manifest["animation"]["rows"]["idle"]["durations_ms"] = [1, 1]
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    rendered = _run(run_dir)
+    assert rendered.returncode == 0, rendered.stdout
+    response = json.loads(rendered.stdout)
+    report_path = run_dir / response["report_path"]
+    assert load_screenshot_evidence(report_path, run_dir=run_dir)["durations_ms"] == [0, 0]
+
+    # Identical images may be merged by the GIF encoder; read its timeline back.
+    with Image.open(atlas_path) as opened:
+        atlas = opened.convert("RGBA")
+    atlas.paste(atlas.crop((0, 0, 8, 8)), (8, 0))
+    atlas.save(atlas_path)
+    manifest["animation"]["rows"]["idle"]["durations_ms"] = [111, 237]
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    merged = _run(run_dir, "--force")
+    assert merged.returncode == 0, merged.stdout
+    report = load_screenshot_evidence(report_path, run_dir=run_dir)
+    assert report["frames"] == [0, 1]
+    assert report["durations_ms"] == [340]
+    artifact = run_dir / report["artifact"]["path"]
+    artifact_before, report_before = artifact.read_bytes(), report_path.read_bytes()
+    report["durations_ms"] = [111, 237]
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+    with pytest.raises(RuntimePreviewError, match="durations do not match"):
+        load_screenshot_evidence(report_path, run_dir=run_dir)
+    report_path.write_bytes(report_before)
+
+    manifest["animation"]["rows"]["idle"]["durations_ms"] = [1000000, 200]
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    unsupported = _run(run_dir, "--force")
+    assert unsupported.returncode == 3
+    assert "GIF cannot encode" in " ".join(json.loads(unsupported.stdout)["errors"])
+    assert artifact.read_bytes() == artifact_before
+    assert report_path.read_bytes() == report_before
 
 
 def test_prepackage_runtime_gate_consumes_current_playback_evidence(

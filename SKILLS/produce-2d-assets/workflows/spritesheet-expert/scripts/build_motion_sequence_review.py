@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
-"""Baseline-register Image Gen frames and build a review sheet.
+"""Align detected baselines and build a motion review sheet.
 
-This script never draws or alters a pose. It translates each complete generated
-raster so its detected registration baseline matches frame 1, then applies the
-same resize to every frame for a compact contact sheet.
+Reject translations that clip detected foreground. Selected PNGs retain alpha;
+contact-sheet resizing preserves aspect ratio. Inspect the result before acceptance.
 """
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+from io import BytesIO
 import json
 import math
 from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageStat
+from runio import atomic_save_image, atomic_write_text
 
 
 def border_color(image: Image.Image) -> tuple[int, int, int]:
@@ -49,9 +50,16 @@ def baseline_row(image: Image.Image) -> int:
 
 
 def translate_to_baseline(image: Image.Image, source_y: int, target_y: int) -> Image.Image:
-    rgb = image.convert("RGB")
-    translated = Image.new("RGB", rgb.size, border_color(rgb))
-    translated.paste(rgb, (0, target_y - source_y))
+    source = image.convert("RGBA")
+    alpha = source.getchannel("A")
+    transparent = alpha.getextrema()[0] < 255
+    bbox = alpha.getbbox() if transparent else foreground_mask(source).getbbox()
+    offset = target_y - source_y
+    if bbox is None or bbox[1] + offset < 0 or bbox[3] + offset > source.height:
+        raise ValueError("baseline translation would clip detected foreground")
+    background = (0, 0, 0, 0) if transparent else (*border_color(source), 255)
+    translated = Image.new("RGBA", source.size, background)
+    translated.paste(source, (0, offset))
     return translated
 
 
@@ -87,24 +95,35 @@ def main() -> int:
         raise SystemExit("columns must be positive and cell-size must be at least 64")
 
     sources = [path.expanduser().resolve() for path in args.frame]
-    images = [Image.open(path).convert("RGB") for path in sources]
+    selected_dir = args.selected_dir.expanduser().resolve()
+    sheet_path, report_path = args.sheet.expanduser().resolve(), args.report.expanduser().resolve()
+    selected_paths = [selected_dir / f"frame-{index:02d}.png" for index in range(1, len(sources) + 1)]
+    outputs = [*selected_paths, sheet_path, report_path]
+    if len(set(outputs)) != len(outputs) or set(outputs) & set(sources):
+        raise SystemExit("motion review outputs must be distinct and cannot overwrite source frames")
+    if any(path.exists() and not path.is_file() for path in outputs):
+        raise SystemExit("motion review output destinations must be files")
+    images, source_hashes = [], []
+    for source in sources:
+        content = source.read_bytes()
+        source_hashes.append(hashlib.sha256(content).hexdigest())
+        with Image.open(BytesIO(content)) as opened:
+            images.append(opened.convert("RGBA"))
     dimensions = {image.size for image in images}
     if len(dimensions) != 1:
         raise SystemExit(f"all source frames must share dimensions, got {sorted(dimensions)}")
 
-    target_baseline = baseline_row(images[0])
-    args.selected_dir.mkdir(parents=True, exist_ok=True)
-    args.sheet.parent.mkdir(parents=True, exist_ok=True)
-    args.report.parent.mkdir(parents=True, exist_ok=True)
+    baselines = [baseline_row(image) for image in images]
+    target_baseline = baselines[0]
+    selected = [translate_to_baseline(image, baseline, target_baseline) for image, baseline in zip(images, baselines, strict=True)]
+    selected_dir.mkdir(parents=True, exist_ok=True)
+    sheet_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
 
-    selected: list[Image.Image] = []
     records: list[dict[str, object]] = []
-    for index, (source, image) in enumerate(zip(sources, images, strict=True), start=1):
-        detected = baseline_row(image)
-        normalized = translate_to_baseline(image, detected, target_baseline)
-        output = args.selected_dir / f"frame-{index:02d}.png"
-        normalized.save(output)
-        selected.append(normalized)
+    for index, (source, detected, normalized) in enumerate(zip(sources, baselines, selected, strict=True), start=1):
+        output = selected_paths[index - 1]
+        atomic_save_image(normalized, output)
         bbox = subject_bbox(normalized, target_baseline)
         records.append(
             {
@@ -117,7 +136,7 @@ def main() -> int:
                 "subject_bbox": list(bbox) if bbox else None,
                 "subject_width": bbox[2] - bbox[0] if bbox else 0,
                 "subject_height": bbox[3] - bbox[1] if bbox else 0,
-                "source_sha256": sha256_file(source),
+                "source_sha256": source_hashes[index - 1],
                 "selected_sha256": sha256_file(output),
             }
         )
@@ -126,14 +145,16 @@ def main() -> int:
     sheet = Image.new(
         "RGB",
         (args.columns * args.cell_size, rows * args.cell_size),
-        border_color(selected[0]),
+        (17, 17, 17),
     )
     for index, image in enumerate(selected):
-        resized = image.resize((args.cell_size, args.cell_size), Image.Resampling.LANCZOS)
-        x = (index % args.columns) * args.cell_size
-        y = (index // args.columns) * args.cell_size
-        sheet.paste(resized, (x, y))
-    sheet.save(args.sheet)
+        scale = min(args.cell_size / image.width, args.cell_size / image.height)
+        size = (max(1, round(image.width * scale)), max(1, round(image.height * scale)))
+        resized = image.resize(size, Image.Resampling.LANCZOS)
+        x = (index % args.columns) * args.cell_size + (args.cell_size - size[0]) // 2
+        y = (index // args.columns) * args.cell_size + (args.cell_size - size[1]) // 2
+        sheet.paste(resized, (x, y), resized.getchannel("A"))
+    atomic_save_image(sheet, sheet_path)
 
     report = {
         "ok": True,
@@ -142,11 +163,11 @@ def main() -> int:
         "columns": args.columns,
         "rows": rows,
         "cell_size": args.cell_size,
-        "sheet": str(args.sheet.resolve()),
-        "sheet_sha256": sha256_file(args.sheet),
+        "sheet": str(sheet_path),
+        "sheet_sha256": sha256_file(sheet_path),
         "frames": records,
     }
-    args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    atomic_write_text(report_path, json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
     return 0
 

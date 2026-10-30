@@ -298,6 +298,11 @@ def main() -> int:
     parser.add_argument("--states-json", help="custom-atlas states object")
     parser.add_argument("--states-file", type=Path, help="path to custom-atlas states JSON object")
     args = parser.parse_args()
+    inputs = [args.presets]
+    if args.states_file is not None:
+        inputs.append(args.states_file)
+    if args.out.resolve() in {path.resolve() for path in inputs}:
+        raise SystemExit("request output cannot replace the presets or states input")
 
     presets = load_presets(args.presets)
     if args.preset not in presets:

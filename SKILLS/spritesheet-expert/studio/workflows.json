@@ -36,12 +36,11 @@
           "default": "standard"
         }
       ],
-      "promptTemplate": "Use $spritesheet-expert to process {{source}} with the {{profile}} local model profile. Write {{output}}. Preserve original RGBA, keep visual groups together, report ambiguous ownership, and review pending pixels before delivery.",
+      "promptTemplate": "Use $spritesheet-expert to process {{source}} with the {{profile}} local model profile. Write {{output}} and locate the active manifest through workflow.json. Preserve original RGBA, keep visual groups together, report ambiguous ownership, and review pending pixels before delivery.",
       "expectedArtifacts": [
         "workflow.json",
-        "atlas.png",
-        "manifest.json",
-        "qa/pixel-ownership-report.json"
+        "qa/item-playground/index.html",
+        "qa/item-playground/playground.evidence.json"
       ],
       "requiresProvider": false,
       "requiresExplicitExecution": true,
@@ -380,7 +379,7 @@
           "label": "Style and camera locks",
           "type": "textarea",
           "required": true,
-          "default": "match the accepted Black Flag prop style; preserve the requested camera and native visual scale"
+          "default": "match the accepted source-sheet art direction; preserve the requested camera and native visual scale"
         },
         {
           "id": "background",
@@ -494,8 +493,15 @@
           "default": "build/sprite-run"
         },
         {
+          "id": "characterId",
+          "label": "Character or asset ID",
+          "type": "text",
+          "required": true,
+          "default": "asset-01"
+        },
+        {
           "id": "provider",
-          "label": "Generation route",
+          "label": "Media route for agent handoff",
           "type": "select",
           "options": [
             "imagegen",
@@ -505,7 +511,7 @@
           "default": "imagegen"
         }
       ],
-      "promptTemplate": "Use $spritesheet-expert to prepare {{request}} under {{runDir}} with {{provider}} as the declared media route. Resolve the narrowest workflow, produce prompts and layout evidence, enforce provenance and transparency policy, keep provider execution separate from deterministic extraction, and do not claim completion until current atlas, manifest, playback/contact evidence, and QA reports have been inspected.",
+      "promptTemplate": "Use $spritesheet-expert to prepare {{request}} under {{runDir}} for {{characterId}}. Keep {{provider}} as the intended media route in the agent handoff; the preparation CLI does not execute or configure that provider. Resolve the narrowest workflow, produce prompts and layout evidence, enforce provenance and transparency policy, and do not claim completion until current atlas, manifest, playback/contact evidence, and QA reports have been inspected.",
       "expectedArtifacts": [
         "prepared request",
         "prompts",
@@ -520,9 +526,13 @@
         {
           "field": "request"
         },
-        "--run-dir",
+        "--out-dir",
         {
           "field": "runDir"
+        },
+        "--character-id",
+        {
+          "field": "characterId"
         }
       ]
     }

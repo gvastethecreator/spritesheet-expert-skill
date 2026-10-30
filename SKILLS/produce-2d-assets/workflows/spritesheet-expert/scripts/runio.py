@@ -44,18 +44,6 @@ from spritecore.locks import (
 _LEGACY_LOCKS: list[RunLock] = []
 
 
-def _pid_alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-    except PermissionError:
-        return True
-    except ProcessLookupError:
-        return False
-    except OSError:
-        return False
-    return True
-
-
 def acquire_run_dir_lock(run_dir: Path, owner: str) -> Path:
     """Take the single-writer lock for `run_dir`, released automatically at exit.
 

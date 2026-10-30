@@ -38,6 +38,27 @@ def test_missing_or_malformed_report_fails_even_when_process_says_success() -> N
     assert any("missing" in error for error in missing.errors)
     assert any("object" in error for error in malformed.errors)
 
+    for fields in (
+        {"errors": "drift"},
+        {"errors": [None]},
+        {"warnings": "unverified"},
+        {"checked_items": "idle"},
+        {"status": {}},
+        {"id": {}},
+        {"complete": "true"},
+        {"ok": "true"},
+        {"metrics": {"drift": float("nan")}},
+    ):
+        result = check_result_from_report(
+            "frame-alignment",
+            {"ok": True, "checked_items": ["idle"], **fields},
+            process_exit_code=0,
+            expected_items=("idle",),
+            report_path="qa/frame-alignment-report.json",
+        )
+        assert result.exit_code == 1, fields
+        assert result.errors, fields
+
 
 def test_zero_checked_items_or_partial_expected_coverage_fails() -> None:
     zero = check_result_from_report(
@@ -105,3 +126,21 @@ def test_native_check_result_report_is_accepted_only_when_consistent() -> None:
 
     assert result.exit_code == 0
     assert result.checked_items == ("idle",)
+
+    for fields, expected_status, expected_exit in (
+        ({"complete": False}, "blocked", 2),
+        ({"status": "blocked"}, "blocked", 2),
+        ({"status": "operational-error"}, "operational-error", 3),
+        ({"applicable": False}, "fail", 1),
+        ({"status": "skipped"}, "fail", 1),
+    ):
+        inconsistent = check_result_from_report(
+            "generation-provenance",
+            {**result.to_dict(), **fields},
+            process_exit_code=0,
+            expected_items=("idle",),
+            report_path="qa/generation-provenance-report.json",
+        )
+        assert inconsistent.status == expected_status, fields
+        assert inconsistent.exit_code == expected_exit, fields
+        assert inconsistent.complete is (expected_exit == 1), fields

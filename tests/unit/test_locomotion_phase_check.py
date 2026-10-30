@@ -14,6 +14,8 @@ from check_motion_variation import (
     contact_phase_check as motion_phase_check,
     support_balance,
     support_side,
+    is_locomotion_state,
+    selected_states,
 )
 
 
@@ -89,3 +91,18 @@ def test_front_fps_creature_locomotion_is_a_first_class_contract() -> None:
         "not a generic biped" in check
         for check in WORKFLOW_CONTRACTS[workflow]["visual_checks"]
     )
+
+
+def test_motion_selection_uses_registered_request_and_art_direction_workflows() -> None:
+    workflow = "run-gun-layered-motion"
+    assert is_locomotion_state("shooting", {"animation_workflows": [workflow]})
+    request = {
+        "asset_kind": "sprite", "frame_semantics": "animation",
+        "cell": {"width": 64, "height": 64},
+        "states": {"shooting": {"frames": 4, "fps": 8}},
+        "animation_workflows": [workflow],
+    }
+    assert selected_states(request, "locomotion", {}) == ["shooting"]
+    del request["animation_workflows"]
+    art_direction = {"rows": {"shooting": {"animation_workflows": [workflow]}}}
+    assert selected_states(request, "locomotion", art_direction) == ["shooting"]
