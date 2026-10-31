@@ -15,7 +15,7 @@ Each folder can be copied on its own. `produce-2d-assets/workflows/` includes th
 
 ## Production Media Contract
 
-- `$imagegen` default still provider. `$grok-imagine` explicit, dry-run-first; paid run needs current-task acknowledgment. Video-to-frames → `spritesheet-expert`.
+- `$imagegen` default still provider. Grok Imagine explicit, dry-run-first; paid run needs current-task acknowledgment. Video-to-frames → `spritesheet-expert`.
 - Deterministic code may prepare, extract, register, cut out, compose, preview, validate — not create replacement production art.
 - Isolated sprites, props, and UI prefer native alpha and preserve valid transparency. Use gray/black/white source backgrounds only when a matte is required; never request new green/blue/cyan/magenta chroma. Full-bleed backgrounds keep authored scene pixels.
 - Every produced source declares verified provider/import provenance. Fixtures and placeholders stay non-representative even if validation passes.
