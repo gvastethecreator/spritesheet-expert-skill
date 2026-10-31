@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Spritesheet Expert</title>
-<meta name="description" content="An agent skill and one Python CLI that turn generated art into game-ready sprites: animation rows, poses, icons, UI, loose-item atlases, and a review page that names every frame to redraw.">
+<meta name="description" content="Six agent skills that turn generated 2D game art into checked assets: item atlases, animation rows, tilesets, static props, backgrounds, UI kits, mockups and multi-family packs, each with provenance and proof.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='1' width='6' height='6' rx='2' fill='%23c8613f'/%3E%3Crect x='9' y='1' width='6' height='6' rx='2' fill='%235b7fa8'/%3E%3Crect x='1' y='9' width='6' height='6' rx='2' fill='%235b7fa8'/%3E%3Crect x='9' y='9' width='6' height='6' rx='2' fill='%23c8613f'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -60,13 +60,10 @@ section { padding:96px 0; }
 section + section { border-top:1px solid var(--line); }
 .head { display:grid; gap:14px; max-width:760px; margin-bottom:40px; }
 
-/* buttons and segmented controls */
+/* buttons */
 .btn { display:inline-flex; align-items:center; gap:8px; min-height:46px; padding:0 20px; border-radius:999px; border:1px solid var(--line2); background:var(--paper); color:var(--ink); text-decoration:none; font-weight:600; }
 .btn.primary { background:var(--clay); border-color:var(--clay); color:var(--clay-ink); }
 .btn:hover { filter:brightness(1.04); transform:translateY(-1px); }
-.seg { display:inline-flex; flex-wrap:wrap; gap:4px; padding:4px; border-radius:999px; background:var(--paper); border:1px solid var(--line); }
-.seg button { border:0; background:none; color:var(--muted); padding:8px 16px; border-radius:999px; font:600 14px var(--sans); cursor:pointer; min-height:38px; }
-.seg button[aria-pressed="true"], .seg button[aria-selected="true"] { background:var(--ink); color:var(--bg); }
 
 /* hero */
 .hero { padding:72px 0 88px; }
@@ -76,17 +73,14 @@ section + section { border-top:1px solid var(--line); }
 .facts { display:flex; flex-wrap:wrap; gap:8px 18px; color:var(--muted); font:13px var(--mono); padding:0; margin:0; list-style:none; }
 .facts li::before { content:"● "; color:var(--clay); }
 .card { background:var(--paper); border:1px solid var(--line); border-radius:var(--r); }
-.stage { position:relative; display:grid; place-items:center; background:var(--stage); border-radius:calc(var(--r) - 6px); overflow:hidden; aspect-ratio:1000 / 460; }
-.stage img { width:100%; height:100%; object-fit:contain; }
 .show { padding:14px; display:grid; gap:12px; }
-.show .bar { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+.show .term { margin-top:0; }
 .caption { color:var(--muted); font-size:13px; margin:0; }
 
-/* workflow */
-.steps { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:10px; counter-reset:step; }
+/* skills */
+.steps { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px; }
 .step { text-align:left; padding:18px; border-radius:14px; border:1px solid var(--line); background:var(--paper); color:var(--ink); cursor:pointer; display:grid; gap:6px; align-content:start; font:inherit; }
 .step b { font:600 13px var(--mono); color:var(--clay); }
-.step b::before { counter-increment:step; content:counter(step) "  "; color:var(--muted); }
 .step span { color:var(--muted); font-size:14px; line-height:1.45; }
 .step[aria-selected="true"] { border-color:var(--ink); box-shadow:inset 0 0 0 1px var(--ink); background:var(--raised); }
 .term { margin-top:14px; border-radius:14px; background:var(--code); color:var(--code-ink); padding:20px 22px; overflow-x:auto; font-size:14px; line-height:1.65; }
@@ -94,62 +88,14 @@ section + section { border-top:1px solid var(--line); }
 .term .k { color:#f0a27f; }
 
 /* lanes */
-.tabs { margin-bottom:22px; }
-.panel { display:grid; gap:18px; }
 .grid2 { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:18px; }
 .tile { padding:18px; display:grid; gap:12px; align-content:start; }
-.tile .stage { aspect-ratio:auto; min-height:180px; }
-.label { font:600 12px var(--mono); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:0; }
+.tile p { margin:0; color:var(--muted); font-size:15px; }
+.tile .label { font:600 12px var(--mono); letter-spacing:.06em; text-transform:uppercase; }
 .label code { text-transform:none; letter-spacing:0; }
-.anims { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px; }
-.anims figure { margin:0; background:var(--stage); border-radius:12px; padding:6px; }
-.anims figcaption, .cells figcaption, .buttons figcaption { font:12px var(--mono); color:var(--muted); text-align:center; padding-top:4px; }
-.cells { display:grid; grid-template-columns:repeat(auto-fill, minmax(96px, 1fr)); gap:8px; }
-.cells figure { margin:0; padding:8px; border-radius:12px; background:var(--stage); }
-.cells img { width:100%; aspect-ratio:1; object-fit:contain; }
-.chips { display:flex; flex-wrap:wrap; gap:6px; }
-.chip { display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 10px; border-radius:999px; border:1px solid currentColor; font:600 12px var(--mono); }
-.chip::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor; }
-.chip[data-s="pass"] { color:var(--ok); } .chip[data-s="warn"] { color:var(--warn); } .chip[data-s="fail"] { color:var(--bad); }
-.buttons { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:10px; }
-.buttons figure { margin:0; display:grid; gap:6px; justify-items:center; }
-.buttons img { width:100%; max-width:150px; }
-.nine-demo { display:grid; gap:12px; }
-.nine-stage { display:grid; grid-template-columns:minmax(0, 1fr); place-items:center; min-height:300px; background:var(--stage); border-radius:12px; padding:16px; overflow:hidden; }
-.nine-box { border-style:solid; display:grid; place-items:center; color:#6c4a36; font:600 14px var(--display); max-width:100%; transition:width .15s, height .15s; }
-.ranges { display:grid; grid-template-columns:auto 1fr auto; gap:8px 12px; align-items:center; font-size:14px; }
-.ranges output { font:13px var(--mono); color:var(--muted); min-width:56px; text-align:right; }
-input[type=range] { accent-color:var(--clay); width:100%; }
 
-/* atlas */
-.overlay { position:relative; }
-.stage.overlay { display:block; aspect-ratio:auto; min-height:0; }
-.stage.overlay img { height:auto; }
-.overlay svg { position:absolute; inset:0; width:100%; height:100%; }
-.overlay rect { fill:transparent; stroke:var(--clay); stroke-width:3; vector-effect:non-scaling-stroke; transition:fill .15s; }
-.overlay rect.on { fill:color-mix(in srgb, var(--clay) 22%, transparent); stroke-width:4; }
-.overlay text { font:600 15px var(--mono); fill:var(--ink); paint-order:stroke; stroke:var(--paper); stroke-width:4px; }
-.names { display:flex; flex-wrap:wrap; gap:6px; }
-.names button { border:1px solid var(--line2); background:var(--paper); color:var(--ink); border-radius:999px; padding:6px 12px; font:13px var(--mono); cursor:pointer; min-height:34px; }
-.names button.on { background:var(--clay); color:var(--clay-ink); border-color:var(--clay); }
-.rules { margin:0; padding:0; list-style:none; display:grid; gap:8px; font-size:14px; color:var(--muted); }
-.rules strong { color:var(--ink); }
-
-/* healthy */
-.healthy { display:grid; grid-template-columns:minmax(0, 1.5fr) minmax(0, 1fr); gap:18px; align-items:start; }
-.strip img { width:100%; height:auto; }
-.strip { position:relative; background:var(--stage); border-radius:12px; padding:10px; }
-.flags { position:absolute; inset:10px; display:grid; grid-template-columns:repeat(6, 1fr); pointer-events:none; }
-.flags span { margin:4px; border-radius:10px; }
-.flags span[data-s="fail"] { box-shadow:inset 0 0 0 3px var(--bad); background:color-mix(in srgb, var(--bad) 8%, transparent); }
-.flags span[data-s="warn"] { box-shadow:inset 0 0 0 3px var(--warn); }
-.flags em { display:block; margin:6px; width:max-content; font:600 11px var(--mono); font-style:normal; color:var(--paper); background:var(--ink); padding:2px 6px; border-radius:6px; }
-.checklist { display:grid; gap:0; padding:6px 18px; }
-.checklist div { display:grid; grid-template-columns:auto 1fr; gap:4px 10px; padding:12px 0; border-top:1px solid var(--line); }
-.checklist div:first-child { border-top:0; }
-.checklist p { grid-column:2; margin:0; font-size:13px; color:var(--muted); }
-.note { font-size:13px; color:var(--muted); border-left:3px solid var(--warn); padding:4px 0 4px 12px; margin:0; }
-.flow { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px; margin-top:18px; }
+/* rules */
+.flow { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px; }
 .flow div { padding:16px; border-radius:14px; background:var(--paper); border:1px solid var(--line); font-size:14px; color:var(--muted); }
 .flow b { display:block; color:var(--ink); font:600 13px var(--mono); margin-bottom:4px; }
 
@@ -161,7 +107,7 @@ footer { padding:40px 0 56px; color:var(--muted); font-size:14px; border-top:1px
 footer .wrap { display:flex; flex-wrap:wrap; gap:12px 24px; justify-content:space-between; }
 
 @media (max-width: 920px) {
-  .hero .wrap, .healthy, .install, .grid2 { grid-template-columns:minmax(0, 1fr); }
+  .hero .wrap, .install, .grid2 { grid-template-columns:minmax(0, 1fr); }
   .steps { grid-template-columns:repeat(2, minmax(0, 1fr)); }
   .flow { grid-template-columns:minmax(0, 1fr); }
   section { padding:64px 0; }
@@ -169,9 +115,6 @@ footer .wrap { display:flex; flex-wrap:wrap; gap:12px 24px; justify-content:spac
 }
 @media (max-width: 560px) {
   .top nav a[href^="https"] { display:none; }
-  .flags em { display:none; }
-  .anims { grid-template-columns:minmax(0, 1fr); }
-  .buttons { grid-template-columns:repeat(2, minmax(0, 1fr)); }
   .steps { grid-template-columns:minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) { * { transition:none !important; scroll-behavior:auto !important; } .btn:hover { transform:none; } }
@@ -182,7 +125,7 @@ footer .wrap { display:flex; flex-wrap:wrap; gap:12px 24px; justify-content:spac
   <div class="wrap">
     <a class="mark" href="#top" aria-label="Spritesheet Expert home"><i aria-hidden="true"><b></b><b></b><b></b><b></b></i>Spritesheet Expert</a>
     <nav aria-label="Sections">
-      <a href="#workflow">Workflow</a><a href="#lanes">Lanes</a><a href="#healthy">Healthy sheets</a><a class="keep" href="#install">Install</a>
+      <a href="#skills">Skills</a><a href="#lanes">Sprite lanes</a><a href="#rules">Rules</a><a class="keep" href="#install">Install</a>
       <a class="keep" href="https://github.com/gvastethecreator/spritesheet-expert-skill">GitHub</a>
     </nav>
     <button class="theme" id="theme" type="button" aria-label="Switch color theme">◐</button>
@@ -193,42 +136,36 @@ footer .wrap { display:flex; flex-wrap:wrap; gap:12px 24px; justify-content:spac
   <section class="hero" aria-labelledby="hero-title">
     <div class="wrap">
       <div class="copy">
-        <p class="eyebrow">Agent skill · one Python CLI</p>
-        <h1 id="hero-title">Generated art in. Game&#8209;ready sprites out.</h1>
-        <p class="lede">An image model draws the sheet. <code>sprite.py</code> plans the prompt, cuts out and registers every frame, packs the atlas, writes a review page and tells you which frames to redraw.</p>
+        <p class="eyebrow">Agent skills · 2D game assets</p>
+        <h1 id="hero-title">Generated art in. Checked game assets out.</h1>
+        <p class="lede">Six agent skills for 2D game art. An image model draws the art. The skills cut it out, register frames, pack atlases, validate each delivery and record where every source came from. They never paint replacement art.</p>
         <div class="cta">
-          <a class="btn primary" href="#install">Quick start</a>
+          <a class="btn primary" href="#install">Install</a>
           <a class="btn" href="https://github.com/gvastethecreator/spritesheet-expert-skill">View on GitHub</a>
         </div>
-        <ul class="facts"><li>any image model</li><li>no provider keys in the CLI</li><li>Pillow + numpy + scipy</li></ul>
+        <ul class="facts"><li>Python 3.11+</li><li>Pillow + jsonschema</li><li>no provider keys</li></ul>
       </div>
       <div class="card show">
-        <div class="stage" id="hero-stage">
-          <picture id="hero-anim">
-            <source srcset="assets/v2/matchup-still.webp" media="(prefers-reduced-motion: reduce)">
-            <img src="assets/v2/matchup.webp" width="1000" height="460" alt="Two soft 3D vinyl-toy fighters: the red one throws a jab, the blue one answers with an overhead hammer fist.">
-          </picture>
-          <img id="hero-source" src="assets/v2/anim-source.webp" alt="The single sheet the image model drew for the red fighter: an idle row and a punch row." hidden>
-        </div>
-        <div class="bar">
-          <div class="seg" role="group" aria-label="Hero view">
-            <button type="button" data-hero="anim" aria-pressed="true">Built animation</button>
-            <button type="button" data-hero="source" aria-pressed="false">What the model drew</button>
-          </div>
-          <p class="caption">Each fighter: one generated sheet, every state in it.</p>
-        </div>
+        <pre class="term"><span class="c"># loose items in, packed atlas and review page out</span>
+<span class="k">python</span> scripts/run_item_atlas_workflow.py items.png \
+  --output-dir runs/items --models none
+
+<span class="c"># which lane is this, and what is its final gate?</span>
+<span class="k">python</span> scripts/check_workflow.py \
+  --run-dir runs/items --describe</pre>
+        <p class="caption">Run from the installed <code>spritesheet-expert</code> folder. The final gate for this run is <code>validate_item_delivery.py</code>.</p>
       </div>
     </div>
   </section>
 
-  <section id="workflow" aria-labelledby="workflow-title">
+  <section id="skills" aria-labelledby="skills-title">
     <div class="wrap">
       <div class="head">
-        <p class="eyebrow">Workflow</p>
-        <h2 id="workflow-title">Draw it once. Repair only what broke.</h2>
-        <p class="lede">Frames drawn in one image share light, color and scale. So the whole sheet is generated first, checked, and only the frames that fail are redrawn from their healthy neighbors.</p>
+        <p class="eyebrow">Skills</p>
+        <h2 id="skills-title">One skill per asset family.</h2>
+        <p class="lede">Use the narrowest skill that owns the asset. Each folder runs on its own. Pick one to see the command your agent runs and what it writes.</p>
       </div>
-      <div class="steps" role="tablist" aria-label="Workflow steps" id="steps"></div>
+      <div class="steps" role="tablist" aria-label="Skills" id="steps"></div>
       <pre class="term" id="term" role="tabpanel" aria-live="polite"></pre>
     </div>
   </section>
@@ -236,111 +173,49 @@ footer .wrap { display:flex; flex-wrap:wrap; gap:12px 24px; justify-content:spac
   <section id="lanes" aria-labelledby="lanes-title">
     <div class="wrap">
       <div class="head">
-        <p class="eyebrow">Lanes</p>
-        <h2 id="lanes-title">Three kinds of sheet, one build.</h2>
-        <p class="lede">Every image below is real output: art generated with Cozy Studio, then planned, built and checked by <code>sprite.py</code>.</p>
+        <p class="eyebrow">Sprite lanes</p>
+        <h2 id="lanes-title">Four lanes, one final gate each.</h2>
+        <p class="lede"><code>spritesheet-expert</code> picks a lane from the source and the result you ask for, not from the file extension. Each lane ends at its own validator.</p>
       </div>
-      <div class="seg tabs" role="tablist" aria-label="Lanes">
-        <button type="button" role="tab" id="tab-animation" aria-controls="lane-animation" aria-selected="true">Animation</button>
-        <button type="button" role="tab" id="tab-slots" aria-controls="lane-slots" aria-selected="false" tabindex="-1">Slots</button>
-        <button type="button" role="tab" id="tab-atlas" aria-controls="lane-atlas" aria-selected="false" tabindex="-1">Atlas</button>
-      </div>
-
-      <div class="panel" id="lane-animation" role="tabpanel" aria-labelledby="tab-animation">
-        <div class="grid2">
-          <div class="card tile">
-            <p class="label">Generated: one sheet, all states</p>
-            <div class="stage"><img src="assets/v2/anim-source.webp" alt="Generated sheet with an idle row of four frames and a punch row of six frames." loading="lazy"></div>
-            <p class="caption">A pose guide per cell sets the pose and ground line. The model draws both rows in one pass, so idle and punch share light and color.</p>
-          </div>
-          <div class="card tile">
-            <p class="label">Built: one baseline, one body size, phase timing</p>
-            <div class="anims">
-              <figure><img src="assets/v2/anim-red-punch.webp" alt="Red fighter punch animation" loading="lazy"><figcaption>punch · 6 fr</figcaption></figure>
-              <figure><img src="assets/v2/anim-blue-smash.webp" alt="Blue fighter overhead smash animation" loading="lazy"><figcaption>smash · 6 fr</figcaption></figure>
-              <figure><img src="assets/v2/anim-red-idle.webp" alt="Red fighter idle animation" loading="lazy"><figcaption>idle · 4 fr</figcaption></figure>
-            </div>
-            <div class="chips" id="anim-checks" aria-label="Checks for the punch row"></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="panel" id="lane-slots" role="tabpanel" aria-labelledby="tab-slots" hidden>
+      <div class="grid2">
         <div class="card tile">
-          <p class="label">Poses · <code>--set "gestures:ground=wave,point,…"</code></p>
-          <div class="cells" id="gestures"></div>
-          <p class="caption">One scale for the set, feet on the baseline, the character anchored to one approved image.</p>
+          <p class="label"><code>static-items</code> · gate <code>validate_item_delivery.py</code></p>
+          <h3>Irregular items</h3>
+          <p>Loose items on one sheet become separate items packed into atlas pages. Every visible pixel is assigned once, left pending or explicitly discarded. The packer never rotates or scales an item to fit.</p>
         </div>
-        <div class="grid2">
-          <div class="card tile">
-            <p class="label">Icons · <code>icons:fill=…</code></p>
-            <div class="cells" id="icons"></div>
-            <p class="label">UI states · <code>button=normal,hover,pressed,disabled</code></p>
-            <div class="buttons" id="buttons"></div>
-          </div>
-          <div class="card tile nine-demo">
-            <p class="label">Nine-slice · <code>panel:nine=dialog,tooltip</code></p>
-            <div class="nine-stage"><div class="nine-box" id="nine-box">Stretch me</div></div>
-            <div class="ranges">
-              <label for="nine-w">Width</label><input id="nine-w" type="range" min="140" max="560" value="360"><output id="nine-w-out">360px</output>
-              <label for="nine-h">Height</label><input id="nine-h" type="range" min="90" max="300" value="200"><output id="nine-h-out">200px</output>
-            </div>
-            <div class="seg" role="group" aria-label="Panel">
-              <button type="button" data-panel="0" aria-pressed="true">dialog</button>
-              <button type="button" data-panel="1" aria-pressed="false">tooltip</button>
-            </div>
-            <p class="caption" id="nine-note">Build finds the plain middle band and writes the margins to <code>atlas.json</code>. This panel uses them as CSS <code>border-image</code>.</p>
-          </div>
+        <div class="card tile">
+          <p class="label"><code>true-grid</code> · gate <code>validate_run.py</code></p>
+          <h3>Exact grids</h3>
+          <p>Exact slots or a non-animated variant set, such as a set of character poses. Fixed cells need a true grid; otherwise the source boxes are detected and inspected.</p>
         </div>
-      </div>
-
-      <div class="panel" id="lane-atlas" role="tabpanel" aria-labelledby="tab-atlas" hidden>
-        <div class="grid2">
-          <div class="card tile">
-            <p class="label">Generated: loose items, no grid</p>
-            <div class="stage overlay" id="atlas-source"><img src="assets/v2/atlas-source.webp" alt="Ten gym props scattered on one sheet: trophy, dumbbell, bottle, towel, glove, jump rope, bell, medal, sneaker, stopwatch." loading="lazy"></div>
-            <ul class="rules">
-              <li><strong>Pieces closer than 1.5%</strong> of the short side are one item: a bottle keeps its cap.</li>
-              <li><strong>Tiny groups</strong> are specks: dropped and counted.</li>
-              <li><strong>Names</strong> follow reading order: rows, then left to right.</li>
-            </ul>
-          </div>
-          <div class="card tile">
-            <p class="label">Built: separated, named, packed</p>
-            <div class="stage overlay" id="atlas-packed"><img src="assets/v2/atlas-packed.png" alt="The same ten props packed tightly into one atlas." loading="lazy"></div>
-            <div class="names" id="atlas-names" aria-label="Items: hover or focus to highlight"></div>
-            <p class="caption">One shared scale keeps the trophy bigger than the medal. If two items touch, the <code>items</code> check fails instead of guessing.</p>
-          </div>
+        <div class="card tile">
+          <p class="label"><code>animation</code> · gate <code>validate_run.py</code></p>
+          <h3>Animation rows and video frames</h3>
+          <p>Frames are registered to an explicit runtime cell and pivot. Existing videos go through frame selection first. Proof is playback, a contact sheet, onion skin and identity.</p>
+        </div>
+        <div class="card tile">
+          <p class="label"><code>tileset</code> · gate <code>validate_run.py</code></p>
+          <h3>Tiles and textures</h3>
+          <p>Adjacent tiles and repeat textures, including isometric sets. Proof covers repeat and adjacency, projection, pivots and the map.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <section id="healthy" aria-labelledby="healthy-title">
+  <section id="rules" aria-labelledby="rules-title">
     <div class="wrap">
       <div class="head">
-        <p class="eyebrow">Healthy sheets</p>
-        <h2 id="healthy-title">Every frame that broke gets a name.</h2>
-        <p class="lede">Checks catch missing frames, size jumps, light shifts, cut-off poses and matte halos. <code>repair</code> writes a kit for each bad frame from its nearest healthy neighbors, and <code>--patch</code> drops the redraw back in at the right size.</p>
-      </div>
-      <div class="seg" role="group" aria-label="Sheet state" style="margin-bottom:18px">
-        <button type="button" data-health="before" aria-pressed="true">Before repair</button>
-        <button type="button" data-health="after" aria-pressed="false">After repair</button>
-      </div>
-      <div class="healthy">
-        <div class="card tile">
-          <div class="strip">
-            <img id="health-img" src="assets/v2/healthy-before-strip.webp" alt="Punch row before repair: frame 2 missing, frame 3 too small, frame 4 darker, frame 6 cut off at the edge.">
-            <div class="flags" id="flags" aria-hidden="true"></div>
-          </div>
-          <p class="note" id="health-note">Demo input: the four faults were injected into a real generated sheet. The repairs are real generations from the repair kits.</p>
-        </div>
-        <div class="card checklist" id="health-checks" aria-live="polite"></div>
+        <p class="eyebrow">Rules</p>
+        <h2 id="rules-title">Models draw. Code checks.</h2>
+        <p class="lede">Every skill keeps the same production rules.</p>
       </div>
       <div class="flow">
-        <div><b>repair --frame 2 --frame 3 …</b>Each kit holds the nearest frames that are not broken, the pose guide and a prompt.</div>
-        <div><b>generate the in-between</b>Same character, same light; only the pose comes from the guide.</div>
-        <div><b>build --patch punch:3=…</b>The patch is scaled to its neighbors' body size; checks run again.</div>
+        <div><b>No replacement art</b>Scripts prepare, extract, register, cut out, compose, preview and validate. They never create replacement production art.</div>
+        <div><b>Native alpha first</b>Valid provider transparency is kept. A gray, black or white matte is the fallback; new sources never use chroma green, blue, cyan or magenta.</div>
+        <div><b>A record for every source</b>Each source declares its provider or import provenance, and its hash is pinned.</div>
+        <div><b>Fixtures are not art</b>A fixture can pass validation, but it never counts as representative production media.</div>
+        <div><b>Proof matches the asset</b>Playback and onion skin for animation, composite and scroll for backgrounds, state and stretch boards for UI.</div>
+        <div><b>Validated is not engine-tested</b>Check the real engine loader, texture limits, filtering and pivots before calling an asset engine-ready.</div>
       </div>
     </div>
   </section>
@@ -349,23 +224,26 @@ footer .wrap { display:flex; flex-wrap:wrap; gap:12px 24px; justify-content:spac
     <div class="wrap install">
       <div>
         <p class="eyebrow">Install</p>
-        <h2 id="install-title">Clone it. Point your agent at it.</h2>
+        <h2 id="install-title">Copy a folder. Point your agent at it.</h2>
         <ul class="reqs">
-          <li><b>Python 3.11+</b> with Pillow, numpy and scipy.</li>
-          <li><b>Any image model.</b> The agent generates; the CLI never calls a provider or holds a key.</li>
-          <li><b>Optional:</b> <code>rembg[cpu]</code> for BiRefNet cutouts on busy backgrounds.</li>
-          <li><b>Status:</b> animation, slots and atlas are ready. Tiles and backgrounds come next.</li>
+          <li><b>Python 3.11+.</b> Each skill ships its own pinned requirements: Pillow and jsonschema, or jsonschema alone.</li>
+          <li><b>Your image tool.</b> Imagegen by default. Grok Imagine only when you select it, with a dry run before a paid run.</li>
+          <li><b>Optional:</b> video frame intake, rembg cutouts and a locked Lucida/BEN2 model runtime in <code>spritesheet-expert</code>.</li>
+          <li><b>Multi-family packs:</b> <code>produce-2d-assets</code> bundles all five family workflows.</li>
         </ul>
       </div>
-      <pre class="term"><span class="c"># get the skill</span>
+      <pre class="term"><span class="c"># get the skills</span>
 git clone https://github.com/gvastethecreator/spritesheet-expert-skill
-cd spritesheet-expert-skill/v2/spritesheet-expert
+cp -r spritesheet-expert-skill/SKILLS/spritesheet-expert &lt;your-agent-skills-folder&gt;/
 
-<span class="c"># plan a run, generate prompts/_all.txt with your model, then:</span>
-<span class="k">python</span> sprite.py plan --out runs/hero --subject "a vinyl-toy fighter" \
-  --anchor hero.png --state idle:4 --state punch:6:attack:12
-<span class="k">python</span> sprite.py build runs/hero --source all=sheet.png --provider "my model"
-<span class="k">python</span> sprite.py check runs/hero --strict</pre>
+<span class="c"># or with the skills.sh CLI</span>
+npx skills add gvastethecreator/spritesheet-expert-skill
+
+<span class="c"># runtime for spritesheet-expert, from its folder</span>
+<span class="k">python</span> -m pip install -r scripts/requirements-core.txt
+
+<span class="c"># runtime for the other five, from each folder</span>
+<span class="k">python</span> -m pip install -r requirements-runtime.txt</pre>
     </div>
   </section>
 </main>
@@ -373,18 +251,14 @@ cd spritesheet-expert-skill/v2/spritesheet-expert
 <footer>
   <div class="wrap">
     <span>Spritesheet Expert · MIT license</span>
-    <span>Demo art generated with Cozy Studio. Built, checked and packed by <code>sprite.py</code>.</span>
+    <span>Skills live in <a href="https://github.com/gvastethecreator/spritesheet-expert-skill/tree/main/SKILLS"><code>SKILLS/</code></a>.</span>
   </div>
 </footer>
 
-<script src="assets/v2/demo-data.js"></script>
 <script>
 (() => {
-  const D = window.DEMO, A = 'assets/v2/';
   const $ = (id) => document.getElementById(id);
   const el = (tag, props = {}, ...kids) => { const e = document.createElement(tag); Object.assign(e, props); e.append(...kids); return e; };
-  const press = (sel, attr, val) => document.querySelectorAll(sel).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset[attr] === val)));
-  const chip = (c) => { const s = el('span', { className: 'chip', title: c.detail }, c.id); s.dataset.s = c.status; return s; };
 
   // theme
   $('theme').addEventListener('click', () => {
@@ -392,109 +266,32 @@ cd spritesheet-expert-skill/v2/spritesheet-expert
     document.documentElement.dataset.theme = dark ? 'light' : 'dark';
   });
 
-  // hero
-  document.querySelectorAll('[data-hero]').forEach((b) => b.addEventListener('click', () => {
-    press('[data-hero]', 'hero', b.dataset.hero);
-    $('hero-anim').hidden = b.dataset.hero !== 'anim'; $('hero-source').hidden = b.dataset.hero !== 'source';
-  }));
-
-  // workflow
-  const STEPS = [
-    ['plan', 'Prompt, layout guide and run.json for every state or set.',
-      '<span class="c"># one run per character; all its states go in one sheet</span>\n<span class="k">python</span> sprite.py plan --out runs/red --subject "a vinyl-toy fighter" \\\n  --anchor red.png --view "side view, facing right" \\\n  --state idle:4 --state punch:6:attack:12\n\n<span class="c"># writes prompts/_all.txt + guides/_all.png (one pose mannequin per cell)</span>'],
-    ['generate', 'Your agent sends the prompt, anchor and guide to any image model.',
-      '<span class="c"># the CLI never calls a provider; the agent does</span>\nattach: anchor/anchor.png + guides/_all.png\nprompt: prompts/_all.txt\nask for 2 candidates, keep the better sheet'],
-    ['build', 'Cutout, frames on one baseline and one body size, atlas, previews, review.html.',
-      '<span class="k">python</span> sprite.py build runs/red --source all=sheet.png --provider "my model"\n\nidle:  native-alpha, 9 pass / 0 warn / 0 fail\npunch: native-alpha, 8 pass / 0 warn / 0 fail\noutputs: atlas.png, atlas.json, frames/, previews/, review.html'],
-    ['repair', 'A kit per bad frame: healthy neighbors, pose guide, prompt.',
-      '<span class="k">python</span> sprite.py repair runs/red --state punch --frame 3\n<span class="c"># repair/punch/03/: frame-01.png + frame-05.png + pose.png + prompt.txt</span>\n\n<span class="k">python</span> sprite.py build runs/red --patch punch:3=redraw.png'],
-    ['check', 'Source hashes, outputs and every open check; ‑‑strict blocks delivery.',
-      '<span class="k">python</span> sprite.py check runs/red --strict\nall checks pass'],
+  // skills
+  const SKILLS = [
+    ['spritesheet-expert', 'Item atlases, exact grids, animation rows, video frames, tilesets and textures.',
+      '<span class="c"># loose items -> separated items, packed atlas, review playground</span>\n<span class="k">python</span> scripts/run_item_atlas_workflow.py items.png --output-dir runs/items --models none\n\n<span class="c"># resolved lane and final gate; drop --describe to run the gate</span>\n<span class="k">python</span> scripts/check_workflow.py --run-dir runs/items --describe\n\nwrites: alpha/atlas.png, alpha/manifest.json, alpha/items/\n        qa/item-playground/index.html   <span class="c"># filter, approve, reject, export a review</span>'],
+    ['build-static-game-assets', 'Props, pickups, decals and item icons.',
+      '<span class="k">python</span> scripts/validate_static_pack.py --pack &lt;root&gt;/static-pack.json --root &lt;root&gt;\n\nwrites: qa/static-pack-report.json\n        qa/static-pack-contact.png      <span class="c"># on checker, black, gray and white</span>'],
+    ['build-game-backgrounds', 'Layered, scrolling and parallax backgrounds.',
+      '<span class="k">python</span> scripts/validate_background_pack.py --pack &lt;root&gt;/background-pack.json --root &lt;root&gt;\n\nwrites: qa/background-pack-report.json\n        qa/background-composite.png     <span class="c"># layer order and placement</span>\n        qa/background-scroll.gif        <span class="c"># horizontal scroll sample</span>'],
+    ['build-game-ui-kits', 'UI controls, states, densities and nine-slice assets.',
+      '<span class="k">python</span> scripts/validate_ui_kit.py --kit &lt;root&gt;/ui-kit.json --root &lt;root&gt;\n\nwrites: qa/ui-kit-report.json\n        qa/ui-state-board.png           <span class="c"># states and densities side by side</span>\n        qa/ui-nine-slice.png            <span class="c"># stretch proof</span>'],
+    ['compose-asset-mockups', 'Store art, review boards and gameplay mockups from validated assets.',
+      '<span class="k">python</span> scripts/prepare_presentation.py --presentation &lt;root&gt;/presentation.json --root &lt;root&gt;\n\nwrites: presentation/prepared-presentation.json\n        presentation/resolved-presentation.json\n        presentation/content-addressed/ <span class="c"># hash-checked copies of pinned inputs</span>\n\ntruth labels: concept, reconstructed, runtime-captured'],
+    ['produce-2d-assets', 'One delivery that spans two or more asset families.',
+      '<span class="k">python</span> scripts/validate_asset_pack.py --pack &lt;root&gt;/asset-pack.json --pack-root &lt;root&gt;\n\nwrites: validation/asset-pack-validation-report.json\nexit:   0 pass, 1 contract failure, 2 blocked dependency, 3 operational failure'],
   ];
-  const showStep = (i) => {
+  const show = (i) => {
     document.querySelectorAll('.step').forEach((s, k) => { s.setAttribute('aria-selected', String(k === i)); s.tabIndex = k === i ? 0 : -1; });
-    $('term').innerHTML = STEPS[i][2];
+    $('term').innerHTML = SKILLS[i][2];
   };
-  $('steps').append(...STEPS.map(([name, text], i) => {
+  $('steps').append(...SKILLS.map(([name, text], i) => {
     const b = el('button', { type: 'button', className: 'step', role: 'tab' }, el('b', {}, name), el('span', {}, text));
-    b.addEventListener('click', () => showStep(i));
-    b.addEventListener('keydown', (e) => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { const n = (i + (e.key === 'ArrowRight' ? 1 : -1) + STEPS.length) % STEPS.length; showStep(n); $('steps').children[n].focus(); } });
+    b.addEventListener('click', () => show(i));
+    b.addEventListener('keydown', (e) => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { const n = (i + (e.key === 'ArrowRight' ? 1 : -1) + SKILLS.length) % SKILLS.length; show(n); $('steps').children[n].focus(); } });
     return b;
   }));
-  showStep(0);
-
-  // lane tabs
-  const tabs = [...document.querySelectorAll('[role=tab][aria-controls^="lane-"]')];
-  const pick = (t) => tabs.forEach((x) => { const on = x === t; x.setAttribute('aria-selected', String(on)); x.tabIndex = on ? 0 : -1; $(x.getAttribute('aria-controls')).hidden = !on; });
-  tabs.forEach((t, i) => {
-    t.addEventListener('click', () => pick(t));
-    t.addEventListener('keydown', (e) => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { const n = tabs[(i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length]; pick(n); n.focus(); } });
-  });
-
-  // animation checks
-  $('anim-checks').append(...D.animation.checks.map(chip));
-
-  // slots
-  const fig = (src, alt, cap) => el('figure', {}, el('img', { src, alt, loading: 'lazy' }), el('figcaption', {}, cap));
-  $('gestures').append(...D.gestures.map((n) => fig(`${A}gesture-${n}.webp`, `Character gesture: ${n.replace('-', ' ')}`, n)));
-  $('icons').append(...D.icons.map((n) => fig(`${A}ui-icons-${n}.webp`, `${n} icon`, n)));
-  $('buttons').append(...D.buttons.map((n) => fig(`${A}ui-button-${n}.webp`, `Button, ${n} state`, n)));
-  let panel = 0;
-  const nine = () => {
-    const p = D.panels[panel], [l, t, r, b] = p.slice, box = $('nine-box');
-    box.style.borderImage = `url(${A}${p.file}) ${t} ${r} ${b} ${l} fill / ${t}px ${r}px ${b}px ${l}px stretch`;
-    box.style.borderWidth = `${t}px ${r}px ${b}px ${l}px`;
-    box.style.width = `${$('nine-w').value}px`; box.style.height = `${$('nine-h').value}px`;
-    $('nine-w-out').textContent = `${$('nine-w').value}px`; $('nine-h-out').textContent = `${$('nine-h').value}px`;
-    box.setAttribute('aria-label', `${p.name} panel stretched to ${$('nine-w').value} by ${$('nine-h').value} pixels; slice margins ${l}, ${t}, ${r}, ${b}`);
-  };
-  ['nine-w', 'nine-h'].forEach((id) => $(id).addEventListener('input', nine));
-  document.querySelectorAll('[data-panel]').forEach((b) => b.addEventListener('click', () => { panel = Number(b.dataset.panel); press('[data-panel]', 'panel', b.dataset.panel); nine(); }));
-  nine();
-
-  // atlas: boxes on the source and on the packed sheet, linked by name
-  const NS = 'http://www.w3.org/2000/svg';
-  const svg = (w, h) => { const s = document.createElementNS(NS, 'svg'); s.setAttribute('viewBox', `0 0 ${w} ${h}`); s.setAttribute('aria-hidden', 'true'); return s; };
-  const rect = (x, y, w, h, name) => { const r = document.createElementNS(NS, 'rect'); Object.entries({ x, y, width: w, height: h, rx: 6 }).forEach(([k, v]) => r.setAttribute(k, v)); r.dataset.name = name; return r; };
-  const src = svg(...D.atlas.source), packed = svg(...D.atlas.size);
-  D.atlas.found.forEach(({ name, box: [x0, y0, x1, y1] }, i) => {
-    src.append(rect(x0, y0, x1 - x0, y1 - y0, name));
-    const t = document.createElementNS(NS, 'text'); t.setAttribute('x', x0 + 6); t.setAttribute('y', y0 + 18); t.textContent = `${i + 1} ${name}`; src.append(t);
-  });
-  D.atlas.packed.forEach((f) => packed.append(rect(f.x, f.y, f.w, f.h, f.name)));
-  $('atlas-source').append(src); $('atlas-packed').append(packed);
-  const light = (name) => {
-    document.querySelectorAll('.overlay rect').forEach((r) => r.classList.toggle('on', r.dataset.name === name));
-    document.querySelectorAll('#atlas-names button').forEach((b) => b.classList.toggle('on', b.textContent === name));
-  };
-  $('atlas-names').append(...D.atlas.packed.map((f) => {
-    const b = el('button', { type: 'button' }, f.name);
-    ['mouseenter', 'focus'].forEach((ev) => b.addEventListener(ev, () => light(f.name)));
-    b.addEventListener('mouseleave', () => light(null)); b.addEventListener('blur', () => light(null));
-    return b;
-  }));
-
-  // healthy sheet
-  const health = (which) => {
-    press('[data-health]', 'health', which);
-    const checks = D.healthy[which];
-    $('health-img').src = `${A}healthy-${which}-strip.webp`;
-    $('health-img').alt = which === 'before'
-      ? 'Punch row before repair: frame 2 missing, frame 3 too small, frame 4 darker, frame 6 cut off at the edge.'
-      : 'Punch row after repair: six frames at one size, in one light, all inside the sheet.';
-    const worst = {};
-    checks.forEach((c) => c.frames.forEach((f) => { if (worst[f] !== 'fail') worst[f] = c.status === 'pass' ? worst[f] : c.status; }));
-    $('flags').replaceChildren(...[1, 2, 3, 4, 5, 6].map((f) => {
-      const s = el('span'); if (worst[f]) { s.dataset.s = worst[f]; s.append(el('em', {}, `frame ${f}`)); } return s;
-    }));
-    $('health-checks').replaceChildren(...checks.map((c) => {
-      const s = el('span', { className: 'chip' }, c.status); s.dataset.s = c.status;
-      return el('div', {}, s, el('strong', {}, c.id), el('p', {}, c.detail));
-    }));
-    $('health-note').hidden = which !== 'before';
-  };
-  document.querySelectorAll('[data-health]').forEach((b) => b.addEventListener('click', () => health(b.dataset.health)));
-  health('before');
+  show(0);
 })();
 </script>
 </body>

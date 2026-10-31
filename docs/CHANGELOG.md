@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-31
+
+- Retired the `v2/` rewrite. Its `spritesheet-expert` skill duplicated the name of the catalog skill in `SKILLS/`, so `v2/`, its tests and its demo assets in `docs/assets/v2/` are removed. The six skills in `SKILLS/` are the only published skills.
+- Rewrote the README and the project site around those six skills, with install and usage steps checked against their scripts.
+
 ## 2026-10-25 (v1 final)
 
 - Added one shared visual system for every review tool (`spritecore/tool_theme.py`), synced into Studio, curator, motion review, and the docs site with `pnpm run sync:theme`. All tool UIs are English.
