@@ -46,7 +46,7 @@ Block done unless:
 - Pixel tiny: missing-information economy; no unnecessary detail, no excessive frames, one-pixel motion scale where applicable.
 - Pixel VFX: buildup/peak/decay, stable emitter/contact point, alpha-safe fade, loop math without end-to-start pop. Water: wave/flow loop closure; wind: flow points/propagation instead of random motion.
 - If no base image, `references/identity-anchor.png` exists and later generated rows visibly follow that anchor instead of drifting into new character.
-- User-facing generated art was backed by declared `$imagegen` or `$grok-imagine` source media; synthetic fixtures are labeled as fixtures only.
+- User-facing generated art was backed by declared Imagegen or Grok Imagine source media; synthetic fixtures are labeled as fixtures only.
 - Every video row has hash-bound `video-source.json`. Grok rows retain completed invocation and exact first-frame evidence.
 - Multi-identity batches: passing `batch-completion-report.json` from `check_animation_batch_completion.py`. Quota videos, final accepted sources, Imagegen repairs, and archived reports are counted separately; recursive file count is never quota evidence.
 - Every video row has `qa/<state>-video-frame-selector/index.html` and `selector.evidence.json`. evidence matches report, video, selected indices, candidates, and HTML hashes.

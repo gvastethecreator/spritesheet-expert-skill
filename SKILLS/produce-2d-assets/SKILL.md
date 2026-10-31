@@ -24,7 +24,7 @@ Execute directly for small local work. Delegate only when authorized and paralle
 1. Freeze the cross-family contract.
    - Pack id, owners, style bible, inventory, variant matrix, delivery targets, dependencies, acceptance proof.
    - One style fingerprint across families. State allowed differences; do not let families drift.
-   - Semantic provider per generated family: available Imagegen tool by default, Grok only when selected. `$imagegen` and `$grok-imagine` are optional client adapters; paid adapter runs need reviewed dry-run plus current-task acknowledgement. For video-to-frames, follow the bundled sprite guide, including its adapter-free existing-video intake.
+   - Semantic provider per generated family: available Imagegen tool by default, Grok only when selected. `$imagegen` and the Grok Imagine CLI are optional client tools; paid runs need reviewed dry-run plus current-task acknowledgement. For video-to-frames, follow the bundled sprite guide, including its runner-free existing-video intake.
 
 2. Produce each family through its owner.
    - Real source provenance, licenses, portable paths, current hashes, and the selected bundled family's deterministic report/proof.

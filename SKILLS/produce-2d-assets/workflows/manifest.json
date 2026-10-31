@@ -16,7 +16,7 @@
     {
       "source": "SKILLS/build-game-backgrounds/SKILL.md",
       "path": "build-game-backgrounds/WORKFLOW.md",
-      "sha256": "5ff89d9eb9afefd063b8210fb250649034b7dd63b7d3afa24ef53b866b2e9a43"
+      "sha256": "ad1780656f4f7ca9a2ccd1edd1b6c712342572ae0035d051bd2eec91b4800bb1"
     },
     {
       "source": "SKILLS/build-game-backgrounds/references/schemas/background-pack-v1.schema.json",
@@ -51,7 +51,7 @@
     {
       "source": "SKILLS/build-game-ui-kits/SKILL.md",
       "path": "build-game-ui-kits/WORKFLOW.md",
-      "sha256": "bdf2d7240ef42397143aaf35a35349780815e45401e43241150724a45d405bf0"
+      "sha256": "a360a3b5ba4df7f589cee77a902b182ce275f5cfde9fb5df07ea54f8ee8cc7d0"
     },
     {
       "source": "SKILLS/build-game-ui-kits/references/schemas/ui-kit-v1.schema.json",
@@ -86,7 +86,7 @@
     {
       "source": "SKILLS/build-static-game-assets/SKILL.md",
       "path": "build-static-game-assets/WORKFLOW.md",
-      "sha256": "ba49f4ad137538e87d42904902801e037f1576fac8d2deb87d421e672df5a008"
+      "sha256": "35f763438892b82523740ba861e0b0c181d97053175677b9ec33fd6710315c71"
     },
     {
       "source": "SKILLS/build-static-game-assets/references/schemas/static-asset-pack-v1.schema.json",
@@ -221,7 +221,7 @@
     {
       "source": "SKILLS/spritesheet-expert/SKILL.md",
       "path": "spritesheet-expert/WORKFLOW.md",
-      "sha256": "5335d9aea69782380b69f9717f801b2c45beaa4422ab4fcdd077164a2a8c8bab"
+      "sha256": "9ef160c07877f20c33101ea9d396e809c416d5f259a074ea8cf1126b3f696a29"
     },
     {
       "source": "SKILLS/spritesheet-expert/assets/motion-reference-templates/README.md",
@@ -341,7 +341,7 @@
     {
       "source": "SKILLS/spritesheet-expert/references/atlas-reference.md",
       "path": "spritesheet-expert/references/atlas-reference.md",
-      "sha256": "b057cb44231d8c48ea08d521ea3c1c8c2c407d39b01f68b01a636b867973c0f5"
+      "sha256": "9dbcce1adad4fa5555857841370ae4a2f042c78e58c3609e8fb34e20c6026039"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/creature-animation.md",
@@ -356,7 +356,7 @@
     {
       "source": "SKILLS/spritesheet-expert/references/grok-video-animation.md",
       "path": "spritesheet-expert/references/grok-video-animation.md",
-      "sha256": "bbdefc6a12cae8ca7015017e82313e7d82a98679fb88172677019fa2e8394cb1"
+      "sha256": "eaed1a6473af075d832f565bf490c140045a67f8d0529f65c8f087b14641ab3e"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/isometric-tilesets.md",
@@ -406,7 +406,7 @@
     {
       "source": "SKILLS/spritesheet-expert/references/qa-and-outputs.md",
       "path": "spritesheet-expert/references/qa-and-outputs.md",
-      "sha256": "552b3fadeb5f5165fae9b4c129d376c16cacac66d8bc2421ca60cba78cbbb37f"
+      "sha256": "01bc6e236d4dcdfdc0f209bf118f9dfe878dec1f4c299c3bed1d974c20d7ca5d"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/schemas/deterministic-item-sheet-v1.schema.json",
@@ -511,7 +511,7 @@
     {
       "source": "SKILLS/spritesheet-expert/references/workflows.md",
       "path": "spritesheet-expert/references/workflows.md",
-      "sha256": "533624f265ea5f9df55e5e53b1e2d7a5583a04fe3ea0e4f75e0afe41b9c3c6ad"
+      "sha256": "85e4f915d9f5769864060dca8f475f9c7bc9cfbdb6d7277e65601509255f6eb6"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/apply_item_classification.py",

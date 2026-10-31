@@ -91,7 +91,7 @@ When `asset_labels` are present, generated prompt contains an exact numbered slo
 
 Locomotion phase guides generate for 4-, 6-, and 8-frame cycles when state name/action/workflow indicates walk, run, move, advance, retreat, or dash. Do not accept a generated locomotion row that skipped these guides unless it is intentional non-legged/hovering motion with a separate visual rationale.
 
-4. Generate one row per state or asset group with `$imagegen` by default. `$grok-imagine` is an explicit optional still/video route; read `grok-video-animation.md`, start with dry-run, and require a completed invocation manifest before ingestion.
+4. Generate one row per state or asset group with `$imagegen` by default. Grok Imagine is an explicit optional still/video route; read `grok-video-animation.md`, start with a dry run or preview, and require a completed provider run record before ingestion.
    - Prompt: `prompts/<state>.txt`
    - Inputs: accepted base/anchor image plus `references/layout-guides/<state>.png`
    - Output path: `raw/<state>.png`

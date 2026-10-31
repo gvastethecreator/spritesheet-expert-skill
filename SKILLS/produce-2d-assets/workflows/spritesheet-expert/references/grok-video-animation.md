@@ -1,12 +1,12 @@
 # Grok Image And Video Provider
 
-Use an available Grok provider tool only when selected. Default stills use the available Imagegen tool. The `$grok-imagine` and `$imagegen` skill adapters are optional client integrations.
+Use the client's Grok Imagine tool or CLI only when Grok is selected. Default stills use the available Imagegen tool. Both are optional client capabilities.
 
-## Without the Grok adapter
+## Without an invocation runner
 
-For stills, retain the actual provider request and result, then use the source-intake contract in [workflows.md](workflows.md). For an existing video, use `scripts/ingest_video_animation.py` and [video-animation-workflow.md](video-animation-workflow.md). Supply the approved local video and declared source rights; keep the provider receipt beside it. This route records imported video provenance and does not certify an adapter invocation. Do not manufacture `invocation.json` or mark an imported source as wrapper-verified. If no selected provider or approved media is available, report that concrete blocker.
+For stills, retain the actual provider request and result, then use the source-intake contract in [workflows.md](workflows.md). For an existing video, use `scripts/ingest_video_animation.py` and [video-animation-workflow.md](video-animation-workflow.md). Supply the approved local video and declared source rights; keep the provider receipt beside it. This route records imported video provenance and does not certify a runner invocation. Do not manufacture `invocation.json` or mark an imported source as wrapper-verified. If no selected provider or approved media is available, report that concrete blocker.
 
-The remaining sections describe the optional adapter's stricter invocation format. Use them only when that adapter is installed and selected; they are not prerequisites for the core sprite or imported-video workflows.
+The remaining sections describe the stricter verified-invocation format. Use them only when the runner named in the job's `dry_run.wrapper` is installed and selected; it writes the `invocation.json` that ingestion checks. They are not prerequisites for the core sprite or imported-video workflows.
 
 This file defines the Grok boundary. Read `video-animation-workflow.md` for frame selection, imported videos, background removal, cropping, registration, and QA.
 
@@ -14,11 +14,11 @@ This file defines the Grok boundary. Read `video-animation-workflow.md` for fram
 
 1. Prepare the job with `scripts/prepare_grok_video_animation.py`.
 2. Read the generated prompt and `job.json`.
-3. Run `$grok-imagine` in `video-from-image` mode with the job's exact dry-run arguments.
+3. Run the job's `dry_run.wrapper` with its exact `dry_run.args` (`video-from-image` mode, `--dry-run`).
 4. Review the dry-run manifest. A real provider call requires explicit current-task consent and `--ack-run`.
 5. Accept only the copied video listed in a completed `invocation.json` whose exact media count is one.
 
-Tests, smoke checks, and fixtures must never call inference. A provider timeout is not permission to retry: inspect the output directory, `invocation.json`, status, and copied `media/` first. For Zero Data Retention storage, follow the installed Grok adapter's `references/cli-contract.md`. Missing storage is a blocker, not permission to change account settings or retry generation.
+Tests, smoke checks, and fixtures must never call inference. A provider timeout is not permission to retry: inspect the output directory, `invocation.json`, status, and copied `media/` first. Grok video under Zero Data Retention needs the operator-configured S3-compatible storage that the Grok CLI requires; a `zdr_video_upload_url_required` error means it is missing. Missing storage is a blocker, not permission to change account settings or retry generation.
 
 ## First Frame To Video
 
@@ -80,7 +80,7 @@ Before a retry, inspect the existing timeline and diagnose the failed state. A w
 
 For `gesture-loop`, prompt preparation adds a planted-body lock. Pelvis, legs, knees, ankles, both feet, and the contact footprint stay pixel-for-pixel fixed; only the waving shoulder, arm, wrist, and hand carry the gesture, with minimal torso/head motion. Post-extraction QA still measures lower-body silhouette and center-x travel. A clean loop closure does not waive movement in the middle frames.
 
-After `$grok-imagine` completes, ingest its exact invocation manifest:
+After the runner completes, ingest its exact invocation manifest (the job's `provider_output.invocation_path`):
 
 ```bash
 python -m pip install -r scripts/requirements-video.txt
@@ -142,7 +142,7 @@ Review the workbench on checker, black, gray, and white. Reject identity morphin
 
 ## Optional Grok Still Images
 
-For a Grok-generated still, use `$grok-imagine image-generate` or `image-edit`. Preserve valid native alpha for isolated rows; a video first frame follows its declared neutral-background contract. Start with dry-run; accept only copied media from a completed invocation manifest. Keep that provider manifest with the run evidence; source intake alone does not prove inference occurred.
+For a Grok-generated still, use the Grok Imagine image generate or image edit operation. Preserve valid native alpha for isolated rows; a video first frame follows its declared neutral-background contract. Start with a dry run or preview; accept only media copied from a completed provider run. Keep that run's provider record with the run evidence; source intake alone does not prove inference occurred.
 
 Copy the selected image into the run, create a `source-intake-v1` document, then ingest it:
 
@@ -152,4 +152,4 @@ python scripts/ingest_source.py \
   --intake /abs/project/.scratch/sprite-run/provider/grok-imagine/<state>/source-intake.json
 ```
 
-The intake uses `source_type: grok-imagine-image`, `engine: grok-imagine`, `source_stage: provider-output`, `provider.name: grok-imagine`, `provider.status: succeeded`, and the exact candidate/request hashes. The command validates the selected bitmap, dimensions, request binding, state, license policy, and output containment before writing `raw/<state>.png`. Verified provenance records `art_engine: grok-imagine`, per-source provider fields, and `qa/source-intake-report.json`. A real completion claim still requires the retained completed `$grok-imagine` invocation, acknowledged execution, copied provider media, and visual review.
+The intake uses `source_type: grok-imagine-image`, `engine: grok-imagine`, `source_stage: provider-output`, `provider.name: grok-imagine`, `provider.status: succeeded`, and the exact candidate/request hashes. The command validates the selected bitmap, dimensions, request binding, state, license policy, and output containment before writing `raw/<state>.png`. Verified provenance records `art_engine: grok-imagine`, per-source provider fields, and `qa/source-intake-report.json`. A real completion claim still requires the retained completed Grok Imagine run record, acknowledged execution, copied provider media, and visual review.

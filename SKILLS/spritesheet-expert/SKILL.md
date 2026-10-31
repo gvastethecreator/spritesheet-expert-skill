@@ -73,10 +73,10 @@ after preparation; rebuild the environment after moving the skill and reuse weig
 
 When the user selects Grok, read
 [references/grok-video-animation.md](references/grok-video-animation.md).
-Use the available provider tool directly, or the optional `$grok-imagine` adapter
-when installed. The adapter-specific verified-invocation route needs that adapter;
-the bundled existing-video intake works without it and keeps imported provenance.
-For the adapter, use dry-run first and current-task consent before `--ack-run`.
+Use the client's Grok Imagine tool or CLI. The verified-invocation route needs a
+runner that writes the `invocation.json` the prepared job names; without one, the
+bundled existing-video intake works and keeps imported provenance.
+Dry-run or preview the exact call first; a paid run needs current-task consent.
 Never call paid inference from tests or hide it in skill scripts.
 One successful media call completes that approved job; inspect it before requesting
 another. Provider errors and missing returned media remain blocked, not placeholders.

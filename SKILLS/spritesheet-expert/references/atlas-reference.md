@@ -192,7 +192,7 @@ When auto inference is wrong for a custom row, add explicit workflows in the req
 - `scripts/compose_sprite_atlas.py`: bake atlas and runtime `manifest.json.frame_layout`.
 - `scripts/preview_animation.py`: contact sheets and GIF previews under `qa/`. Its summary separates requested timing from decoded GIF delays and encoded frame counts, including coalesced frames.
 - `scripts/build_preview_workbench.py`: self-contained, hash-bound interactive review under `qa/preview-workbench/`.
-- `scripts/prepare_grok_video_animation.py`: bind one exact first frame to a dry-run-first `$grok-imagine video-from-image` job.
+- `scripts/prepare_grok_video_animation.py`: bind one exact first frame to a dry-run-first Grok Imagine `video-from-image` job.
 - `scripts/ingest_grok_video_animation.py`: validate completed Grok media, decode/sample video deterministically, preserve frame 1, write the normal raw grid and provider provenance.
 - `scripts/ingest_video_animation.py`: ingest an existing animation video, rank candidate sequences, copy source media, write imported provenance.
 - `scripts/build_video_frame_selector.py`: required minimal editor from all decoded frames; write hash-bound selector evidence.

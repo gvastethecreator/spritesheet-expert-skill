@@ -165,7 +165,7 @@ async function checkProductionMediaContracts() {
     ],
     "build-static-game-assets": [
       "$imagegen",
-      "$grok-imagine",
+      "Grok Imagine",
       "gray, black, or white",
       "green, blue, cyan, or magenta",
       "BiRefNet/BEN2",
@@ -176,7 +176,7 @@ async function checkProductionMediaContracts() {
     ],
     "build-game-backgrounds": [
       "$imagegen",
-      "$grok-imagine",
+      "Grok Imagine",
       "Full-bleed scene layers",
       "green, blue, cyan, or magenta",
       "provenance for every layer",
@@ -186,7 +186,7 @@ async function checkProductionMediaContracts() {
     ],
     "build-game-ui-kits": [
       "$imagegen",
-      "$grok-imagine",
+      "Grok Imagine",
       "flat gray, black, or white",
       "green, blue, cyan, or magenta",
       "BiRefNet/BEN2",
@@ -203,7 +203,7 @@ async function checkProductionMediaContracts() {
     ],
     "produce-2d-assets": [
       "$imagegen",
-      "$grok-imagine",
+      "Grok Imagine",
       "evidence.production_media",
       "provenance_verified: true",
       "neutral gray/black/white",
