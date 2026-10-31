@@ -167,7 +167,7 @@ Analyzer writes up to eight ranked cycles. Open:
 qa/<state>-video-frame-selector/index.html
 ```
 
-Editor: complete video, one thumbnail per decoded frame, candidate presets, semantic slots, a pausable pose preview, declared subject/motion source, and five review checks. Exact idle slots show the preserved PNG when supplied. The preview starts paused for reduced motion; its 125 ms per slot is a review aid, not runtime timing. Imported video uses a relative URL; Grok's external video keeps its local file URL and may need a local media player.
+Editor: complete video, one thumbnail per decoded frame, candidate presets, semantic slots, a pausable pose preview, declared subject/motion source, and five review checks. Exact idle slots show the preserved PNG when supplied. The preview starts paused for reduced motion; its 125 ms per slot is a review aid, not runtime timing. Imported video uses a relative URL; Grok runner video keeps its local file URL and may need a local media player.
 
 Detected foreground at the source boundary is marked `EDGE`. When locomotion scale analysis applies, subject height outside `0.78x..1.22x` of the anchor is marked `SCALE`. Either flag blocks export for an affected active slot. Adaptive scores are heuristic rankings; uniform candidates are unscored. Penalties influence ranking but do not guarantee that every unflagged candidate ranks above every flagged one. Missing alerts do not establish visual quality.
 

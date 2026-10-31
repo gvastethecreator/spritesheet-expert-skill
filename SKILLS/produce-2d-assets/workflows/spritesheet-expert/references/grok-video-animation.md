@@ -4,9 +4,9 @@ Use the client's Grok Imagine tool or CLI only when Grok is selected. Default st
 
 ## Without an invocation runner
 
-For stills, retain the actual provider request and result, then use the source-intake contract in [workflows.md](workflows.md). For an existing video, use `scripts/ingest_video_animation.py` and [video-animation-workflow.md](video-animation-workflow.md). Supply the approved local video and declared source rights; keep the provider receipt beside it. This route records imported video provenance and does not certify a runner invocation. Do not manufacture `invocation.json` or mark an imported source as wrapper-verified. If no selected provider or approved media is available, report that concrete blocker.
+For stills, retain the actual provider request and result, then use the source-intake contract in [workflows.md](workflows.md). For an existing video, use `scripts/ingest_video_animation.py` and [video-animation-workflow.md](video-animation-workflow.md). Supply the approved local video and declared source rights; keep the provider receipt beside it. This route records imported video provenance and does not certify a runner invocation. Do not manufacture `invocation.json` or mark an imported source as runner-verified. If no selected provider or approved media is available, report that concrete blocker.
 
-The remaining sections describe the stricter verified-invocation format. Use them only when the runner named in the job's `dry_run.wrapper` is installed and selected; it writes the `invocation.json` that ingestion checks. They are not prerequisites for the core sprite or imported-video workflows.
+The remaining sections describe the stricter verified-invocation format. Use them only when a selected runner meets the [runner contract](#runner-contract); it writes the `invocation.json` that ingestion checks. They are not prerequisites for the core sprite or imported-video workflows.
 
 This file defines the Grok boundary. Read `video-animation-workflow.md` for frame selection, imported videos, background removal, cropping, registration, and QA.
 
@@ -14,11 +14,27 @@ This file defines the Grok boundary. Read `video-animation-workflow.md` for fram
 
 1. Prepare the job with `scripts/prepare_grok_video_animation.py`.
 2. Read the generated prompt and `job.json`.
-3. Run the job's `dry_run.wrapper` with its exact `dry_run.args` (`video-from-image` mode, `--dry-run`).
+3. Run the selected runner with the job's exact `dry_run.args` (`video-from-image` mode, `--dry-run`).
 4. Review the dry-run manifest. A real provider call requires explicit current-task consent and `--ack-run`.
 5. Accept only the copied video listed in a completed `invocation.json` whose exact media count is one.
 
 Tests, smoke checks, and fixtures must never call inference. A provider timeout is not permission to retry: inspect the output directory, `invocation.json`, status, and copied `media/` first. Grok video under Zero Data Retention needs the operator-configured S3-compatible storage that the Grok CLI requires; a `zdr_video_upload_url_required` error means it is missing. Missing storage is a blocker, not permission to change account settings or retry generation.
+
+## Runner Contract
+
+Any runner can run the job: a client tool, a CLI wrapper, or a script. It reads its inputs from `job.json`. `dry_run.args` lists them as flags: `--mode video-from-image`, `--repo` (the job's `repo_root`), `--prompt-file`, `--source-file` (the exact first frame), `--expected-videos 1`, `--timeout-ms`, `--output` (`provider_output.result_path`, relative to the repo), and `--dry-run`. A real call drops `--dry-run` and adds `dry_run.real_run_ack_flag` (`--ack-run`) only after current-task consent.
+
+In the folder of `provider_output.result_path`, the runner writes:
+
+- `result.json`: the provider result. Ingestion hashes it.
+- `media/video-01.mp4` (or `.webm`, `.mov`, `.m4v`): the one copied video.
+- `invocation.json` at `provider_output.invocation_path`, with these fields. Paths are absolute.
+  - `provider: "grok-imagine"`, `mode: "video-from-image"`, `status: "completed"`, `exitCode: 0`.
+  - `cwd`: the job's `repo_root`. `promptFile`: the prepared prompt.
+  - `enforcement`: `operation: "video-from-image"`, `sourceFiles: [<first frame>]`, `expectedImages: 0`, `expectedVideos: 1`.
+  - `resultValidation`: `ok: true`, `images: []`, `videos: [<media/video-01 file>]`.
+
+Ingestion ignores other fields. The default output folder is `provider/grok-imagine/<state>/runner/<frame-hash>-<prompt-hash>/` inside the run. If the runner writes only below its own root, pass that root to `prepare_grok_video_animation.py --runner-output-root`; the job then names a hash-named folder below it.
 
 ## First Frame To Video
 
@@ -45,7 +61,7 @@ The prompt is structured, not one long prose sentence. It records a `prompt_cont
 
 Prompt keeps camera, projection, framing, ground line, subject scale, center, identity, lighting, neutral background, and existing empty border fixed. Request one continuous action for the selected `--duration-seconds` (integer 1–15; default 6): no cuts, camera motion, text, extra objects, detached effects, motion blur, or cast shadow. `image-plane` default for frontal sprites: “toward the player” = pose readability, not depth travel, foreshortening, giant foreground limbs, or body enlargement. Do not force an output aspect ratio; image-to-video should inherit the first frame instead of stretching it.
 
-The first line instructs the worker to call `reference_to_video` exactly once, passing the exact approved image as `first_frame`, and stop after the requested video exists. The wrapper still rejects extra media. Do not request multiple takes in one call: use the full native-rate timeline as the candidate pool, then regenerate only when no reviewed frame set is usable.
+The first line instructs the worker to call `reference_to_video` exactly once, passing the exact approved image as `first_frame`, and stop after the requested video exists. Ingestion still rejects extra media. Do not request multiple takes in one call: use the full native-rate timeline as the candidate pool, then regenerate only when no reviewed frame set is usable.
 
 Optional state controls live under `states.<state>.video_prompt`:
 
@@ -87,7 +103,7 @@ python -m pip install -r scripts/requirements-video.txt
 python scripts/ingest_grok_video_animation.py \
   --run-dir /abs/project/.scratch/sprite-run \
   --state walk \
-  --invocation /abs/project/.scratch/agent-cli-delegation/grok-imagine/spritesheet-video/<run>/invocation.json
+  --invocation /abs/project/.scratch/sprite-run/provider/grok-imagine/walk/runner/<frame-hash>-<prompt-hash>/invocation.json
 ```
 
 Ingestion fails before mutation unless all of these match:
@@ -96,7 +112,7 @@ Ingestion fails before mutation unless all of these match:
 - provider `grok-imagine`, mode `video-from-image`, completed status, and exit code zero;
 - enforcement source list containing only the exact first frame;
 - zero generated images and exactly one generated video;
-- wrapper-owned `media/video-01.*` inside the job output directory;
+- runner-owned `media/video-01.*` inside the job output directory;
 - a decodable video with a stable size/fps and enough unique frames.
 
 Ingestion enters the common video analyzer: scans every decoded frame and creates several candidate sequences. Watch the entire video before selection; reject a bad state before Lucida. Then review every frame, compare several candidates, and inspect final active frames at full source size.

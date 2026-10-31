@@ -356,7 +356,7 @@
     {
       "source": "SKILLS/spritesheet-expert/references/grok-video-animation.md",
       "path": "spritesheet-expert/references/grok-video-animation.md",
-      "sha256": "eaed1a6473af075d832f565bf490c140045a67f8d0529f65c8f087b14641ab3e"
+      "sha256": "89b03f4d96c4e3c2f4e4192252d898b60863eebdbd37515bda5f87088e75363b"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/isometric-tilesets.md",
@@ -416,7 +416,7 @@
     {
       "source": "SKILLS/spritesheet-expert/references/schemas/grok-video-animation-job-v1.schema.json",
       "path": "spritesheet-expert/references/schemas/grok-video-animation-job-v1.schema.json",
-      "sha256": "16e9b2fba4b8b6921344da1b742dd75b98864e7ffd5d24ee76c0def2a1b58304"
+      "sha256": "ea0d82df0b3bc7c4e465b0917d721fbb47a52ef3606b492cdd64eba9f1e60158"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/schemas/item-classification-v1.schema.json",
@@ -501,7 +501,7 @@
     {
       "source": "SKILLS/spritesheet-expert/references/video-animation-workflow.md",
       "path": "spritesheet-expert/references/video-animation-workflow.md",
-      "sha256": "0e6fe7f19d42b19381f58dbe6e012e1223c5ae27c28211f684438a7852431df3"
+      "sha256": "09e1fd5cd7b1e4a827104682684121cf819bb4319079466c73e03deac6d8cf70"
     },
     {
       "source": "SKILLS/spritesheet-expert/references/workflow-lanes.json",
@@ -706,7 +706,7 @@
     {
       "source": "SKILLS/spritesheet-expert/scripts/ingest_grok_video_animation.py",
       "path": "spritesheet-expert/scripts/ingest_grok_video_animation.py",
-      "sha256": "1c82a2b8b1d852728110d30622e2d724c96872b8df5fb12ac646b81583c71de5"
+      "sha256": "728cc0dbcebc83a078316c1f1917837a4c1a63f4f31ad3a0488c51cbafb01c72"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/ingest_source.py",
@@ -736,7 +736,7 @@
     {
       "source": "SKILLS/spritesheet-expert/scripts/prepare_grok_video_animation.py",
       "path": "spritesheet-expert/scripts/prepare_grok_video_animation.py",
-      "sha256": "73195bc0b67652f2a3d9c595076788caa88a6de12520438e85d9b66376ddb493"
+      "sha256": "f2e9b2e0b7815ac03c650e1e9426c785ec1734a5c8e69cb7ecd0489f327f1d82"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/prepare_item_classification.py",
@@ -986,7 +986,7 @@
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/video_animation.py",
       "path": "spritesheet-expert/scripts/spritecore/video_animation.py",
-      "sha256": "d06e2bc62c622099513735ed2128e9d34ceae2da4d266de9c7f2d4b643074cc5"
+      "sha256": "989af1687d93e04bf6824d76ccb3d1fb938396b14b5cda808e96748bb8798dee"
     },
     {
       "source": "SKILLS/spritesheet-expert/scripts/spritecore/visual_review.py",

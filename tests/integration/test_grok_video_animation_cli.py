@@ -140,6 +140,8 @@ def test_prepare_grok_video_job_is_dry_run_first_and_hashes_the_exact_frame(
     ).hexdigest()
     assert job["dry_run"]["args"][-1] == "--dry-run"
     assert "--ack-run" not in job["dry_run"]["args"]
+    assert set(job["dry_run"]) == {"args", "real_run_ack_flag"}
+    assert job["provider_output"]["result_path"].startswith("run/provider/grok-imagine/walk/runner/")
     assert "locked camera" in prompt
     assert "flat neutral gray" in prompt
     assert "one continuous" in prompt

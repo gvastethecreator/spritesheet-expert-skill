@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ingest a completed $grok-imagine video into a deterministic raw sprite grid."""
+"""Ingest a completed Grok Imagine runner video into a deterministic raw sprite grid."""
 
 from __future__ import annotations
 

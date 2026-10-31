@@ -436,6 +436,7 @@ def prepare_video_job(
     first_frame_name: str,
     duration_seconds: int = 6,
     provider_action_override: str | None = None,
+    runner_output_root: str | Path | None = None,
     force: bool = False,
 ) -> PreparedVideoJob:
     repo = Path(repo_root).expanduser().resolve()
@@ -546,16 +547,17 @@ def prepare_video_job(
         "size_bytes": len(prompt_bytes),
     }
     sampling_mode = _video_sampling_mode(state, entry)
-    run_label = _safe_slug(run_root.relative_to(repo).as_posix())
-    output_rel = (
-        Path(".scratch")
-        / "agent-cli-delegation"
-        / "grok-imagine"
-        / "spritesheet-video"
-        / f"{run_label}-{state}-{first_record['sha256'][:10]}-{prompt_record['sha256'][:10]}"
-        / "result.json"
-    ).as_posix()
-    invocation_rel = str(Path(output_rel).parent / "invocation.json").replace("\\", "/")
+    # Content-addressed leaf: a re-prepared prompt or frame never reuses an old invocation.
+    leaf = f"{first_record['sha256'][:10]}-{prompt_record['sha256'][:10]}"
+    if runner_output_root is None:
+        output_dir = job_dir / "runner" / leaf
+    else:
+        root = Path(runner_output_root).expanduser()
+        run_label = _safe_slug(run_root.relative_to(repo).as_posix())
+        output_dir = (root if root.is_absolute() else repo / root) / f"{run_label}-{state}-{leaf}"
+    output_dir = _inside(repo, output_dir, "runner output")
+    output_rel = (output_dir.relative_to(repo) / "result.json").as_posix()
+    invocation_rel = (output_dir.relative_to(repo) / "invocation.json").as_posix()
     args = [
         "--mode",
         "video-from-image",
@@ -603,8 +605,6 @@ def prepare_video_job(
             "expected_videos": 1,
         },
         "dry_run": {
-            "skill": "$grok-imagine",
-            "wrapper": "run-grok-imagine.mjs",
             "args": args,
             "real_run_ack_flag": "--ack-run",
         },
@@ -1372,7 +1372,7 @@ def _merged_provenance(
     force: bool,
     source_type: str = "grok-imagine-video",
     art_engine: str = "grok-imagine",
-    notes: str = "accepted through completed $grok-imagine video-from-image invocation and deterministic frame sampling",
+    notes: str = "accepted through a completed Grok Imagine video-from-image runner invocation and deterministic frame sampling",
     license_name: str = "xAI-provider-terms",
 ) -> dict[str, Any]:
     accepted: list[dict[str, Any]] = []
@@ -1551,7 +1551,7 @@ def ingest_video(
     if video_path.parent != expected_media_dir.resolve():
         raise VideoAnimationError("accepted video is outside the job media directory")
     if video_path.stem != "video-01" or video_path.suffix.lower() not in _VIDEO_EXTENSIONS:
-        raise VideoAnimationError("accepted video must be the wrapper-owned media/video-01 file")
+        raise VideoAnimationError("accepted video must be the runner-owned media/video-01 file")
     if not video_path.is_file() or video_path.stat().st_size < 1:
         raise VideoAnimationError("accepted provider video is missing or empty")
     video_record = _file_record(video_path)
