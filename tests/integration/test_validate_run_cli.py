@@ -123,6 +123,16 @@ def test_preflight_derives_gates_and_skips_animation_for_static_variants(
         "source_types": ["imagegen"],
     }
 
+    request = run_dir / "sprite-request.json"
+    original = request.read_bytes()
+    collision = _run(run_dir, "--stage", "preflight", "--report", "sprite-request.json")
+    assert collision.returncode == 1
+    assert "replace a run input" in collision.stderr
+    assert request.read_bytes() == original
+
+    refreshed = _run(run_dir, "--stage", "preflight")
+    assert refreshed.returncode == 0, refreshed.stderr
+
 
 def test_generated_preflight_fails_when_provenance_is_missing(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
@@ -231,3 +241,12 @@ def test_unknown_or_partial_gate_selection_cannot_produce_a_final_green(
     report = json.loads((run_dir / "qa" / "run-validation-report.json").read_text())
     assert report["complete"] is False
     assert any("partial" in blocker for blocker in report["blockers"])
+
+    # A quality failure must not turn an incomplete run into a completed one.
+    (run_dir / "raw" / "barrel.bin").write_bytes(b"changed source")
+    for extra in ((), ("--gate", "generation-provenance")):
+        failed = _run(run_dir, "--stage", "pre-package", *extra)
+        assert failed.returncode == 1, failed.stderr
+        report = json.loads((run_dir / "qa" / "run-validation-report.json").read_text())
+        assert report["status"] == "fail"
+        assert report["complete"] is False

@@ -1,0 +1,1556 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>Sprite Motion Workbench</title>
+  <style>
+    /* tool-theme:start (generated from spritecore/tool_theme.py by sync_tool_theme.py; do not edit) */
+:root {
+  color-scheme: dark;
+  --bg:#111; --surface:#181818; --raised:#202020; --sunken:#0b0b0b;
+  --line:#303030; --line-strong:#474747; --ink:#ebebeb; --muted:#9a9a9a; --faint:#6c6c6c;
+  --accent:#d4d4d4; --accent-ink:#111; --accent-soft:#ffffff14;
+  --ok:#5fbf83; --warn:#e2b443; --bad:#ef6a5f;
+  --checker-a:#2a2a2a; --checker-b:#363636; --checker-size:16px;
+  --matte-black:#000; --matte-gray:#808080; --matte-white:#fff;
+  --scroll-track:var(--sunken);
+  --radius:4px; --radius-lg:6px;
+  --font-ui:ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono:ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg:#f4f4f4; --surface:#fbfbfb; --raised:#ffffff; --sunken:#e8e8e8;
+  --line:#d9d9d9; --line-strong:#b9b9b9; --ink:#1b1b1b; --muted:#5e5e5e; --faint:#8b8b8b;
+  --accent:#444; --accent-ink:#ffffff; --accent-soft:#00000014;
+  --ok:#23824a; --warn:#9a6a00; --bad:#c2392f;
+  --checker-a:#dcdcdc; --checker-b:#f2f2f2;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg:#f4f4f4; --surface:#fbfbfb; --raised:#ffffff; --sunken:#e8e8e8;
+    --line:#d9d9d9; --line-strong:#b9b9b9; --ink:#1b1b1b; --muted:#5e5e5e; --faint:#8b8b8b;
+    --accent:#444; --accent-ink:#ffffff; --accent-soft:#00000014;
+    --ok:#23824a; --warn:#9a6a00; --bad:#c2392f;
+    --checker-a:#dcdcdc; --checker-b:#f2f2f2;
+  }
+}
+* { box-sizing:border-box; scrollbar-width:thin; scrollbar-color:var(--line) var(--scroll-track); }
+*::-webkit-scrollbar { width:10px; height:10px; }
+*::-webkit-scrollbar-track { background:var(--scroll-track); }
+*::-webkit-scrollbar-thumb { background:var(--line); border:2px solid var(--scroll-track); border-radius:999px; }
+html, body { margin:0; background:var(--bg); color:var(--ink); }
+body { min-width:320px; font:13px/1.45 var(--font-ui); -webkit-font-smoothing:antialiased; }
+h1, h2, h3, p { margin:0; }
+button, select, input { font:inherit; color:inherit; }
+:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.num, output, kbd { font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+
+/* Shell */
+.tool { min-height:100vh; display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:auto 1fr; }
+.tool-header { display:flex; align-items:center; gap:16px; min-height:48px; padding:0 16px; border-bottom:1px solid var(--line); background:var(--surface); }
+.brand { display:flex; align-items:baseline; gap:10px; min-width:0; }
+.brand-mark { color:var(--muted); font:600 11px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase; white-space:nowrap; }
+.brand h1 { font-size:15px; font-weight:600; letter-spacing:-.01em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.status { min-width:0; margin-left:auto; color:var(--muted); font-family:var(--font-mono); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* Controls */
+.btn, select { min-height:32px; padding:0 10px; border:1px solid var(--line); border-radius:var(--radius); background:var(--raised); color:var(--ink); cursor:pointer; }
+.btn:hover, select:hover { border-color:var(--line-strong); }
+.btn[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+.btn-icon { min-width:32px; padding:0; display:inline-grid; place-items:center; }
+.btn-primary { min-width:72px; font-weight:600; }
+.btn:disabled { opacity:.45; cursor:not-allowed; }
+select { padding-right:24px; }
+.field { display:inline-flex; align-items:center; gap:6px; color:var(--muted); font-size:12px; }
+.toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; }
+.group { display:inline-flex; align-items:center; gap:4px; }
+.seg { display:inline-flex; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; }
+.seg .btn { border:0; border-radius:0; min-height:30px; }
+.seg .btn + .btn { border-left:1px solid var(--line); }
+.swatch { display:inline-block; width:10px; height:10px; margin-right:6px; border:1px solid var(--line-strong); border-radius:2px; vertical-align:-1px; }
+.swatch[data-swatch="checker"] { background:conic-gradient(var(--checker-a) 25%, var(--checker-b) 0 50%, var(--checker-a) 0 75%, var(--checker-b) 0) 0 0/6px 6px; }
+.swatch[data-swatch="black"] { background:var(--matte-black); }
+.swatch[data-swatch="gray"] { background:var(--matte-gray); }
+.swatch[data-swatch="white"] { background:var(--matte-white); }
+
+/* Stage: the artifact owns the space */
+.stage { position:relative; min-height:320px; overflow:auto; display:grid; place-items:center; border:1px solid var(--line); border-radius:var(--radius-lg); background-color:var(--checker-a); }
+.stage[data-background="checker"] { background-image:conic-gradient(var(--checker-a) 25%, var(--checker-b) 0 50%, var(--checker-a) 0 75%, var(--checker-b) 0); background-size:var(--checker-size) var(--checker-size); }
+.stage[data-background="black"] { background:var(--matte-black); }
+.stage[data-background="gray"] { background:var(--matte-gray); }
+.stage[data-background="white"] { background:var(--matte-white); }
+.stage:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+canvas[data-sampling="nearest"] { image-rendering:pixelated; image-rendering:crisp-edges; }
+canvas[data-sampling="linear"] { image-rendering:auto; }
+
+/* Transport and timeline */
+.transport { display:grid; grid-template-columns:auto minmax(120px,1fr) auto; align-items:center; gap:10px; }
+.scrub { width:100%; accent-color:var(--accent); }
+.readout { min-width:64px; color:var(--muted); text-align:right; font-size:12px; }
+.filmstrip { display:flex; gap:6px; overflow-x:auto; padding:2px 2px 6px; scroll-snap-type:x proximity; }
+.film-frame { flex:0 0 auto; display:grid; gap:4px; padding:4px; min-width:56px; border:1px solid var(--line); border-radius:var(--radius); background:var(--surface); color:var(--muted); cursor:pointer; scroll-snap-align:start; font:11px/1 var(--font-mono); }
+.film-frame canvas { display:block; width:48px; height:48px; margin:0 auto; object-fit:contain; background:conic-gradient(var(--checker-a) 25%, var(--checker-b) 0 50%, var(--checker-a) 0 75%, var(--checker-b) 0) 0 0/8px 8px; }
+.film-frame .bar { display:block; height:3px; border-radius:2px; background:var(--line-strong); }
+.film-frame:hover { border-color:var(--line-strong); color:var(--ink); }
+.film-frame[aria-current="true"] { border-color:var(--accent); color:var(--ink); box-shadow:inset 0 0 0 1px var(--accent); }
+.film-frame[aria-current="true"] .bar { background:var(--accent); }
+
+/* Rails and lists */
+.rail { min-width:0; border-left:1px solid var(--line); background:var(--surface); overflow:auto; }
+.rail-section { padding:14px 16px; border-bottom:1px solid var(--line); }
+.rail-title { margin:0 0 8px; color:var(--muted); font:600 11px/1.2 var(--font-mono); letter-spacing:.08em; text-transform:uppercase; }
+.list { list-style:none; margin:0; padding:0; }
+.list-row { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; min-height:32px; padding:6px 8px; border:0; border-radius:var(--radius); background:none; color:var(--ink); text-align:left; text-decoration:none; cursor:pointer; }
+.list-row:hover { background:var(--raised); }
+.list-row[aria-pressed="true"] { background:var(--accent-soft); box-shadow:inset 2px 0 0 var(--accent); }
+.list-row .meta { color:var(--muted); font:12px var(--font-mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.facts { display:grid; grid-template-columns:auto 1fr; gap:4px 12px; margin:0; font-size:12px; }
+.facts dt { color:var(--muted); }
+.facts dd { margin:0; font-family:var(--font-mono); font-variant-numeric:tabular-nums; text-align:right; }
+.empty { color:var(--muted); font-style:italic; padding:6px 8px; }
+
+/* Review decisions */
+.chip { display:inline-flex; align-items:center; gap:5px; height:20px; padding:0 7px; border:1px solid var(--line); border-radius:999px; font:600 11px/1 var(--font-mono); color:var(--muted); }
+.chip::before { content:""; width:6px; height:6px; border-radius:50%; background:currentColor; }
+.chip[data-status="approved"], .chip[data-status="pass"] { color:var(--ok); border-color:currentColor; }
+.chip[data-status="rejected"], .chip[data-status="fail"] { color:var(--bad); border-color:currentColor; }
+.chip[data-status="pending"], .chip[data-status="warn"] { color:var(--warn); border-color:currentColor; }
+.chip[data-status="missing"] { color:var(--faint); border-style:dashed; }
+.chip[data-status="missing"]::before { background:none; border:1px solid currentColor; }
+.list-row[aria-disabled="true"] { cursor:default; color:var(--muted); }
+.list-row[aria-disabled="true"]:hover { background:none; }
+.card { border:1px solid var(--line); border-radius:var(--radius-lg); background:var(--surface); }
+kbd { display:inline-block; min-width:20px; padding:1px 5px; border:1px solid var(--line-strong); border-bottom-width:2px; border-radius:3px; color:var(--ink); font-size:11px; text-align:center; }
+.keys { display:grid; grid-template-columns:auto 1fr; gap:6px 10px; align-items:center; margin:0; color:var(--muted); font-size:12px; }
+.keys dd { margin:0; }
+
+@media (prefers-reduced-motion:reduce) { * { scroll-behavior:auto !important; transition:none !important; animation:none !important; } }
+/* tool-theme:end */
+
+    /* Sprite Motion Workbench layout. Colors come from the shared tokens. */
+    body { min-height: 100vh; }
+    button, input, select, textarea { min-height: 32px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--raised); color: var(--ink); }
+    button { padding: 0 10px; cursor: pointer; font-weight: 500; }
+    button:hover, select:hover, input:hover { border-color: var(--line-strong); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+    button.accent { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+    button.quiet { background: transparent; }
+    button.danger { color: var(--bad); }
+    button:disabled { cursor: not-allowed; opacity: .45; }
+    label { display: grid; gap: 5px; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+    input, select { width: 100%; padding: 4px 8px; font-family: var(--font-mono); font-size: 12px; text-transform: none; letter-spacing: 0; }
+    input[type="checkbox"] { width: 16px; min-height: 16px; accent-color: var(--accent); }
+    input[type="range"] { min-height: 24px; padding: 0; border: 0; background: transparent; accent-color: var(--accent); }
+    textarea { width: 100%; min-height: 76px; padding: 8px; resize: vertical; font: 13px/1.45 var(--font-ui); text-transform: none; letter-spacing: 0; }
+    .skip { position: fixed; left: 12px; top: -60px; z-index: 100; padding: 8px 12px; color: var(--accent-ink); background: var(--accent); }
+    .skip:focus { top: 12px; }
+    .hidden-input { display: none; }
+
+    .shell { height: 100vh; min-height: 640px; display: grid; grid-template-columns: 264px minmax(0, 1fr) 340px; overflow: hidden; }
+
+    /* Left rail: project, references, workspaces */
+    .shell > .rail { min-height: 0; display: flex; flex-direction: column; border-left: 0; border-right: 1px solid var(--line); overflow: hidden; }
+    .brand { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 48px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--line); }
+    .rail-scroll { min-height: 0; overflow-y: auto; }
+    .rail-section h2, .workflows h2 { margin: 0 0 8px; color: var(--muted); font: 600 11px/1.2 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+    .project-grid { display: grid; gap: 8px; }
+    .project-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .session-status { min-height: 16px; color: var(--muted); font: 12px var(--font-mono); }
+    .session-status.dirty { color: var(--warn); }
+    .reference-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .reference-slot { min-width: 0; min-height: 76px; padding: 6px; display: grid; grid-template-rows: 40px auto; gap: 4px; align-items: center; color: var(--muted); background: var(--sunken); border: 1px dashed var(--line-strong); border-radius: var(--radius); text-align: left; font-size: 11px; overflow: hidden; }
+    .reference-slot:hover { border-style: solid; }
+    .reference-slot.has-asset { color: var(--ink); border-style: solid; border-color: var(--line-strong); }
+    .reference-preview { width: 100%; height: 40px; display: grid; place-items: center; overflow: hidden; border-radius: 2px; background: conic-gradient(var(--checker-a) 25%, var(--checker-b) 0 50%, var(--checker-a) 0 75%, var(--checker-b) 0) 0 0/8px 8px; font: 600 11px var(--font-mono); }
+    .reference-preview img, .reference-preview canvas { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+    .reference-slot strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 600; }
+    .mini-note { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+    #useWorkbenchTemplates { width: 100%; margin-top: 8px; }
+    .workflows { padding: 14px 8px; }
+    .workflows h2 { margin-inline: 8px; }
+    .workflow { width: 100%; min-height: 44px; margin: 1px 0; padding: 6px 8px; display: grid; grid-template-columns: 1fr auto; gap: 1px 8px; text-align: left; border: 0; background: transparent; }
+    .workflow strong { font-size: 13px; font-weight: 600; }
+    .workflow small { grid-column: 1; color: var(--muted); font-size: 12px; }
+    .workflow .dot { width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: var(--line-strong); }
+    .workflow.active { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+    .workflow.active .dot { background: var(--accent); }
+    .workflow[disabled] { opacity: .5; }
+    .rail-note { margin: 0; padding: 12px 16px 16px; color: var(--faint); border-top: 1px solid var(--line); font-size: 12px; }
+
+    /* Center: source bar, light table, timeline */
+    .workspace { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+    .topbar { padding: 10px 14px; display: grid; grid-template-columns: minmax(160px, 1fr) auto auto; align-items: end; gap: 8px 10px; border-bottom: 1px solid var(--line); background: var(--surface); }
+    .title { min-width: 0; grid-column: 1 / 3; align-self: center; }
+    .title h1 { font-size: 15px; font-weight: 600; }
+    .title p { margin-top: 2px; color: var(--muted); font-size: 12px; }
+    .source { min-width: 0; grid-column: 1; grid-row: 2; }
+    .compact-inputs { display: grid; grid-template-columns: repeat(3, 60px); gap: 6px; }
+    .topbar .compact-inputs { grid-column: 2; grid-row: 2; }
+    #load { grid-column: 3; grid-row: 2; }
+    .review-state { grid-column: 3; grid-row: 1; justify-self: end; align-self: center; }
+    .stage-wrap { min-height: 0; flex: 1; display: grid; grid-template-rows: minmax(320px, 1fr) auto; }
+    .stage-area { position: relative; min-height: 0; padding: 20px; display: grid; place-items: center; overflow: hidden; touch-action: none; background: var(--sunken); }
+    .stage-area.panning { cursor: grabbing; }
+    .light-table { position: relative; width: min(100%, 760px); aspect-ratio: 1; transform-origin: center; border: 1px solid var(--line-strong); border-radius: var(--radius); overflow: hidden; will-change: transform; background-color: var(--checker-a); }
+    .light-table[data-background="checker"] { background-image: conic-gradient(var(--checker-a) 25%, var(--checker-b) 0 50%, var(--checker-a) 0 75%, var(--checker-b) 0); background-size: 24px 24px; }
+    .light-table[data-background="black"] { background: var(--matte-black); }
+    .light-table[data-background="gray"] { background: var(--matte-gray); }
+    .light-table[data-background="white"] { background: var(--matte-white); }
+    #frameCanvas, #guideCanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+    #frameCanvas { z-index: 1; cursor: move; touch-action: none; }
+    #guideCanvas { z-index: 2; pointer-events: none; }
+    .viewer-tools { position: absolute; z-index: 8; left: 14px; top: 14px; right: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; width: max-content; max-width: calc(100% - 28px); padding: 4px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+    .viewer-tools > button { width: 32px; padding: 0; }
+    .viewer-tools output { min-width: 52px; color: var(--muted); font-size: 12px; text-align: center; }
+    .viewer-tools .divider { width: 1px; height: 20px; background: var(--line); }
+    .viewer-tools .seg .btn { min-height: 28px; padding: 0 8px; font-size: 12px; }
+    .transform-handle { position: absolute; z-index: 5; right: 12px; bottom: 12px; width: 20px; min-height: 20px; height: 20px; padding: 0; border: 2px solid var(--matte-white); border-radius: 3px; background: var(--accent); cursor: nwse-resize; }
+    .light-table.frame-locked #frameCanvas { cursor: not-allowed; }
+    .light-table.frame-locked .transform-handle { display: none; }
+    .stage-caption { position: absolute; z-index: 4; left: 12px; bottom: 12px; display: flex; gap: 6px; align-items: center; }
+    .frame-chip, .phase-chip { padding: 3px 7px; border-radius: var(--radius); font: 600 11px var(--font-mono); }
+    .frame-chip { color: var(--accent-ink); background: var(--accent); }
+    .phase-chip { color: var(--ink); background: var(--surface); border: 1px solid var(--line); text-transform: uppercase; }
+    .timeline { min-width: 0; padding: 10px 14px 12px; border-top: 1px solid var(--line); background: var(--surface); }
+    .timeline .transport { grid-template-columns: auto auto auto minmax(120px, 1fr) auto; gap: 8px; }
+    .transport .icon { width: 32px; padding: 0; }
+    #scrubber { width: 100%; }
+    #frameLabel { min-width: 72px; color: var(--muted); text-align: right; font: 12px var(--font-mono); font-variant-numeric: tabular-nums; }
+    .timeline .filmstrip { margin-top: 10px; }
+    .frame-thumb { flex: 0 0 auto; width: 96px; min-height: 0; padding: 4px; display: grid; gap: 4px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--raised); scroll-snap-align: start; }
+    .frame-thumb canvas { width: 100%; height: 58px; object-fit: contain; image-rendering: pixelated; border-radius: 2px; background: conic-gradient(var(--checker-a) 25%, var(--checker-b) 0 50%, var(--checker-a) 0 75%, var(--checker-b) 0) 0 0/8px 8px; }
+    .frame-thumb span { overflow: hidden; text-overflow: ellipsis; color: var(--muted); font: 11px var(--font-mono); text-align: left; white-space: nowrap; }
+    .frame-thumb.selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+    .frame-thumb.selected span { color: var(--ink); }
+    .frame-thumb.multi-selected { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .frame-thumb.queued span::before { content: "QUEUE · "; color: var(--accent); font-weight: 600; }
+    .frame-thumb.dirty span::after { content: " · adjusted"; color: var(--warn); }
+    .frame-thumb[data-qa="pass"] { box-shadow: inset 0 -3px 0 var(--ok); }
+    .frame-thumb[data-qa="fail"] { box-shadow: inset 0 -3px 0 var(--bad); }
+    .frame-thumb.selected[data-qa="pass"] { box-shadow: inset 0 0 0 1px var(--accent), inset 0 -3px 0 var(--ok); }
+    .frame-thumb.selected[data-qa="fail"] { box-shadow: inset 0 0 0 1px var(--accent), inset 0 -3px 0 var(--bad); }
+    .frame-thumb.locked canvas { opacity: .6; }
+    .selection-bar { margin-top: 8px; display: grid; grid-template-columns: auto minmax(120px, 1fr) 150px auto; gap: 8px; align-items: center; }
+    .selection-toggle { min-height: 32px; padding: 0 8px; display: flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--ink); font-size: 12px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+    #selectionSummary { color: var(--muted); font: 12px var(--font-mono); }
+
+    /* Right inspector */
+    .inspector { min-width: 0; min-height: 0; border-left: 1px solid var(--line); background: var(--surface); overflow-y: auto; }
+    .inspector > header { padding: 12px 16px; border-bottom: 1px solid var(--line); }
+    .inspector h2 { font-size: 14px; font-weight: 600; }
+    .inspector > header p { margin-top: 3px; color: var(--muted); font-size: 12px; }
+    .inspector-tabs { position: sticky; top: 0; z-index: 12; display: grid; grid-template-columns: repeat(4, 1fr); background: var(--surface); border-bottom: 1px solid var(--line); }
+    .inspector-tab { min-height: 38px; padding: 0 3px; border: 0; border-radius: 0; color: var(--muted); background: transparent; font: 600 11px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+    .inspector-tab:hover { color: var(--ink); }
+    .inspector-tab.active { color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); }
+    [data-inspector-panel][hidden] { display: none; }
+    .panel-group { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+    .panel-group h3 { margin: 0 0 10px; color: var(--muted); font: 600 11px/1.2 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+    .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .fields .wide { grid-column: 1 / -1; }
+    .checks { display: grid; gap: 8px; }
+    .check { display: grid; grid-template-columns: 18px 1fr; gap: 8px; align-items: center; color: var(--ink); font-size: 13px; font-weight: 400; letter-spacing: 0; text-transform: none; }
+    .button-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+    .button-stack { display: grid; gap: 6px; }
+    .stack-gap { margin-top: 10px; }
+    .full { width: 100%; margin-top: 6px; }
+    .panel-group .readout { min-width: 0; padding: 8px 10px; color: var(--muted); background: var(--sunken); border-left: 2px solid var(--accent); border-radius: 2px; text-align: left; font: 12px var(--font-mono); font-variant-numeric: tabular-nums; }
+    .contract-card { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--sunken); }
+    .contract-card strong { font-size: 13px; font-weight: 600; }
+    .contract-card span { color: var(--muted); font-size: 12px; }
+    .contract-order { display: flex; gap: 4px; flex-wrap: wrap; }
+    .contract-order b { min-width: 24px; padding: 3px 5px; border: 1px solid var(--line-strong); border-radius: 3px; text-align: center; font: 600 11px var(--font-mono); }
+    .gate-list { display: grid; gap: 6px; }
+    .gate-row { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 8px; align-items: center; color: var(--ink); font-size: 12px; font-weight: 400; letter-spacing: 0; text-transform: none; }
+    .gate-row span { line-height: 1.25; }
+    .gate-row select { min-height: 28px; padding: 2px 6px; }
+    .gate-summary { margin-top: 8px; padding: 8px; color: var(--muted); background: var(--sunken); border-left: 2px solid var(--line-strong); font: 12px var(--font-mono); }
+    .gate-summary.pass { color: var(--ok); border-color: var(--ok); }
+    .gate-summary.fail { color: var(--bad); border-color: var(--bad); }
+    .variant-list, .queue-list { display: grid; gap: 6px; max-height: 220px; overflow-y: auto; }
+    .variant-item, .queue-item { min-width: 0; min-height: 0; padding: 8px; display: grid; gap: 3px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--raised); text-align: left; }
+    .variant-item.active { border-color: var(--accent); box-shadow: inset 2px 0 0 var(--accent); }
+    .variant-item.selected { outline: 2px solid var(--accent-soft); }
+    .variant-item strong, .queue-item strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; }
+    .variant-item small, .queue-item small { color: var(--muted); font: 11px var(--font-mono); }
+    .queue-item[data-status="ready"] { box-shadow: inset 2px 0 0 var(--accent); }
+    .queue-item[data-status="exported"] { box-shadow: inset 2px 0 0 var(--ok); }
+    .queue-empty { margin: 0; padding: 10px; color: var(--muted); background: var(--sunken); border-radius: var(--radius); font-size: 12px; }
+    .panel-group .status { display: block; min-height: 18px; margin: 8px 0 0; white-space: normal; overflow: visible; color: var(--muted); font: 12px var(--font-mono); }
+    .panel-group .status.error { color: var(--bad); }
+    .panel-group .status.success { color: var(--ok); }
+
+    @media (max-width: 1100px) {
+      .shell { grid-template-columns: 72px minmax(0, 1fr) 310px; }
+      .brand { justify-content: center; padding: 0; }
+      .brand .brand-mark, .rail-section, .workflows h2, .workflow strong, .workflow small, .rail-note { display: none; }
+      .workflow { place-items: center; grid-template-columns: 1fr; }
+      .workflow .dot { margin: 0; width: 10px; height: 10px; }
+    }
+    @media (max-width: 820px) {
+      .shell { height: auto; min-height: 100vh; display: block; overflow: visible; }
+      .shell > .rail { border-right: 0; border-bottom: 1px solid var(--line); }
+      .brand { justify-content: space-between; padding: 0 12px 0 16px; }
+      .brand .brand-mark { display: inline; }
+      .workflows { padding: 6px; display: flex; gap: 4px; overflow-x: auto; }
+      .workflow { min-width: 88px; width: auto; min-height: 36px; padding-inline: 10px; place-items: center start; grid-template-columns: 1fr auto; }
+      .workflow strong { display: block; font-size: 12px; }
+      .workflow small { display: none; }
+      .topbar { grid-template-columns: minmax(0, 1fr) auto; }
+      .title { grid-column: 1; grid-row: 1; }
+      .review-state { grid-column: 2; grid-row: 1; }
+      .source { grid-column: 1 / -1; grid-row: 2; }
+      .topbar .compact-inputs { grid-column: 1; grid-row: 3; }
+      #load { grid-column: 2; grid-row: 3; }
+      .stage-wrap { min-width: 0; width: 100%; min-height: 560px; }
+      .stage-area { padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+      .viewer-tools { position: static; width: 100%; max-width: none; }
+      .workspace, .inspector { overflow: visible; }
+      .inspector { border-left: 0; border-top: 1px solid var(--line); }
+      .timeline .transport { grid-template-columns: auto auto auto minmax(0, 1fr); }
+      #frameLabel { display: none; }
+      .selection-bar { grid-template-columns: 1fr 1fr; }
+      #selectionSummary { grid-column: 1 / -1; order: 3; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#stage">Skip to frame</a>
+  <div class="shell">
+    <aside class="rail" aria-label="Workbenches">
+      <div class="brand"><span class="brand-mark">Motion workbench</span><button id="theme-toggle" class="btn btn-icon" type="button" aria-label="Switch theme">◐</button></div>
+      <div class="rail-scroll">
+        <section class="rail-section" aria-labelledby="projectHeading">
+          <h2 id="projectHeading">Project</h2>
+          <div class="project-grid">
+            <label>Name<input id="projectName" type="text" value="Side-view walk · 6 frames" spellcheck="false"></label>
+            <div class="project-actions"><button id="newProject" class="quiet" type="button">New</button><button id="saveProject" class="primary" type="button">Save</button></div>
+            <p class="session-status" id="sessionStatus">Preparing local session…</p>
+          </div>
+        </section>
+        <section class="rail-section" aria-labelledby="referencesHeading">
+          <h2 id="referencesHeading">Working references</h2>
+          <div class="reference-grid">
+            <button id="referenceIdentity" class="reference-slot" type="button" title="Load identity reference">
+              <span class="reference-preview" aria-hidden="true">ID</span><strong>Identity</strong>
+            </button>
+            <button id="referenceMechanics" class="reference-slot" type="button" title="Load mechanics or mannequin reference">
+              <span class="reference-preview" aria-hidden="true">MEC</span><strong>Mechanics</strong>
+            </button>
+            <div class="reference-slot has-asset" title="Derived from the previous frame">
+              <span class="reference-preview"><canvas id="referencePrevious" width="120" height="72" aria-label="Previous-frame reference"></canvas></span><strong>Previous</strong>
+            </div>
+            <div class="reference-slot has-asset" title="Derived from the next frame">
+              <span class="reference-preview"><canvas id="referenceNext" width="120" height="72" aria-label="Next-frame reference"></canvas></span><strong>Next</strong>
+            </div>
+          </div>
+          <input id="referenceIdentityFile" class="hidden-input" type="file" accept="image/png,image/jpeg,image/webp">
+          <input id="referenceMechanicsFile" class="hidden-input" type="file" accept="image/png,image/jpeg,image/webp">
+          <p class="mini-note">Identity and mechanics export as separate roles; previous and next are derived from the cycle.</p>
+          <button id="useWorkbenchTemplates" class="quiet" type="button">Use versioned templates</button>
+        </section>
+        <nav class="workflows">
+          <h2>Specialized workspaces</h2>
+          <button class="workflow active" type="button"><strong>Side-view walk</strong><small>active · candidate</small><span class="dot" aria-hidden="true"></span></button>
+          <button class="workflow" type="button" disabled><strong>Views</strong><small>next contract</small><span class="dot" aria-hidden="true"></span></button>
+          <button class="workflow" type="button" disabled><strong>Run</strong><small>next contract</small><span class="dot" aria-hidden="true"></span></button>
+          <button class="workflow" type="button" disabled><strong>Idle</strong><small>next contract</small><span class="dot" aria-hidden="true"></span></button>
+          <button class="workflow" type="button" disabled><strong>Jump</strong><small>next contract</small><span class="dot" aria-hidden="true"></span></button>
+          <button class="workflow" type="button" disabled><strong>Combat</strong><small>next contract</small><span class="dot" aria-hidden="true"></span></button>
+          <button class="workflow" type="button" disabled><strong>VFX</strong><small>next contract</small><span class="dot" aria-hidden="true"></span></button>
+          <button class="workflow" type="button" disabled><strong>Stills</strong><small>next contract</small><span class="dot" aria-hidden="true"></span></button>
+        </nav>
+        <p class="rail-note">Originals and variants stay separate. The contract fixes pose order.</p>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div class="title"><h1>Side-view walk · 6 frames</h1><p>Alignment and motion-mechanics workbench</p></div>
+        <label class="source">Sheet URL<input id="sheetUrl" type="text" spellcheck="false"></label>
+        <div class="compact-inputs">
+          <label>Cols<input id="columns" type="number" min="1" max="32" value="3"></label>
+          <label>Rows<input id="rows" type="number" min="1" max="32" value="2"></label>
+          <label>FPS<input id="fps" type="number" min="1" max="60" value="8"></label>
+        </div>
+        <button id="load" class="primary" type="button">Load</button>
+        <span class="review-state chip" data-status="pending">candidate only</span>
+      </header>
+
+      <section class="stage-wrap" aria-label="Frame editor">
+        <div class="stage-area" id="stage">
+          <div class="viewer-tools" aria-label="View">
+            <button id="zoomOut" class="quiet" type="button" aria-label="Zoom out">−</button>
+            <output id="zoomReadout">100%</output>
+            <button id="zoomIn" class="quiet" type="button" aria-label="Zoom in">+</button>
+            <button id="fitView" class="quiet" type="button" aria-label="Fit view" title="Fit view · 0">□</button>
+            <span class="divider" aria-hidden="true"></span>
+            <button id="undo" class="quiet" type="button" aria-label="Undo" title="Undo · Ctrl+Z" disabled>↶</button>
+            <button id="redo" class="quiet" type="button" aria-label="Redo" title="Redo · Ctrl+Shift+Z" disabled>↷</button>
+            <span class="divider" aria-hidden="true"></span>
+            <div class="seg" role="group" aria-label="Review background"><button class="btn" type="button" data-background="checker" aria-pressed="true"><span class="swatch" data-swatch="checker"></span>Checker</button><button class="btn" type="button" data-background="black" aria-pressed="false"><span class="swatch" data-swatch="black"></span>Black</button><button class="btn" type="button" data-background="gray" aria-pressed="false"><span class="swatch" data-swatch="gray"></span>Gray</button><button class="btn" type="button" data-background="white" aria-pressed="false"><span class="swatch" data-swatch="white"></span>White</button></div>
+          </div>
+          <div class="light-table" id="lightTable" data-background="checker">
+            <canvas id="frameCanvas" width="1024" height="1024" aria-label="Selected frame"></canvas>
+            <canvas id="guideCanvas" width="1024" height="1024" aria-hidden="true"></canvas>
+            <div class="stage-caption"><span class="frame-chip" id="stageFrame">F01</span><span class="phase-chip" id="stagePhase">contact A</span></div>
+            <button id="scaleHandle" class="transform-handle" type="button" aria-label="Scale frame directly" title="Drag to scale"></button>
+          </div>
+        </div>
+        <div class="timeline">
+          <div class="transport">
+            <button id="previous" class="icon quiet" type="button" aria-label="Previous frame">←</button>
+            <button id="play" class="accent" type="button">Play</button>
+            <button id="next" class="icon quiet" type="button" aria-label="Next frame">→</button>
+            <input id="scrubber" type="range" min="0" max="5" value="0" aria-label="Current frame">
+            <span id="frameLabel">01 / 06</span>
+          </div>
+          <div class="filmstrip" id="filmstrip" aria-label="Cycle frames"></div>
+          <div class="selection-bar" aria-label="Batch actions">
+            <label class="selection-toggle"><input id="selectionMode" type="checkbox">Multiple selection</label>
+            <output id="selectionSummary">1 frame selected</output>
+            <select id="batchQaStatus" aria-label="QA for selected frames"><option value="review">Mark: review</option><option value="pass">Mark: approved</option><option value="fail">Mark: blocked</option></select>
+            <button id="applyBatchQa" class="quiet" type="button">Apply QA</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <aside class="inspector" aria-label="Correction inspector">
+      <header><h2>Frame inspector</h2><p>Registration, contract QA, variants, and Image Gen jobs.</p></header>
+      <nav class="inspector-tabs" aria-label="Inspector panels">
+        <button class="inspector-tab active" data-panel-target="align" type="button">Align</button>
+        <button class="inspector-tab" data-panel-target="qa" type="button">QA</button>
+        <button class="inspector-tab" data-panel-target="correct" type="button">Correct</button>
+        <button class="inspector-tab" data-panel-target="export" type="button">Export</button>
+      </nav>
+      <div data-inspector-panel="align">
+      <section class="panel-group">
+        <h3>Transform</h3>
+        <div class="fields">
+          <label>Offset X<input id="offsetX" type="number" step="1" value="0"></label>
+          <label>Offset Y<input id="offsetY" type="number" step="1" value="0"></label>
+          <label class="wide">Scale %<input id="scale" type="number" min="50" max="150" step="0.25" value="100"></label>
+        </div>
+        <div class="button-row"><button id="resetFrame" class="quiet" type="button">Reset frame</button><button id="copyTransform" class="quiet" type="button">Copy adjustment</button></div>
+        <button id="pasteTransform" class="quiet full" type="button" disabled>Paste adjustment</button>
+        <label class="check stack-gap"><input id="frameLocked" type="checkbox">Lock frame</label>
+        <p class="status">Drag to move · corner handle to scale · arrow keys 1 px · Shift 10 px.</p>
+      </section>
+      <section class="panel-group">
+        <h3>Technical guides</h3>
+        <div class="checks">
+          <label class="check"><input id="showBaseline" type="checkbox" checked>Baseline</label>
+          <label class="check"><input id="showCenter" type="checkbox" checked>Root axes</label>
+          <label class="check"><input id="showThirds" type="checkbox">Thirds</label>
+          <label class="check"><input id="showBounds" type="checkbox" checked>Safe bounds</label>
+        </div>
+        <label class="stack-gap">Baseline %<input id="baseline" type="range" min="50" max="98" step="0.1" value="89"></label>
+        <div class="readout" id="guideReadout">baseline 89.0% · root 50%</div>
+      </section>
+      <section class="panel-group">
+        <h3>Comparison</h3>
+        <label>Mode<select id="compareMode"><option value="onion">Onion skin</option><option value="difference">Difference from previous</option><option value="current">Current only</option></select></label>
+        <div class="checks">
+          <label class="check"><input id="onionPrevious" type="checkbox" checked>Previous frame</label>
+          <label class="check"><input id="onionNext" type="checkbox">Next frame</label>
+        </div>
+        <label class="stack-gap">Opacity<input id="onionOpacity" type="range" min="0" max="0.8" step="0.02" value="0.24"></label>
+      </section>
+      </div>
+      <div data-inspector-panel="qa" hidden>
+      <section class="panel-group">
+        <h3>Animation contract</h3>
+        <div class="contract-card" id="workflowContract">
+          <strong>Right-facing side-view walk · 6 fixed poses</strong>
+          <span>Strict side view · loop · one frame per generation</span>
+          <div class="contract-order" aria-label="Generation order"><b>1</b><b>6</b><b>4</b><b>2</b><b>3</b><b>5</b></div>
+        </div>
+      </section>
+      <section class="panel-group">
+        <h3>Frame QA</h3>
+        <div class="fields">
+          <label>Status<select id="qaStatus"><option value="review">Review</option><option value="pass">Approved</option><option value="fail">Blocked</option></select></label>
+          <label>Snap<select id="snapMode"><option value="both">Center + baseline</option><option value="center">Center only</option><option value="baseline">Baseline only</option><option value="off">Off</option></select></label>
+        </div>
+        <label class="stack-gap">Notes<textarea id="frameNote" placeholder="What failed, what must stay, and which gate needs another run."></textarea></label>
+      </section>
+      <section class="panel-group">
+        <h3>Frame quality gates</h3>
+        <div class="gate-list" id="gateChecklist"></div>
+        <div class="gate-summary" id="gateSummary">Not assessed.</div>
+        <p class="mini-note">QA is triage. A candidate is ready only after every hard gate passes.</p>
+      </section>
+      </div>
+      <div data-inspector-panel="correct" hidden>
+      <section class="panel-group">
+        <h3>Non-destructive variants</h3>
+        <div class="variant-list" id="variantList"></div>
+        <div class="button-row"><button id="addVariant" class="quiet" type="button">Import variant</button><button id="activateVariant" class="primary" type="button">Activate</button></div>
+        <input id="variantFile" class="hidden-input" type="file" accept="image/png,image/jpeg,image/webp">
+        <button id="clearReplacement" class="quiet danger full" type="button" disabled>Return to original</button>
+      </section>
+      <section class="panel-group">
+        <h3>Contextual correction</h3>
+        <label>Image Gen request<textarea id="correctionPrompt" placeholder="Example: lower the passing-foot knee without changing identity, arms, or scale."></textarea></label>
+        <div class="button-stack stack-gap">
+          <button id="queueCorrection" class="accent" type="button">Send selection to queue</button>
+          <button id="exportPacket" class="primary" type="button">Export frame packet</button>
+          <div id="packetDownloads" class="button-stack" aria-label="Prepared packet downloads"></div>
+          <button id="replaceFrame" class="quiet" type="button">Import Image Gen return</button>
+          <input id="replaceFrameFile" class="hidden-input" type="file" accept="image/png,image/jpeg,image/webp">
+        </div>
+      </section>
+      <section class="panel-group">
+        <h3>Correction queue</h3>
+        <div class="queue-list" id="correctionQueue"></div>
+        <div class="button-row"><button id="acceptCorrection" class="quiet" type="button">Accept return</button><button id="rejectCorrection" class="quiet danger" type="button">Reject return</button></div>
+        <button id="exportCorrectionQueue" class="quiet full" type="button">Export queue manifest</button>
+      </section>
+      </div>
+      <div data-inspector-panel="export" hidden>
+      <section class="panel-group">
+        <h3>Project and deliverables</h3>
+        <div class="button-stack">
+          <button id="exportJson" class="primary" type="button">Export project JSON</button>
+          <button id="exportAlignment" class="quiet" type="button">Export alignment profile v2</button>
+          <button id="importJson" class="quiet" type="button">Import project</button>
+          <input id="importFile" class="hidden-input" type="file" accept="application/json,.json">
+          <button id="exportPng" class="accent" type="button">Export corrected sheet</button>
+          <button id="resetAll" class="quiet danger" type="button">Full reset</button>
+        </div>
+        <p class="status" id="status" role="status" aria-live="polite">Waiting for sheet.</p>
+      </section>
+      <section class="panel-group">
+        <h3>Promotion</h3>
+        <div class="readout" id="readinessSummary">Manual draft · no verified CLI evidence yet.</div>
+        <p class="mini-note">The editor prepares and reviews. Final approval remains hash-bound in the pipeline.</p>
+      </section>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const PROJECT_KIND = "sprite-animation-editor-project";
+    const PROJECT_VERSION = 3;
+    const CURRENT_PROJECT_KEY = `${PROJECT_KIND}:current`;
+    const PROJECT_INDEX_KEY = `${PROJECT_KIND}:index`;
+    const ASSET_DB_NAME = "sprite-animation-editor-assets";
+    const defaultSheet = params.get("sheet") || "";
+    const defaultIdentityReference = params.get("identity") || "";
+    const defaultMechanicsReferences = params.getAll("mechanics").filter(Boolean);
+    const defaultPhases = ["contact A", "down A", "pass A", "contact B", "down B", "pass B"];
+    const animation_contract = {
+      id: "sideview-walk-right-6f-v1",
+      workflow: "sideview-walk",
+      view: "strict-side",
+      direction: "right",
+      frame_count: 6,
+      frame_order_locked: true,
+      candidate_policy: "one-frame-per-imagegen-call",
+      required_templates: ["mechanics-mannequin", "identity-anchor", "real-character-transfer"],
+      hard_gates: ["opposite-contacts", "passing-foot-clearance", "arm-counter-swing", "root-lock", "scale-lock", "background-clean", "loop-seam", "identity-transfer"],
+      generation_order: [1, 6, 4, 2, 3, 5],
+      generation_dependencies: { 1: [], 6: [1], 4: [1, 6], 2: [1, 4], 3: [2, 4], 5: [4, 6] }
+    };
+    const quality_gates = [
+      { id: "opposite-contacts", label: "Opposite contacts A/B", hard: true },
+      { id: "passing-foot-clearance", label: "Passing-foot clearance", hard: true },
+      { id: "arm-counter-swing", label: "Arm counter-swing", hard: true },
+      { id: "root-lock", label: "Stable root and baseline", hard: true },
+      { id: "scale-lock", label: "Stable scale and framing", hard: true },
+      { id: "background-clean", label: "Clean background and edges", hard: true },
+      { id: "loop-seam", label: "Loop continuity", hard: true },
+      { id: "identity-transfer", label: "Identity and anatomy", hard: true }
+    ];
+    const $ = selector => document.querySelector(selector);
+    const controls = {
+      url: $("#sheetUrl"), columns: $("#columns"), rows: $("#rows"), fps: $("#fps"), load: $("#load"),
+      previous: $("#previous"), play: $("#play"), next: $("#next"), scrubber: $("#scrubber"),
+      offsetX: $("#offsetX"), offsetY: $("#offsetY"), scale: $("#scale"), baseline: $("#baseline"),
+      showBaseline: $("#showBaseline"), showCenter: $("#showCenter"), showThirds: $("#showThirds"), showBounds: $("#showBounds"),
+      onionPrevious: $("#onionPrevious"), onionNext: $("#onionNext"), onionOpacity: $("#onionOpacity"), compareMode: $("#compareMode"),
+      frameLocked: $("#frameLocked"), qaStatus: $("#qaStatus"), snapMode: $("#snapMode"), frameNote: $("#frameNote"), correctionPrompt: $("#correctionPrompt"),
+      undo: $("#undo"), redo: $("#redo"), zoomIn: $("#zoomIn"), zoomOut: $("#zoomOut"), fitView: $("#fitView"), zoomReadout: $("#zoomReadout"),
+      stage: $("#stage"), lightTable: $("#lightTable"), scaleHandle: $("#scaleHandle"),
+      projectName: $("#projectName"), sessionStatus: $("#sessionStatus"), selectionMode: $("#selectionMode"),
+      selectionSummary: $("#selectionSummary"), batchQaStatus: $("#batchQaStatus"), gateChecklist: $("#gateChecklist"),
+      gateSummary: $("#gateSummary"), variantList: $("#variantList"), activateVariant: $("#activateVariant"),
+      correctionQueue: $("#correctionQueue")
+    };
+    const frameCanvas = $("#frameCanvas");
+    const guideCanvas = $("#guideCanvas");
+    const frameContext = frameCanvas.getContext("2d");
+    const guideContext = guideCanvas.getContext("2d");
+    const image = new Image();
+    let frame = 0;
+    let frameCount = 6;
+    let cellWidth = 0;
+    let cellHeight = 0;
+    let loadedSheet = null;
+    let timer = null;
+    let clipboardTransform = null;
+    let transforms = [];
+    let frameMeta = [];
+    let frameOverrides = [];
+    let frameVariants = [];
+    let activeVariantIds = [];
+    let selectedVariantId = "original";
+    let selectedFrames = new Set([0]);
+    let lastSelectedFrame = 0;
+    let correctionQueue = [];
+    let currentProjectId = "sideview-walk-six-frame";
+    try { currentProjectId = localStorage.getItem(CURRENT_PROJECT_KEY) || currentProjectId; } catch { /* Report unavailable storage when loading or saving. */ }
+    let projectState = {
+      id: currentProjectId,
+      name: "Side-view walk · 6 frames",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    let projectDirty = false;
+    let assetDbPromise = null;
+    const referenceSlots = {
+      identity: { role: "identity", name: "No identity", image: null, asset_key: null, source_url: null },
+      mechanics: { role: "mechanics", name: "No mechanics", image: null, asset_key: null, source_url: null, frame_urls: [], frame_images: [] },
+      previous: { role: "previous", derived: true },
+      next: { role: "next", derived: true }
+    };
+    let phases = defaultPhases;
+    let history = [];
+    let future = [];
+    let gesture = null;
+    let spacePressed = false;
+    let snapGuides = { x: false, y: false };
+    const viewer = { zoom: 1, x: 0, y: 0 };
+
+    controls.url.value = params.get("sheet") || defaultSheet;
+    controls.columns.value = params.get("columns") || "3";
+    controls.rows.value = params.get("rows") || "2";
+    controls.fps.value = params.get("fps") || "8";
+    if (params.get("phases")) phases = params.get("phases").split(",").map(value => value.trim());
+
+    function settings() {
+      const columns = Number(controls.columns.value);
+      const rows = Number(controls.rows.value);
+      const fps = Number(controls.fps.value);
+      if (![columns, rows, fps].every(Number.isSafeInteger) || columns < 1 || rows < 1 || columns > 32 || rows > 32 || fps < 1 || fps > 60) throw new Error("Grid values must be integers from 1 to 32; FPS must be an integer from 1 to 60.");
+      return { columns, rows, fps };
+    }
+
+    function loadedSheetMatches() {
+      return Boolean(loadedSheet && image.complete && image.naturalWidth && controls.url.value === loadedSheet.source && image.currentSrc === loadedSheet.imageSrc && Number(controls.columns.value) === loadedSheet.columns && Number(controls.rows.value) === loadedSheet.rows);
+    }
+
+    function blankTransform() { return { x: 0, y: 0, scale: 1 }; }
+    function blankGateResults() { return Object.fromEntries(quality_gates.map(gate => [gate.id, "pending"])); }
+    function blankMeta() { return { locked: false, qa: "review", note: "", correction: "", gates: blankGateResults(), revision: 0 }; }
+    function storageKey() { return `${PROJECT_KIND}:${projectState.id}`; }
+    function legacyStorageKey() { const { columns, rows } = settings(); return `sprite-workbench:${controls.url.value}:${columns}x${rows}`; }
+    function isDirty(transform) { return transform.x !== 0 || transform.y !== 0 || Math.abs(transform.scale - 1) > 0.0001; }
+    function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
+    function uniqueId(prefix) { return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`; }
+    function safeName(value) { return String(value || "sprite-project").trim().toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "sprite-project"; }
+    function setSessionStatus(message, dirty = projectDirty) {
+      controls.sessionStatus.textContent = message;
+      controls.sessionStatus.classList.toggle("dirty", dirty);
+    }
+
+    function openAssetDb() {
+      if (assetDbPromise) return assetDbPromise;
+      assetDbPromise = new Promise((resolve, reject) => {
+        if (!window.indexedDB) return reject(new Error("IndexedDB is unavailable"));
+        const request = indexedDB.open(ASSET_DB_NAME, 1);
+        request.addEventListener("upgradeneeded", () => { if (!request.result.objectStoreNames.contains("assets")) request.result.createObjectStore("assets"); });
+        request.addEventListener("success", () => resolve(request.result));
+        request.addEventListener("error", () => reject(request.error));
+      });
+      return assetDbPromise;
+    }
+    async function putAsset(key, blob) {
+      const database = await openAssetDb();
+      await new Promise((resolve, reject) => {
+        const transaction = database.transaction("assets", "readwrite");
+        transaction.objectStore("assets").put(blob, key);
+        transaction.addEventListener("complete", resolve);
+        transaction.addEventListener("error", () => reject(transaction.error));
+      });
+    }
+    async function getAsset(key) {
+      if (!key) return null;
+      const database = await openAssetDb();
+      return new Promise((resolve, reject) => {
+        const request = database.transaction("assets", "readonly").objectStore("assets").get(key);
+        request.addEventListener("success", () => resolve(request.result || null));
+        request.addEventListener("error", () => reject(request.error));
+      });
+    }
+    async function imageFromBlob(blob) {
+      const output = new Image();
+      const objectUrl = URL.createObjectURL(blob);
+      output.src = objectUrl;
+      try { await output.decode(); } catch (error) { URL.revokeObjectURL(objectUrl); throw error; }
+      output.dataset.objectUrl = objectUrl;
+      return output;
+    }
+    async function imageFromUrl(url) {
+      const output = new Image(); output.src = url; await output.decode(); return output;
+    }
+    function referenceImage(role, index = frame) {
+      if (role === "mechanics" && referenceSlots.mechanics.frame_urls?.length) return referenceSlots.mechanics.frame_images?.[index] || null;
+      return referenceSlots[role]?.image || null;
+    }
+    function referencesReady() {
+      const mechanicsReady = referenceSlots.mechanics.frame_urls?.length ? referenceSlots.mechanics.frame_urls.length === frameCount && referenceSlots.mechanics.frame_images.length === frameCount && referenceSlots.mechanics.frame_images.every(Boolean) : Boolean(referenceSlots.mechanics.image);
+      return Boolean(referenceSlots.identity.image) && mechanicsReady;
+    }
+
+    function normalizeMeta(value) {
+      return {
+        locked: Boolean(value?.locked),
+        qa: ["review", "pass", "fail"].includes(value?.qa) ? value.qa : "review",
+        note: String(value?.note || ""),
+        correction: String(value?.correction || ""),
+        gates: Object.fromEntries(quality_gates.map(gate => [gate.id, ["pending", "pass", "fail", "stale"].includes(value?.gates?.[gate.id]) ? value.gates[gate.id] : "pending"])),
+        revision: Number.isInteger(value?.revision) ? value.revision : 0
+      };
+    }
+
+    function normalizeVariant(value) {
+      return {
+        id: String(value?.id || uniqueId("variant")),
+        name: String(value?.name || "Variante importada"),
+        created_at: String(value?.created_at || new Date().toISOString()),
+        asset_key: value?.asset_key ? String(value.asset_key) : null,
+        provenance: String(value?.provenance || "imported-unverified"),
+        image: null
+      };
+    }
+
+    function initializeProjectFrames() {
+      transforms = Array.from({ length: frameCount }, blankTransform);
+      frameMeta = Array.from({ length: frameCount }, blankMeta);
+      frameOverrides = Array(frameCount).fill(null);
+      frameVariants = Array.from({ length: frameCount }, () => []);
+      activeVariantIds = Array(frameCount).fill("original");
+      correctionQueue = [];
+      selectedFrames = new Set([0]);
+      selectedVariantId = "original";
+    }
+
+    function applyProjectPayload(stored) {
+      if (!validProjectTransforms(stored)) return false;
+      transforms = stored.transforms.map(value => ({ x: value.x, y: value.y, scale: value.scale }));
+      if (Array.isArray(stored.frame_meta) && stored.frame_meta.length === frameCount) frameMeta = stored.frame_meta.map(normalizeMeta);
+      if (stored.kind === PROJECT_KIND) {
+        projectState = { ...projectState, ...(stored.project || {}) };
+        projectState.name = String(projectState.name || "Side-view walk · 6 frames");
+        controls.projectName.value = projectState.name;
+        correctionQueue = Array.isArray(stored.correction_jobs) ? stored.correction_jobs.map(job => ({ ...job })) : [];
+        frameVariants = Array.from({ length: frameCount }, (_, index) => Array.isArray(stored.frame_variants?.[index]) ? stored.frame_variants[index].map(normalizeVariant) : []);
+        activeVariantIds = Array.from({ length: frameCount }, (_, index) => String(stored.active_variants?.[index] || "original"));
+        selectedFrames = new Set([frame]);
+        for (const role of ["identity", "mechanics"]) {
+          const savedReference = stored.reference_slots?.[role];
+          if (savedReference) referenceSlots[role] = {
+            ...referenceSlots[role], name: String(savedReference.name || `No ${role}`), asset_key: savedReference.asset_key || null,
+            source_url: savedReference.source_url || null, frame_urls: role === "mechanics" && Array.isArray(savedReference.frame_urls) ? [...savedReference.frame_urls] : [],
+            image: null, frame_images: role === "mechanics" ? [] : undefined
+          };
+        }
+      }
+      if (Number.isFinite(stored.baseline_ratio)) controls.baseline.value = String(stored.baseline_ratio * 100);
+      return true;
+    }
+
+    function validProjectTransforms(stored) {
+      return Array.isArray(stored?.transforms) && stored.transforms.length === frameCount && stored.transforms.every(value => value && [value.x, value.y, value.scale].every(item => typeof item === "number" && Number.isFinite(item)) && value.scale > 0);
+    }
+
+    async function restoreDurableAssets() {
+      for (const role of ["identity", "mechanics"]) {
+        try {
+          const blob = await getAsset(referenceSlots[role].asset_key);
+          if (blob) referenceSlots[role].image = await imageFromBlob(blob);
+          else if (referenceSlots[role].source_url) referenceSlots[role].image = await imageFromUrl(referenceSlots[role].source_url);
+          if (role === "mechanics" && referenceSlots.mechanics.frame_urls?.length) referenceSlots.mechanics.frame_images = await Promise.all(referenceSlots.mechanics.frame_urls.map(url => imageFromUrl(url).catch(() => null)));
+        } catch { /* JSON remains usable when browser storage is unavailable. */ }
+      }
+      for (let index = 0; index < frameVariants.length; index += 1) {
+        for (const variant of frameVariants[index]) {
+          try { const blob = await getAsset(variant.asset_key); if (blob) variant.image = await imageFromBlob(blob); }
+          catch { variant.image = null; }
+        }
+      }
+      syncFrameOverrides();
+      updateReferenceSlots();
+    }
+
+    async function loadStoredProject() {
+      initializeProjectFrames();
+      try {
+        let stored = JSON.parse(localStorage.getItem(storageKey()) || "null");
+        if (!stored) stored = JSON.parse(localStorage.getItem(legacyStorageKey()) || "null");
+        if (stored?.kind === PROJECT_KIND && (stored.source !== controls.url.value || Number(stored.grid?.columns) !== settings().columns || Number(stored.grid?.rows) !== settings().rows)) {
+          projectState = { id: uniqueId("walk-project"), name: `${projectState.name} · new source`, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+          controls.projectName.value = projectState.name;
+          setStatus("The sheet or grid does not match the saved project. A clean state was opened to keep candidates separate.", "error");
+          setSessionStatus("New source · unsaved project", true); return "mismatch";
+        }
+        if (applyProjectPayload(stored)) {
+          await restoreDurableAssets();
+          setStatus(stored.kind === PROJECT_KIND ? "Project v3 restored." : "Project v2 migrated into the editor.", "success");
+          setSessionStatus("Local save restored", false);
+          return "restored";
+        }
+        setSessionStatus("New project · unsaved", true); return "new";
+      } catch { setStatus("The local project could not be restored.", "error"); return "error"; }
+    }
+
+    function correctionPayload() {
+      return {
+        version: PROJECT_VERSION,
+        kind: PROJECT_KIND,
+        project: { ...projectState, name: controls.projectName.value.trim() || projectState.name, updated_at: new Date().toISOString() },
+        animation_contract,
+        source: controls.url.value,
+        grid: { columns: settings().columns, rows: settings().rows, order: "row-major" },
+        baseline_ratio: Number(controls.baseline.value) / 100,
+        transforms: transforms.map((value, index) => ({ frame: index + 1, x: value.x, y: value.y, scale: value.scale })),
+        frame_meta: frameMeta.map((value, index) => ({ frame: index + 1, phase: phases[index] || `frame ${index + 1}`, ...value })),
+        quality_gates: quality_gates.map(gate => ({ ...gate })),
+        reference_slots: Object.fromEntries(["identity", "mechanics"].map(role => [role, { role, name: referenceSlots[role].name, asset_key: referenceSlots[role].asset_key, source_url: referenceSlots[role].source_url || null, frame_urls: role === "mechanics" ? [...(referenceSlots.mechanics.frame_urls || [])] : [] }])),
+        frame_variants: frameVariants.map(variants => variants.map(({ image: ignoredImage, ...variant }) => variant)),
+        active_variants: [...activeVariantIds],
+        selected_frames: [...selectedFrames].sort((a, b) => a - b).map(index => index + 1),
+        correction_jobs: correctionQueue.map(job => ({ ...job })),
+        replacements_in_session: frameOverrides.map(Boolean)
+      };
+    }
+
+    function alignmentProfilePayload() {
+      return {
+        version: 2,
+        kind: "sprite-frame-registration-corrections",
+        source: controls.url.value,
+        grid: { columns: settings().columns, rows: settings().rows, order: "row-major" },
+        baseline_ratio: Number(controls.baseline.value) / 100,
+        transforms: transforms.map((value, index) => ({ frame: index + 1, x: value.x, y: value.y, scale: value.scale })),
+        frame_meta: frameMeta.map((value, index) => ({ frame: index + 1, phase: phases[index] || `frame ${index + 1}`, locked: value.locked, qa: value.qa, note: value.note, correction: value.correction }))
+      };
+    }
+
+    function saveProject(explicit = false) {
+      if (!loadedSheetMatches() || transforms.length !== frameCount || frameMeta.length !== frameCount) {
+        setStatus("Load the selected sheet and grid before saving its project.", "error"); setSessionStatus("No matching loaded sheet", true); return false;
+      }
+      try {
+        projectState.name = controls.projectName.value.trim() || projectState.name;
+        projectState.updated_at = new Date().toISOString();
+        localStorage.setItem(storageKey(), JSON.stringify(correctionPayload()));
+        localStorage.setItem(CURRENT_PROJECT_KEY, projectState.id);
+        const index = JSON.parse(localStorage.getItem(PROJECT_INDEX_KEY) || "[]").filter(item => item.id !== projectState.id);
+        index.unshift({ id: projectState.id, name: projectState.name, updated_at: projectState.updated_at });
+        localStorage.setItem(PROJECT_INDEX_KEY, JSON.stringify(index.slice(0, 20)));
+        projectDirty = false;
+        setSessionStatus(explicit ? `Guardado · ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Autoguardado local", false);
+        return true;
+      } catch { setStatus("The browser could not persist the project. Export its JSON to retain metadata.", "error"); setSessionStatus("No local persistence", true); return false; }
+    }
+    function markDirty() { projectDirty = true; setSessionStatus("Pending changes", true); }
+    function setStatus(message, kind = "") { const node = $("#status"); node.textContent = message; node.className = `status ${kind}`.trim(); }
+
+    function captureState() {
+      return {
+        transforms: transforms.map(value => ({ ...value })),
+        frameMeta: frameMeta.map(value => ({ ...value, gates: { ...value.gates } })),
+        frameVariants: frameVariants.map(variants => variants.map(value => ({ ...value }))),
+        activeVariantIds: [...activeVariantIds],
+        correctionQueue: correctionQueue.map(job => ({ ...job })),
+        baseline: controls.baseline.value
+      };
+    }
+    function recordHistory() {
+      if (!transforms.length) return;
+      history.push(captureState());
+      if (history.length > 80) history.shift();
+      future = [];
+      updateHistoryButtons();
+    }
+    function restoreState(state) {
+      transforms = state.transforms.map(value => ({ ...value }));
+      frameMeta = state.frameMeta.map(value => ({ ...value, gates: { ...value.gates } }));
+      frameVariants = state.frameVariants.map(variants => variants.map(value => ({ ...value })));
+      activeVariantIds = [...state.activeVariantIds];
+      correctionQueue = state.correctionQueue.map(job => ({ ...job }));
+      syncFrameOverrides();
+      controls.baseline.value = state.baseline;
+      saveProject(); updateInspector(); drawStage(); rebuildFilmstrip(); renderCorrectionQueue(); updateHistoryButtons();
+    }
+    function undo() { if (!history.length) return; future.push(captureState()); restoreState(history.pop()); setStatus("Cambio deshecho.", "success"); }
+    function redo() { if (!future.length) return; history.push(captureState()); restoreState(future.pop()); setStatus("Cambio rehecho.", "success"); }
+    function updateHistoryButtons() { controls.undo.disabled = history.length === 0; controls.redo.disabled = future.length === 0; }
+
+    function updateViewer() {
+      controls.lightTable.style.transform = `translate(${viewer.x}px, ${viewer.y}px) scale(${viewer.zoom})`;
+      controls.zoomReadout.value = `${Math.round(viewer.zoom * 100)}%`;
+      controls.zoomReadout.textContent = `${Math.round(viewer.zoom * 100)}%`;
+    }
+    function setZoom(next) { viewer.zoom = clamp(next, .25, 4); updateViewer(); }
+    function fitView() {
+      const availableWidth = Math.max(1, controls.stage.clientWidth - 48);
+      const availableHeight = Math.max(1, controls.stage.clientHeight - 48);
+      const baseWidth = Math.max(1, controls.lightTable.offsetWidth);
+      const baseHeight = Math.max(1, controls.lightTable.offsetHeight);
+      viewer.zoom = clamp(Math.min(availableWidth / baseWidth, availableHeight / baseHeight), .25, 1);
+      viewer.x = 0; viewer.y = 0; updateViewer();
+    }
+
+    function drawSourceFrame(context, index, transform, alpha = 1) {
+      const { columns } = settings();
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      const scaledWidth = cellWidth * transform.scale;
+      const scaledHeight = cellHeight * transform.scale;
+      const dx = transform.x + (cellWidth - scaledWidth) / 2;
+      const dy = transform.y + (cellHeight - scaledHeight) / 2;
+      context.save();
+      context.globalAlpha = alpha;
+      const override = frameOverrides[index];
+      if (override?.naturalWidth) context.drawImage(override, 0, 0, override.naturalWidth, override.naturalHeight, dx, dy, scaledWidth, scaledHeight);
+      else context.drawImage(image, column * cellWidth, row * cellHeight, cellWidth, cellHeight, dx, dy, scaledWidth, scaledHeight);
+      context.restore();
+    }
+
+    function themeToken(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+    function drawGuides() {
+      guideContext.clearRect(0, 0, cellWidth, cellHeight);
+      guideContext.save();
+      const guideColor = themeToken("--accent"); const baselineColor = themeToken("--warn"); const boundsColor = themeToken("--muted");
+      const baselineY = cellHeight * Number(controls.baseline.value) / 100;
+      if (controls.showThirds.checked) {
+        guideContext.strokeStyle = guideColor; guideContext.globalAlpha = .35;
+        guideContext.lineWidth = Math.max(1, cellWidth / 700);
+        guideContext.setLineDash([8, 8]);
+        [1 / 3, 2 / 3].forEach(ratio => {
+          guideContext.beginPath(); guideContext.moveTo(cellWidth * ratio, 0); guideContext.lineTo(cellWidth * ratio, cellHeight); guideContext.stroke();
+          guideContext.beginPath(); guideContext.moveTo(0, cellHeight * ratio); guideContext.lineTo(cellWidth, cellHeight * ratio); guideContext.stroke();
+        });
+      }
+      if (controls.showCenter.checked || snapGuides.x) {
+        guideContext.strokeStyle = guideColor; guideContext.globalAlpha = snapGuides.x ? 1 : .7;
+        guideContext.lineWidth = snapGuides.x ? Math.max(3, cellWidth / 320) : Math.max(1, cellWidth / 700);
+        guideContext.setLineDash(snapGuides.x ? [] : [12, 7]);
+        guideContext.beginPath(); guideContext.moveTo(cellWidth / 2, 0); guideContext.lineTo(cellWidth / 2, cellHeight); guideContext.stroke();
+      }
+      if (controls.showBaseline.checked || snapGuides.y) {
+        guideContext.strokeStyle = snapGuides.y ? guideColor : baselineColor; guideContext.globalAlpha = 1;
+        guideContext.lineWidth = snapGuides.y ? Math.max(3, cellWidth / 320) : Math.max(2, cellWidth / 420);
+        guideContext.setLineDash([]);
+        guideContext.beginPath(); guideContext.moveTo(0, baselineY); guideContext.lineTo(cellWidth, baselineY); guideContext.stroke();
+      }
+      if (controls.showBounds.checked) {
+        const inset = cellWidth * .06;
+        guideContext.strokeStyle = boundsColor; guideContext.globalAlpha = .6;
+        guideContext.lineWidth = Math.max(1, cellWidth / 700);
+        guideContext.setLineDash([4, 5]);
+        guideContext.strokeRect(inset, inset, cellWidth - inset * 2, cellHeight - inset * 2);
+      }
+      guideContext.restore();
+      $("#guideReadout").textContent = `baseline ${Number(controls.baseline.value).toFixed(1)}% · root 50%${snapGuides.x || snapGuides.y ? " · snap" : ""}`;
+    }
+
+    function drawStage() {
+      if (!image.naturalWidth) return;
+      frameContext.clearRect(0, 0, cellWidth, cellHeight);
+      const opacity = Number(controls.onionOpacity.value);
+      const previousIndex = (frame - 1 + frameCount) % frameCount;
+      const nextIndex = (frame + 1) % frameCount;
+      if (controls.compareMode.value === "difference") {
+        drawSourceFrame(frameContext, previousIndex, transforms[previousIndex], 1);
+        frameContext.save(); frameContext.globalCompositeOperation = "difference"; drawSourceFrame(frameContext, frame, transforms[frame], 1); frameContext.restore();
+      } else {
+        if (controls.compareMode.value === "onion" && controls.onionPrevious.checked) drawSourceFrame(frameContext, previousIndex, transforms[previousIndex], opacity);
+        if (controls.compareMode.value === "onion" && controls.onionNext.checked) drawSourceFrame(frameContext, nextIndex, transforms[nextIndex], opacity);
+        drawSourceFrame(frameContext, frame, transforms[frame], 1);
+      }
+      drawGuides();
+      $("#stageFrame").textContent = `F${String(frame + 1).padStart(2, "0")}`;
+      $("#stagePhase").textContent = phases[frame] || `frame ${frame + 1}`;
+      $("#frameLabel").textContent = `${String(frame + 1).padStart(2, "0")} / ${String(frameCount).padStart(2, "0")}`;
+      controls.scrubber.value = String(frame);
+      updateDerivedReferences();
+    }
+
+    function invalidateFrameGates(index, reason = "changed") {
+      const meta = frameMeta[index];
+      if (!meta) return;
+      meta.revision = (meta.revision || 0) + 1;
+      for (const gate of quality_gates) if (meta.gates[gate.id] === "pass") meta.gates[gate.id] = "stale";
+      correctionQueue.forEach(job => { if (job.target_frame === index + 1 && ["ready", "exported"].includes(job.status)) { job.status = "stale"; job.stale_reason = reason; } });
+    }
+
+    function renderGateChecklist() {
+      const meta = frameMeta[frame] || blankMeta();
+      controls.gateChecklist.replaceChildren();
+      quality_gates.forEach(gate => {
+        const row = document.createElement("label"); row.className = "gate-row";
+        const label = document.createElement("span"); label.textContent = gate.label;
+        const select = document.createElement("select"); select.dataset.gate = gate.id; select.setAttribute("aria-label", `${gate.label} for frame ${frame + 1}`);
+        [["pending", "Pending"], ["pass", "Pass"], ["fail", "Fail"], ["stale", "Rerun"]].forEach(([value, text]) => { const option = document.createElement("option"); option.value = value; option.textContent = text; select.append(option); });
+        select.value = meta.gates[gate.id] || "pending";
+        select.addEventListener("change", () => { recordHistory(); frameMeta[frame].gates[gate.id] = select.value; markDirty(); saveProject(); updateGateSummary(); updateReadiness(); });
+        row.append(label, select); controls.gateChecklist.append(row);
+      });
+      updateGateSummary();
+    }
+
+    function updateGateSummary() {
+      const assessments = frameMeta.flatMap(meta => quality_gates.map(gate => meta.gates?.[gate.id] || "pending"));
+      const passed = assessments.filter(value => value === "pass").length;
+      const failed = assessments.filter(value => value === "fail").length;
+      const stale = assessments.filter(value => value === "stale").length;
+      controls.gateSummary.textContent = `${passed}/${assessments.length} approved · ${failed} failed · ${stale} to rerun`;
+      controls.gateSummary.className = `gate-summary ${failed ? "fail" : passed === assessments.length ? "pass" : ""}`.trim();
+    }
+
+    function updateReadiness() {
+      const node = $("#readinessSummary");
+      const assessments = frameMeta.flatMap(meta => quality_gates.map(gate => meta.gates?.[gate.id] || "pending"));
+      const unresolvedJobs = correctionQueue.filter(job => !["accepted", "rejected"].includes(job.status)).length;
+      const contractMatches = loadedSheetMatches() && frameCount === animation_contract.frame_count;
+      const hasReferences = referencesReady();
+      const ready = contractMatches && assessments.length > 0 && assessments.every(value => value === "pass") && unresolvedJobs === 0 && hasReferences;
+      node.textContent = ready ? "Manual gates complete · convert the review into hash-bound CLI evidence." : `Draft blocked · ${assessments.filter(value => value !== "pass").length} pending/failed gates · ${unresolvedJobs} open jobs${hasReferences ? "" : " · missing references"}${contractMatches ? "" : " · requires six-frame contract"}.`;
+      node.style.borderColor = ready ? "var(--ok)" : "var(--bad)";
+    }
+
+    function syncFrameOverrides(index = null) {
+      const indices = index === null ? Array.from({ length: frameCount }, (_, value) => value) : [index];
+      indices.forEach(value => {
+        const activeId = activeVariantIds[value] || "original";
+        frameOverrides[value] = activeId === "original" ? null : frameVariants[value]?.find(variant => variant.id === activeId)?.image || null;
+      });
+    }
+
+    function renderVariantList() {
+      controls.variantList.replaceChildren();
+      const items = [{ id: "original", name: "Original sheet frame", created_at: "base", image: image }].concat(frameVariants[frame] || []);
+      if (!items.some(item => item.id === selectedVariantId)) selectedVariantId = activeVariantIds[frame] || "original";
+      items.forEach(item => {
+        const button = document.createElement("button"); button.type = "button"; button.className = "variant-item";
+        button.classList.toggle("active", item.id === activeVariantIds[frame]); button.classList.toggle("selected", item.id === selectedVariantId);
+        const title = document.createElement("strong"); title.textContent = item.name;
+        const detail = document.createElement("small"); detail.textContent = item.id === "original" ? "Immutable source" : `${item.image ? "Available" : "Asset not loaded"} · ${new Date(item.created_at).toLocaleString()}`;
+        button.append(title, detail); button.addEventListener("click", () => { selectedVariantId = item.id; renderVariantList(); }); controls.variantList.append(button);
+      });
+      controls.activateVariant.disabled = selectedVariantId === activeVariantIds[frame] || (selectedVariantId !== "original" && !frameVariants[frame]?.find(item => item.id === selectedVariantId)?.image);
+      $("#clearReplacement").disabled = activeVariantIds[frame] === "original";
+    }
+
+    function updateReferenceSlots() {
+      for (const role of ["identity", "mechanics"]) {
+        const node = $(`#reference${role[0].toUpperCase()}${role.slice(1)}`);
+        const preview = node.querySelector(".reference-preview");
+        const title = node.querySelector("strong");
+        preview.replaceChildren();
+        const activeReference = referenceImage(role, frame);
+        if (activeReference) {
+          const thumbnail = document.createElement("img"); thumbnail.src = activeReference.src; thumbnail.alt = ""; preview.append(thumbnail);
+          node.classList.add("has-asset"); title.textContent = `${role === "identity" ? "Identity" : "Mechanics"} · ${referenceSlots[role].name}`;
+        } else {
+          preview.textContent = role === "identity" ? "ID" : "MEC"; node.classList.remove("has-asset"); title.textContent = role === "identity" ? "Identity" : "Mechanics";
+        }
+      }
+      updateReadiness();
+    }
+
+    function drawReferenceCanvas(canvas, index) {
+      if (!canvas || !image.naturalWidth || !transforms[index]) return;
+      const context = canvas.getContext("2d"); context.clearRect(0, 0, canvas.width, canvas.height);
+      const temp = renderedFrameCanvas(index); const scale = Math.min(canvas.width / temp.width, canvas.height / temp.height) * .94;
+      context.drawImage(temp, (canvas.width - temp.width * scale) / 2, (canvas.height - temp.height * scale) / 2, temp.width * scale, temp.height * scale);
+    }
+    function updateDerivedReferences() {
+      if (!frameCount) return;
+      drawReferenceCanvas($("#referencePrevious"), (frame - 1 + frameCount) % frameCount);
+      drawReferenceCanvas($("#referenceNext"), (frame + 1) % frameCount);
+    }
+
+    function updateInspector() {
+      const transform = transforms[frame] || blankTransform();
+      const meta = frameMeta[frame] || blankMeta();
+      controls.offsetX.value = String(Number(transform.x.toFixed(2)));
+      controls.offsetY.value = String(Number(transform.y.toFixed(2)));
+      controls.scale.value = String(Number((transform.scale * 100).toFixed(2)));
+      controls.frameLocked.checked = meta.locked;
+      controls.qaStatus.value = meta.qa;
+      controls.frameNote.value = meta.note;
+      controls.correctionPrompt.value = meta.correction;
+      [controls.offsetX, controls.offsetY, controls.scale, $("#resetFrame"), $("#pasteTransform")].forEach(node => { if (node) node.disabled = meta.locked || (node.id === "pasteTransform" && !clipboardTransform); });
+      controls.lightTable.classList.toggle("frame-locked", meta.locked);
+      selectedVariantId = activeVariantIds[frame] || "original";
+      renderGateChecklist(); renderVariantList(); renderCorrectionQueue(); updateSelectionSummary(); updateReferenceSlots();
+    }
+
+    function drawThumbnail(canvas, index) {
+      const context = canvas.getContext("2d");
+      canvas.width = 180; canvas.height = 116;
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      const temp = document.createElement("canvas"); temp.width = cellWidth; temp.height = cellHeight;
+      drawSourceFrame(temp.getContext("2d"), index, transforms[index], 1);
+      const scale = Math.min(canvas.width / cellWidth, canvas.height / cellHeight) * .92;
+      const width = cellWidth * scale; const height = cellHeight * scale;
+      context.drawImage(temp, (canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
+    }
+    function refreshThumbnail(index) { const canvas = document.querySelector(`.frame-thumb[data-frame="${index}"] canvas`); if (canvas) drawThumbnail(canvas, index); }
+
+    function rebuildFilmstrip() {
+      const root = $("#filmstrip"); root.replaceChildren();
+      for (let index = 0; index < frameCount; index += 1) {
+        const button = document.createElement("button"); button.type = "button"; button.className = "frame-thumb"; button.dataset.frame = String(index);
+        button.setAttribute("aria-label", `Select frame ${index + 1}: ${phases[index] || "no phase"}`);
+        const canvas = document.createElement("canvas"); const label = document.createElement("span");
+        label.dataset.base = `${String(index + 1).padStart(2, "0")} · ${phases[index] || "frame"}`;
+        button.append(canvas, label); button.addEventListener("click", event => toggleFrameSelection(index, event)); root.append(button); drawThumbnail(canvas, index);
+      }
+      updateFilmstripState();
+    }
+
+    function updateFilmstripState() {
+      document.querySelectorAll(".frame-thumb").forEach((node, index) => {
+        const meta = frameMeta[index] || blankMeta();
+        node.classList.toggle("selected", index === frame);
+        node.classList.toggle("multi-selected", selectedFrames.has(index));
+        node.classList.toggle("dirty", isDirty(transforms[index]));
+        node.classList.toggle("locked", meta.locked);
+        node.classList.toggle("queued", correctionQueue.some(job => job.target_frame === index + 1 && !["accepted", "rejected"].includes(job.status)));
+        node.dataset.qa = meta.qa;
+        const label = node.querySelector("span");
+        const variantCount = frameVariants[index]?.length || 0;
+        label.textContent = `${label.dataset.base}${meta.locked ? " · locked" : ""}${activeVariantIds[index] !== "original" ? ` · v${variantCount}` : variantCount ? ` · ${variantCount} alt` : ""}`;
+      });
+    }
+
+    function updateSelectionSummary() {
+      const ordered = [...selectedFrames].sort((a, b) => a - b);
+      controls.selectionSummary.textContent = ordered.length ? `${ordered.length} frame${ordered.length === 1 ? "" : "s"}: ${ordered.map(index => `F${index + 1}`).join(", ")} · fixed order` : "No frames selected";
+    }
+    function toggleFrameSelection(index, event = {}) {
+      const multi = controls.selectionMode.checked || event.ctrlKey || event.metaKey || event.shiftKey;
+      if (!multi) selectedFrames = new Set([index]);
+      else if (event.shiftKey) {
+        const start = Math.min(lastSelectedFrame, index); const end = Math.max(lastSelectedFrame, index);
+        for (let value = start; value <= end; value += 1) selectedFrames.add(value);
+      } else if (selectedFrames.has(index) && selectedFrames.size > 1) selectedFrames.delete(index);
+      else selectedFrames.add(index);
+      lastSelectedFrame = index; selectFrame(index, true); markDirty(); saveProject();
+    }
+    function selectFrame(index, preserveSelection = false, lightweight = false) {
+      frame = (index + frameCount) % frameCount;
+      if (!preserveSelection && !controls.selectionMode.checked) selectedFrames = new Set([frame]);
+      if (!lightweight) updateInspector();
+      drawStage(); updateFilmstripState();
+    }
+    function stop() { const wasPlaying = timer !== null; if (wasPlaying) window.clearInterval(timer); timer = null; controls.play.textContent = "Play"; if (wasPlaying) updateInspector(); }
+    function play() { if (timer !== null) { stop(); return; } controls.play.textContent = "Pause"; timer = window.setInterval(() => selectFrame(frame + 1, false, true), 1000 / settings().fps); }
+
+    function loadSheet() { stop(); history = []; future = []; fitView(); setStatus("Loading sheet…"); image.src = controls.url.value; }
+    image.addEventListener("load", async () => {
+      try {
+        const { columns, rows } = settings();
+        if (image.currentSrc !== new URL(controls.url.value, location.href).href) throw new Error("The sheet URL changed while loading. Load the intended source again.");
+        if (image.naturalWidth % columns || image.naturalHeight % rows) throw new Error("The dimensions are not divisible by the declared grid.");
+        frameCount = columns * rows; cellWidth = image.naturalWidth / columns; cellHeight = image.naturalHeight / rows;
+        loadedSheet = { source: controls.url.value, imageSrc: image.currentSrc, columns, rows };
+        frameCanvas.width = guideCanvas.width = cellWidth; frameCanvas.height = guideCanvas.height = cellHeight;
+        controls.scrubber.max = String(frameCount - 1); frame = 0;
+        const projectLoadState = await loadStoredProject(); rebuildFilmstrip(); updateInspector(); drawStage(); updateHistoryButtons(); requestAnimationFrame(fitView);
+        if (projectLoadState !== "mismatch" && projectLoadState !== "error") setStatus(`${frameCount} frames loaded. Non-destructive editor ready.`, "success");
+      } catch (error) { setStatus(error.message, "error"); }
+    });
+    image.addEventListener("error", () => { stop(); setStatus("The sheet could not be loaded. Check the URL or local server.", "error"); });
+
+    function applyInspector() {
+      if (frameMeta[frame]?.locked) return updateInspector();
+      transforms[frame] = { x: Number(controls.offsetX.value) || 0, y: Number(controls.offsetY.value) || 0, scale: clamp((Number(controls.scale.value) || 100) / 100, .5, 1.5) };
+      invalidateFrameGates(frame, "registration changed"); markDirty(); saveProject(); drawStage(); refreshThumbnail(frame); updateFilmstripState(); renderGateChecklist(); renderCorrectionQueue();
+    }
+    [controls.offsetX, controls.offsetY, controls.scale].forEach(node => { node.addEventListener("focus", recordHistory); node.addEventListener("input", applyInspector); });
+    [controls.showBaseline, controls.showCenter, controls.showThirds, controls.showBounds, controls.onionPrevious, controls.onionNext, controls.onionOpacity, controls.compareMode].forEach(node => node.addEventListener("input", drawStage));
+    controls.baseline.addEventListener("focus", recordHistory); controls.baseline.addEventListener("input", () => { frameMeta.forEach((_, index) => invalidateFrameGates(index, "baseline changed")); markDirty(); saveProject(); drawStage(); renderGateChecklist(); renderCorrectionQueue(); });
+
+    controls.load.addEventListener("click", loadSheet); controls.play.addEventListener("click", play);
+    controls.previous.addEventListener("click", () => { stop(); selectFrame(frame - 1); }); controls.next.addEventListener("click", () => { stop(); selectFrame(frame + 1); });
+    controls.scrubber.addEventListener("input", () => { stop(); selectFrame(Number(controls.scrubber.value)); });
+    controls.fps.addEventListener("change", () => { if (timer !== null) { stop(); play(); } });
+    controls.undo.addEventListener("click", undo); controls.redo.addEventListener("click", redo);
+    controls.zoomIn.addEventListener("click", () => setZoom(viewer.zoom * 1.2)); controls.zoomOut.addEventListener("click", () => setZoom(viewer.zoom / 1.2)); controls.fitView.addEventListener("click", fitView);
+    controls.stage.addEventListener("wheel", event => { event.preventDefault(); setZoom(viewer.zoom * (event.deltaY < 0 ? 1.1 : .9)); }, { passive: false });
+
+    controls.frameLocked.addEventListener("change", () => { recordHistory(); frameMeta[frame].locked = controls.frameLocked.checked; markDirty(); saveProject(); updateInspector(); updateFilmstripState(); setStatus(`Frame ${frame + 1} ${frameMeta[frame].locked ? "locked" : "unlocked"}.`, "success"); });
+    controls.qaStatus.addEventListener("change", () => { recordHistory(); frameMeta[frame].qa = controls.qaStatus.value; markDirty(); saveProject(); updateFilmstripState(); updateReadiness(); });
+    controls.frameNote.addEventListener("focus", recordHistory); controls.frameNote.addEventListener("input", () => { frameMeta[frame].note = controls.frameNote.value; markDirty(); saveProject(); });
+    controls.correctionPrompt.addEventListener("focus", recordHistory); controls.correctionPrompt.addEventListener("input", () => { frameMeta[frame].correction = controls.correctionPrompt.value; markDirty(); saveProject(); });
+
+    $("#resetFrame").addEventListener("click", () => { if (frameMeta[frame].locked) return; recordHistory(); transforms[frame] = blankTransform(); invalidateFrameGates(frame, "registration reset"); markDirty(); saveProject(); updateInspector(); drawStage(); refreshThumbnail(frame); updateFilmstripState(); setStatus(`Frame ${frame + 1} reset.`, "success"); });
+    $("#copyTransform").addEventListener("click", () => { clipboardTransform = { ...transforms[frame] }; updateInspector(); setStatus(`Frame ${frame + 1} adjustment copied.`, "success"); });
+    $("#pasteTransform").addEventListener("click", () => { if (!clipboardTransform || frameMeta[frame].locked) return; recordHistory(); transforms[frame] = { ...clipboardTransform }; invalidateFrameGates(frame, "registration pasted"); markDirty(); saveProject(); updateInspector(); drawStage(); refreshThumbnail(frame); updateFilmstripState(); });
+    $("#resetAll").addEventListener("click", () => {
+      if (!window.confirm("Reset transforms, QA, notes, and replacements for every frame?")) return;
+      recordHistory(); initializeProjectFrames(); markDirty(); saveProject(); updateInspector(); drawStage(); rebuildFilmstrip(); renderCorrectionQueue(); setStatus("Project reset.", "success");
+    });
+
+    document.querySelectorAll(".viewer-tools [data-background]").forEach(button => button.addEventListener("click", () => {
+      controls.lightTable.dataset.background = button.dataset.background;
+      document.querySelectorAll(".viewer-tools [data-background]").forEach(candidate => candidate.setAttribute("aria-pressed", String(candidate === button)));
+    }));
+    $("#theme-toggle").addEventListener("click", () => requestAnimationFrame(drawStage));
+    document.querySelectorAll(".inspector-tab").forEach(tab => tab.addEventListener("click", () => {
+      document.querySelectorAll(".inspector-tab").forEach(candidate => candidate.classList.toggle("active", candidate === tab));
+      document.querySelectorAll("[data-inspector-panel]").forEach(panel => { panel.hidden = panel.dataset.inspectorPanel !== tab.dataset.panelTarget; });
+    }));
+
+    controls.projectName.addEventListener("input", () => { projectState.name = controls.projectName.value; markDirty(); });
+    $("#saveProject").addEventListener("click", () => { if (saveProject(true)) setStatus("Project metadata saved locally; binary references remain in IndexedDB or the current session.", "success"); });
+    $("#newProject").addEventListener("click", () => {
+      if (!window.confirm("Create a clean project? The original sheet will not change, and the current project will remain in local storage.")) return;
+      stop(); projectState = { id: uniqueId("walk-project"), name: "Side-view walk · new candidate", created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      controls.projectName.value = projectState.name; referenceSlots.identity = { role: "identity", name: "No identity", image: null, asset_key: null, source_url: null }; referenceSlots.mechanics = { role: "mechanics", name: "No mechanics", image: null, asset_key: null, source_url: null, frame_urls: [], frame_images: [] };
+      initializeProjectFrames(); frame = 0; history = []; future = []; updateReferenceSlots(); rebuildFilmstrip(); updateInspector(); drawStage(); saveProject(true); setStatus("New project created with the six-frame contract intact.", "success");
+    });
+
+    controls.selectionMode.addEventListener("change", () => { if (!controls.selectionMode.checked) selectedFrames = new Set([frame]); updateSelectionSummary(); updateFilmstripState(); saveProject(); });
+    $("#applyBatchQa").addEventListener("click", () => {
+      if (!selectedFrames.size) return setStatus("Select at least one frame.", "error");
+      recordHistory(); selectedFrames.forEach(index => { frameMeta[index].qa = controls.batchQaStatus.value; }); markDirty(); saveProject(); updateInspector(); updateFilmstripState(); setStatus(`QA applied to ${selectedFrames.size} frames. Contract gates were not changed.`, "success");
+    });
+
+    async function loadReference(role, file) {
+      if (!file) return;
+      const projectFrames = frameMeta;
+      const projectId = projectState.id;
+      try {
+        const assetKey = `${projectId}:reference:${role}:${uniqueId("asset")}`;
+        const referenceImage = await imageFromBlob(file);
+        if (frameMeta !== projectFrames || projectState.id !== projectId) return setStatus("The project changed while reading the reference. Import it again in the intended project.", "error");
+        let persisted = true;
+        try { await putAsset(assetKey, file); } catch { persisted = false; }
+        if (frameMeta !== projectFrames || projectState.id !== projectId) return setStatus("The project changed while reading the reference. Import it again in the intended project.", "error");
+        referenceSlots[role] = { role, name: file.name, image: referenceImage, asset_key: persisted ? assetKey : null, source_url: null, frame_urls: [], frame_images: [] };
+        frameMeta.forEach((_, index) => invalidateFrameGates(index, `${role} reference changed`));
+        correctionQueue.forEach(job => { if (!["accepted", "rejected"].includes(job.status)) { job.status = "stale"; job.stale_reason = `${role} reference changed`; } });
+        markDirty(); const saved = saveProject(); updateReferenceSlots(); renderGateChecklist(); renderCorrectionQueue(); updateFilmstripState();
+        if (!saved) return;
+        setStatus(`${role === "identity" ? "Identity" : "Mechanics"} reference ready.${persisted ? "" : " Available for this session only; its binary asset was not saved."}`, persisted ? "success" : "error");
+      } catch { setStatus("The reference could not be read.", "error"); }
+    }
+    $("#referenceIdentity").addEventListener("click", () => $("#referenceIdentityFile").click());
+    $("#referenceMechanics").addEventListener("click", () => $("#referenceMechanicsFile").click());
+    $("#referenceIdentityFile").addEventListener("change", async event => { await loadReference("identity", event.target.files[0]); event.target.value = ""; });
+    $("#referenceMechanicsFile").addEventListener("change", async event => { await loadReference("mechanics", event.target.files[0]); event.target.value = ""; });
+    $("#useWorkbenchTemplates").addEventListener("click", async () => {
+      if (frameCount !== animation_contract.frame_count) return setStatus("The versioned templates belong to the six-frame walk contract.", "error");
+      const projectFrames = frameMeta; const projectId = projectState.id;
+      try {
+        setStatus("Loading versioned templates…");
+        const identityImage = await imageFromUrl(defaultIdentityReference);
+        const mechanicsImages = await Promise.all(defaultMechanicsReferences.map(url => imageFromUrl(url)));
+        if (frameMeta !== projectFrames || projectState.id !== projectId) return setStatus("The project changed while loading templates; load them again in the intended project.", "error");
+        if (!defaultIdentityReference || mechanicsImages.length !== frameCount) throw new Error("Incomplete template references");
+        referenceSlots.identity = { role: "identity", name: "Character transfer · identity anchor", image: identityImage, asset_key: null, source_url: defaultIdentityReference };
+        referenceSlots.mechanics = { role: "mechanics", name: "Articulated mannequin · frame mapped", image: null, asset_key: null, source_url: null, frame_urls: [...defaultMechanicsReferences], frame_images: mechanicsImages };
+        frameMeta.forEach((_, index) => invalidateFrameGates(index, "workbench references changed"));
+        correctionQueue.forEach(job => { if (!["accepted", "rejected"].includes(job.status)) { job.status = "stale"; job.stale_reason = "workbench references changed"; } });
+        markDirty(); const saved = saveProject(); updateReferenceSlots(); renderGateChecklist(); renderCorrectionQueue(); updateFilmstripState();
+        if (saved) setStatus("Identity and mechanics templates linked without regeneration.", "success");
+      } catch { setStatus("The workbench could not load the versioned templates.", "error"); }
+    });
+
+    async function importVariant(file, provenance = "imported-unverified") {
+      if (!file) return;
+      const targetFrame = frame; const projectFrames = frameMeta; const projectId = projectState.id;
+      if (!frameMeta[targetFrame] || frameMeta[targetFrame].locked) return setStatus("Unlock the target frame before importing a variant.", "error");
+      const revision = frameMeta[targetFrame].revision;
+      try {
+        const variantImage = await imageFromBlob(file); const id = uniqueId(`f${targetFrame + 1}-variant`); const assetKey = `${projectId}:frame:${targetFrame + 1}:${id}`;
+        if (frameMeta !== projectFrames || projectState.id !== projectId || frameMeta[targetFrame].locked || frameMeta[targetFrame].revision !== revision) return setStatus("The target changed while reading the variant. Import it again in the intended frame.", "error");
+        const expectedRatio = cellWidth / cellHeight; const actualRatio = variantImage.naturalWidth / variantImage.naturalHeight;
+        if (Math.abs(expectedRatio - actualRatio) > .01) throw new Error("The variant does not preserve the frame aspect ratio.");
+        const variant = { id, name: file.name, created_at: new Date().toISOString(), asset_key: assetKey, provenance, image: variantImage };
+        let persisted = true;
+        try { await putAsset(assetKey, file); } catch { persisted = false; variant.asset_key = null; }
+        if (frameMeta !== projectFrames || projectState.id !== projectId || frameMeta[targetFrame].locked || frameMeta[targetFrame].revision !== revision) return setStatus("The target changed while reading the variant. Import it again in the intended frame.", "error");
+        recordHistory(); frameVariants[targetFrame].push(variant); activeVariantIds[targetFrame] = id;
+        if (frame === targetFrame) selectedVariantId = id;
+        syncFrameOverrides(targetFrame); invalidateFrameGates(targetFrame, "active variant changed");
+        if (provenance === "imagegen-return") correctionQueue.forEach(job => { if (job.target_frame === targetFrame + 1 && !["accepted", "rejected"].includes(job.status)) job.status = "returned"; });
+        markDirty(); const saved = saveProject(); drawStage(); refreshThumbnail(targetFrame); updateInspector(); updateFilmstripState();
+        if (saved) setStatus(`Variant imported and activated for F${targetFrame + 1}.${persisted ? "" : " Session only; its binary asset was not saved."}`, persisted ? "success" : "error");
+      } catch (error) { setStatus(error.message || "The variant could not be loaded.", "error"); }
+    }
+    $("#addVariant").addEventListener("click", () => $("#variantFile").click());
+    $("#variantFile").addEventListener("change", async event => { await importVariant(event.target.files[0], "manual-variant"); event.target.value = ""; });
+    controls.activateVariant.addEventListener("click", () => {
+      if (selectedVariantId === activeVariantIds[frame]) return;
+      recordHistory(); activeVariantIds[frame] = selectedVariantId; syncFrameOverrides(frame); invalidateFrameGates(frame, "active variant changed"); markDirty(); saveProject(); drawStage(); refreshThumbnail(frame); updateInspector(); updateFilmstripState(); setStatus(`Active variant for F${frame + 1} updated.`, "success");
+    });
+
+    function applySnap(next, threshold) {
+      snapGuides = { x: false, y: false };
+      const mode = controls.snapMode.value;
+      if (["both", "center"].includes(mode) && Math.abs(next.x) <= threshold) { next.x = 0; snapGuides.x = true; }
+      if (["both", "baseline"].includes(mode) && Math.abs(next.y) <= threshold) { next.y = 0; snapGuides.y = true; }
+      return next;
+    }
+    function startGesture(type, event) {
+      if (type !== "pan" && frameMeta[frame]?.locked) return;
+      event.preventDefault(); stop();
+      if (type !== "pan") recordHistory();
+      const captureTarget = event.currentTarget;
+      if (captureTarget?.setPointerCapture) captureTarget.setPointerCapture(event.pointerId);
+      const rect = type === "pan" ? null : frameCanvas.getBoundingClientRect();
+      gesture = {
+        type, startX: event.clientX, startY: event.clientY, viewerX: viewer.x, viewerY: viewer.y, transform: { ...transforms[frame] },
+        pointerId: event.pointerId, captureTarget,
+        logicalX: rect ? cellWidth / Math.max(1, rect.width) : 0,
+        logicalY: rect ? cellHeight / Math.max(1, rect.height) : 0,
+        snapThreshold: rect ? 7 * cellWidth / Math.max(1, rect.width) : 0,
+        renderedWidth: rect?.width || 1
+      };
+      controls.stage.classList.toggle("panning", type === "pan");
+    }
+    controls.stage.addEventListener("pointerdown", event => { if (event.button === 1 || (event.button === 0 && spacePressed)) startGesture("pan", event); });
+    frameCanvas.addEventListener("pointerdown", event => { if (event.button === 0 && !spacePressed) startGesture("move", event); });
+    controls.scaleHandle.addEventListener("pointerdown", event => { if (event.button === 0) startGesture("scale", event); });
+    window.addEventListener("pointermove", event => {
+      if (!gesture) return;
+      if (gesture.type === "pan") { viewer.x = gesture.viewerX + event.clientX - gesture.startX; viewer.y = gesture.viewerY + event.clientY - gesture.startY; updateViewer(); return; }
+      if (gesture.type === "move") {
+        const next = applySnap({ ...gesture.transform, x: gesture.transform.x + (event.clientX - gesture.startX) * gesture.logicalX, y: gesture.transform.y + (event.clientY - gesture.startY) * gesture.logicalY }, gesture.snapThreshold);
+        transforms[frame] = next;
+      } else {
+        const delta = ((event.clientX - gesture.startX) - (event.clientY - gesture.startY)) / Math.max(160, gesture.renderedWidth * .55);
+        transforms[frame] = { ...gesture.transform, scale: clamp(gesture.transform.scale + delta, .5, 1.5) };
+      }
+      updateInspector(); drawStage(); refreshThumbnail(frame); updateFilmstripState();
+    });
+    function finishGesture() {
+      if (!gesture) return;
+      if (gesture.captureTarget?.hasPointerCapture?.(gesture.pointerId)) gesture.captureTarget.releasePointerCapture(gesture.pointerId);
+      const type = gesture.type; gesture = null; snapGuides = { x: false, y: false }; controls.stage.classList.remove("panning");
+      if (type !== "pan") { invalidateFrameGates(frame, "registration changed"); markDirty(); saveProject(); drawStage(); renderGateChecklist(); renderCorrectionQueue(); setStatus(`Frame ${frame + 1} adjusted directly.`, "success"); }
+    }
+    window.addEventListener("pointerup", finishGesture);
+    window.addEventListener("pointercancel", finishGesture);
+
+    function referenceRolesForFrame(index) {
+      const previousIndex = (index - 1 + frameCount) % frameCount; const nextIndex = (index + 1) % frameCount;
+      return [
+        { role: "identity", name: referenceSlots.identity.name, asset_key: referenceSlots.identity.asset_key, source_url: referenceSlots.identity.source_url, available: Boolean(referenceImage("identity", index)) },
+        { role: "mechanics", name: referenceSlots.mechanics.name, asset_key: referenceSlots.mechanics.asset_key, source_url: referenceSlots.mechanics.frame_urls?.[index] || referenceSlots.mechanics.source_url, frame: index + 1, available: Boolean(referenceImage("mechanics", index)) },
+        { role: "previous", frame: previousIndex + 1, active_variant: activeVariantIds[previousIndex] },
+        { role: "target_to_edit", frame: index + 1, active_variant: activeVariantIds[index], revision: frameMeta[index].revision },
+        { role: "next", frame: nextIndex + 1, active_variant: activeVariantIds[nextIndex] }
+      ];
+    }
+
+    function packetForFrame(index) {
+      if (!loadedSheetMatches() || frameCount !== animation_contract.frame_count || !Number.isInteger(index) || index < 0 || index >= frameCount) throw new Error("Load the intended sheet and grid for the six-frame walk contract before preparing corrections.");
+      const meta = frameMeta[index];
+      const failedGates = quality_gates.filter(gate => ["fail", "stale"].includes(meta.gates[gate.id])).map(gate => gate.id);
+      return {
+        version: 2,
+        kind: "sprite-imagegen-frame-correction-packet",
+        project_id: projectState.id,
+        workflow_contract_id: animation_contract.id,
+        target_frame: index + 1,
+        target_phase: phases[index] || `frame ${index + 1}`,
+        correction_request: meta.correction || `Correct F${index + 1} while preserving identity, framing, and every unmentioned part.`,
+        qa_status: meta.qa,
+        qa_note: meta.note,
+        generation_dependencies: animation_contract.generation_dependencies[index + 1] || [],
+        references: referenceRolesForFrame(index),
+        gates_to_repeat: failedGates.length ? failedGates : quality_gates.map(gate => gate.id),
+        preservation_contract: ["preserve character identity and anatomical marker ownership", "preserve crop, transparent background and frame scale unless explicitly requested", "change only the requested motion defect", "return exactly one frame"]
+      };
+    }
+
+    function renderCorrectionQueue() {
+      if (!controls.correctionQueue) return;
+      controls.correctionQueue.replaceChildren();
+      const currentJob = correctionQueue.find(job => job.target_frame === frame + 1 && !["accepted", "rejected"].includes(job.status));
+      $("#acceptCorrection").disabled = !currentJob || currentJob.status !== "returned" || activeVariantIds[frame] === "original";
+      $("#rejectCorrection").disabled = !currentJob || currentJob.status !== "returned";
+      const order = new Map(animation_contract.generation_order.map((value, index) => [value, index]));
+      const jobs = [...correctionQueue].sort((a, b) => (order.get(a.target_frame) ?? 99) - (order.get(b.target_frame) ?? 99));
+      if (!jobs.length) { const empty = document.createElement("p"); empty.className = "queue-empty"; empty.textContent = "No jobs. Select frames and prepare their corrections."; controls.correctionQueue.append(empty); return; }
+      jobs.forEach(job => {
+        const item = document.createElement("button"); item.type = "button"; item.className = "queue-item"; item.dataset.status = job.status;
+        const title = document.createElement("strong"); title.textContent = `F${job.target_frame} · ${job.phase}`;
+        const detail = document.createElement("small"); detail.textContent = `${job.status} · attempt ${job.attempt} · deps ${job.dependencies.length ? job.dependencies.join("+") : "start"}`;
+        item.append(title, detail); item.addEventListener("click", () => { controls.selectionMode.checked = false; selectedFrames = new Set([job.target_frame - 1]); selectFrame(job.target_frame - 1, true); }); controls.correctionQueue.append(item);
+      });
+    }
+
+    function queueSelectedCorrections() {
+      if (!selectedFrames.size) return setStatus("Select at least one frame.", "error");
+      if (!loadedSheetMatches() || frameCount !== animation_contract.frame_count) return setStatus("Load the intended sheet and grid for the six-frame walk contract before preparing corrections.", "error");
+      recordHistory();
+      const ordered = animation_contract.generation_order.map(value => value - 1).filter(index => selectedFrames.has(index));
+      ordered.forEach(index => {
+        const existing = correctionQueue.find(job => job.target_frame === index + 1 && !["accepted", "rejected"].includes(job.status));
+        const packet = packetForFrame(index);
+        const next = {
+          id: existing?.id || uniqueId(`job-f${index + 1}`), target_frame: index + 1, phase: phases[index] || `frame ${index + 1}`,
+          target_revision: frameMeta[index].revision, target_variant: activeVariantIds[index], defect: packet.correction_request,
+          dependencies: packet.generation_dependencies, gates_to_repeat: packet.gates_to_repeat, reference_snapshot: packet.references,
+          status: referencesReady() ? "ready" : "blocked", blocked_reason: referencesReady() ? null : "missing identity or mechanics reference",
+          attempt: (existing?.attempt || 0) + 1, updated_at: new Date().toISOString()
+        };
+        if (existing) Object.assign(existing, next); else correctionQueue.push(next);
+      });
+      markDirty(); saveProject(); renderCorrectionQueue(); updateFilmstripState(); updateReadiness(); setStatus(`${ordered.length} job${ordered.length === 1 ? "" : "s"} prepared in order ${animation_contract.generation_order.join(" → ")}.`, "success");
+    }
+    $("#queueCorrection").addEventListener("click", queueSelectedCorrections);
+
+    $("#acceptCorrection").addEventListener("click", () => {
+      const job = correctionQueue.find(item => item.target_frame === frame + 1 && item.status === "returned"); if (!job || activeVariantIds[frame] === "original") return;
+      recordHistory(); job.status = "accepted"; job.accepted_variant = activeVariantIds[frame]; job.resolved_at = new Date().toISOString(); markDirty(); saveProject(); renderCorrectionQueue(); updateFilmstripState(); updateReadiness(); setStatus(`F${frame + 1} return accepted as a variant; gates remain mandatory.`, "success");
+    });
+    $("#rejectCorrection").addEventListener("click", () => {
+      const job = correctionQueue.find(item => item.target_frame === frame + 1 && item.status === "returned"); if (!job) return;
+      recordHistory(); job.status = "rejected"; job.resolved_at = new Date().toISOString(); activeVariantIds[frame] = "original"; selectedVariantId = "original"; syncFrameOverrides(frame); invalidateFrameGates(frame, "return rejected"); markDirty(); saveProject(); drawStage(); refreshThumbnail(frame); updateInspector(); updateFilmstripState(); setStatus(`F${frame + 1} return rejected; the variant remains available for audit.`, "success");
+    });
+
+    $("#exportCorrectionQueue").addEventListener("click", () => {
+      if (!loadedSheetMatches() || frameCount !== animation_contract.frame_count) return setStatus("Load the intended sheet and grid for the six-frame walk contract before preparing corrections.", "error");
+      const order = new Map(animation_contract.generation_order.map((value, index) => [value, index]));
+      const manifest = {
+        version: 1, kind: "sprite-imagegen-correction-queue", project_id: projectState.id,
+        animation_contract, correction_jobs: [...correctionQueue].sort((a, b) => (order.get(a.target_frame) ?? 99) - (order.get(b.target_frame) ?? 99)).map(job => ({ ...job, packet: packetForFrame(job.target_frame - 1) }))
+      };
+      downloadBlob(new Blob([JSON.stringify(manifest, null, 2) + "\n"], { type: "application/json" }), `${safeName(projectState.name)}-correction-queue.json`); setStatus("Correction manifest exported in contract order.", "success");
+    });
+
+    function downloadBlob(blob, filename) { const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = filename; link.click(); window.setTimeout(() => URL.revokeObjectURL(link.href), 1000); }
+    function canvasBlob(canvas) { return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("The browser could not export the PNG.")), "image/png")); }
+    function renderedFrameCanvas(index) { const output = document.createElement("canvas"); output.width = cellWidth; output.height = cellHeight; drawSourceFrame(output.getContext("2d"), index, transforms[index], 1); return output; }
+    $("#exportJson").addEventListener("click", () => { if (!loadedSheetMatches()) return setStatus("Load the selected sheet and grid before exporting.", "error"); downloadBlob(new Blob([JSON.stringify(correctionPayload(), null, 2) + "\n"], { type: "application/json" }), `${safeName(projectState.name)}-project-v3.json`); setStatus("Project v3 exported. Binary assets remain in IndexedDB and ship separately.", "success"); });
+    $("#exportAlignment").addEventListener("click", () => { if (!loadedSheetMatches()) return setStatus("Load the selected sheet and grid before exporting.", "error"); downloadBlob(new Blob([JSON.stringify(alignmentProfilePayload(), null, 2) + "\n"], { type: "application/json" }), `${safeName(projectState.name)}-alignment-profile.json`); setStatus("Alignment profile v2 exported for the current scripts.", "success"); });
+    $("#importJson").addEventListener("click", () => $("#importFile").click());
+    $("#importFile").addEventListener("change", async event => {
+      try {
+        if (!loadedSheetMatches()) throw new Error("Load the intended sheet and grid before importing its project.");
+        const payload = JSON.parse(await event.target.files[0].text());
+        if (![PROJECT_KIND, "sprite-frame-registration-corrections"].includes(payload?.kind) || !validProjectTransforms(payload)) throw new Error("The JSON does not contain valid transforms for this sheet.");
+        if (payload.source && payload.source !== controls.url.value) throw new Error("The project points to another sheet. Load that source first to avoid applying transforms to the wrong candidate.");
+        if (payload.grid && (payload.grid.columns !== settings().columns || payload.grid.rows !== settings().rows)) throw new Error("The project grid differs from this sheet.");
+        recordHistory(); initializeProjectFrames();
+        if (!applyProjectPayload(payload)) throw new Error("The project could not be migrated.");
+        localStorage.setItem(CURRENT_PROJECT_KEY, projectState.id); await restoreDurableAssets(); saveProject(true); updateInspector(); drawStage(); rebuildFilmstrip(); renderCorrectionQueue(); setStatus(payload.kind === PROJECT_KIND ? "Project v3 imported." : "Project v2 migrated to v3.", "success");
+      } catch (error) { setStatus(error.message, "error"); }
+      event.target.value = "";
+    });
+    $("#replaceFrame").addEventListener("click", () => $("#replaceFrameFile").click());
+    $("#replaceFrameFile").addEventListener("change", async event => {
+      await importVariant(event.target.files[0], "imagegen-return");
+      event.target.value = "";
+    });
+    $("#clearReplacement").addEventListener("click", () => { if (activeVariantIds[frame] === "original") return; recordHistory(); activeVariantIds[frame] = "original"; selectedVariantId = "original"; syncFrameOverrides(frame); invalidateFrameGates(frame, "returned to original"); markDirty(); saveProject(); drawStage(); refreshThumbnail(frame); updateInspector(); updateFilmstripState(); setStatus(`F${frame + 1} returned to the original; its variants remain available.`, "success"); });
+    $("#exportPacket").addEventListener("click", async () => {
+      try {
+        const targetFrame = frame; const projectFrames = frameMeta; const projectId = projectState.id; const revision = frameMeta[targetFrame]?.revision;
+        const packet = packetForFrame(targetFrame);
+        const previousIndex = (targetFrame - 1 + frameCount) % frameCount; const nextIndex = (targetFrame + 1) % frameCount;
+        const contextFrames = [previousIndex, targetFrame, nextIndex];
+        const revisions = contextFrames.map(index => frameMeta[index].revision);
+        const packetJson = JSON.stringify(packet, null, 2) + "\n";
+        const stillCurrent = () => loadedSheetMatches() && frameMeta === projectFrames && projectState.id === projectId && frameMeta[targetFrame].revision === revision && contextFrames.every((index, offset) => frameMeta[index].revision === revisions[offset]) && JSON.stringify(packetForFrame(targetFrame), null, 2) + "\n" === packetJson;
+        const columnWidth = Math.max(160, cellWidth); const previewHeight = Math.round(cellHeight * columnWidth / cellWidth);
+        const contextSheet = document.createElement("canvas"); contextSheet.width = columnWidth * 5; contextSheet.height = previewHeight + 42; const context = contextSheet.getContext("2d"); context.imageSmoothingEnabled = false;
+        context.fillStyle = "#111"; context.fillRect(0, 0, contextSheet.width, 42); context.font = "700 18px system-ui"; context.textAlign = "center"; context.fillStyle = "#ebebeb";
+        ["IDENTITY", "MECHANICS", "PREVIOUS", "TARGET", "NEXT"].forEach((label, index) => context.fillText(label, columnWidth * (index + .5), 27));
+        function drawReferenceImage(referenceImage, column) {
+          context.save(); context.translate(column * columnWidth, 42); context.beginPath(); context.rect(0, 0, columnWidth, previewHeight); context.clip(); context.fillStyle = "#eee"; context.fillRect(0, 0, columnWidth, previewHeight);
+          if (referenceImage?.naturalWidth) { const ratio = Math.min(columnWidth / referenceImage.naturalWidth, previewHeight / referenceImage.naturalHeight) * .94; context.drawImage(referenceImage, (columnWidth - referenceImage.naturalWidth * ratio) / 2, (previewHeight - referenceImage.naturalHeight * ratio) / 2, referenceImage.naturalWidth * ratio, referenceImage.naturalHeight * ratio); }
+          else { context.fillStyle = "#666"; context.font = "700 16px system-ui"; context.fillText("MISSING", columnWidth / 2, previewHeight / 2 - 4); context.fillText("REFERENCE", columnWidth / 2, previewHeight / 2 + 18); }
+          context.restore();
+        }
+        drawReferenceImage(referenceImage("identity", targetFrame), 0); drawReferenceImage(referenceImage("mechanics", targetFrame), 1);
+        [previousIndex, targetFrame, nextIndex].forEach((index, offset) => { context.drawImage(renderedFrameCanvas(index), (offset + 2) * columnWidth, 42, columnWidth, previewHeight); });
+        const prefix = `frame-${String(targetFrame + 1).padStart(2, "0")}-correction`;
+        const [targetBlob, contextBlob] = await Promise.all([canvasBlob(renderedFrameCanvas(targetFrame)), canvasBlob(contextSheet)]);
+        if (!stillCurrent()) return setStatus("The target or its context changed during export. Prepare its packet again.", "error");
+        const downloads = $("#packetDownloads"); downloads.replaceChildren();
+        const note = document.createElement("p"); note.className = "mini-note"; note.textContent = `Prepared F${targetFrame + 1} snapshot. Download all three files separately.`; downloads.append(note);
+        for (const [label, filename, blob] of [
+          ["Download target PNG", `${prefix}-target.png`, targetBlob],
+          ["Download context PNG", `${prefix}-context.png`, contextBlob],
+          ["Download packet JSON", `${prefix}.json`, new Blob([packetJson], { type: "application/json" })]
+        ]) {
+          const button = document.createElement("button"); button.type = "button"; button.className = "quiet"; button.textContent = label;
+          button.addEventListener("click", () => {
+            if (!stillCurrent()) { downloads.replaceChildren(); return setStatus("The frame or its context changed. Prepare a fresh packet.", "error"); }
+            downloadBlob(blob, filename); setStatus(`Download requested: ${filename}. Verify all three files before using the packet.`);
+          });
+          downloads.append(button);
+        }
+        setStatus(`Packet for frame ${targetFrame + 1} prepared. Use its three download buttons.`);
+      } catch (error) { setStatus(error.message, "error"); }
+    });
+    $("#exportPng").addEventListener("click", () => {
+      if (!loadedSheetMatches()) return setStatus("Load the selected sheet and grid before exporting.", "error");
+      const { columns, rows } = settings(); const output = document.createElement("canvas"); output.width = cellWidth * columns; output.height = cellHeight * rows; const context = output.getContext("2d");
+      for (let index = 0; index < frameCount; index += 1) { const column = index % columns; const row = Math.floor(index / columns); context.save(); context.translate(column * cellWidth, row * cellHeight); context.beginPath(); context.rect(0, 0, cellWidth, cellHeight); context.clip(); drawSourceFrame(context, index, transforms[index], 1); context.restore(); }
+      output.toBlob(blob => { if (!blob) return setStatus("The browser could not export the PNG.", "error"); downloadBlob(blob, "sideview-walk-corrected.png"); setStatus("Corrected sheet exported; keep the project JSON as well.", "success"); }, "image/png");
+    });
+
+    document.addEventListener("keydown", event => {
+      const editingText = event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLTextAreaElement;
+      if (editingText) return;
+      if ((event.ctrlKey || event.metaKey) && event.code === "KeyZ") { event.preventDefault(); event.shiftKey ? redo() : undo(); return; }
+      if ((event.ctrlKey || event.metaKey) && event.code === "KeyY") { event.preventDefault(); redo(); return; }
+      if (event.code === "Space") { event.preventDefault(); spacePressed = true; return; }
+      if (event.code === "KeyP") { event.preventDefault(); play(); return; }
+      if (event.code === "Digit0") { event.preventDefault(); fitView(); return; }
+      if (["Equal", "NumpadAdd"].includes(event.code)) { event.preventDefault(); setZoom(viewer.zoom * 1.2); return; }
+      if (["Minus", "NumpadSubtract"].includes(event.code)) { event.preventDefault(); setZoom(viewer.zoom / 1.2); return; }
+      if (event.code === "KeyL") { event.preventDefault(); recordHistory(); frameMeta[frame].locked = !frameMeta[frame].locked; saveProject(); updateInspector(); updateFilmstripState(); return; }
+      if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.code) || frameMeta[frame]?.locked) return;
+      event.preventDefault(); stop(); recordHistory(); const amount = event.shiftKey ? 10 : 1;
+      if (event.code === "ArrowLeft") transforms[frame].x -= amount;
+      if (event.code === "ArrowRight") transforms[frame].x += amount;
+      if (event.code === "ArrowUp") transforms[frame].y -= amount;
+      if (event.code === "ArrowDown") transforms[frame].y += amount;
+      invalidateFrameGates(frame, "registration changed"); markDirty(); saveProject(); updateInspector(); drawStage(); refreshThumbnail(frame); updateFilmstripState();
+    });
+    document.addEventListener("keyup", event => { if (event.code === "Space") spacePressed = false; });
+    window.addEventListener("resize", fitView);
+
+    fitView(); loadSheet();
+
+    // tool-theme:start (generated from spritecore/tool_theme.py by sync_tool_theme.py; do not edit)
+(() => {
+  const root = document.documentElement;
+  const button = document.getElementById('theme-toggle');
+  const key = 'sprite-tools-theme';
+  const effective = () => root.dataset.theme || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  const label = () => { if (button) button.setAttribute('aria-label', `Switch to ${effective() === 'dark' ? 'light' : 'dark'} theme`); };
+  try { const saved = localStorage.getItem(key); if (saved === 'light' || saved === 'dark') root.dataset.theme = saved; } catch (_error) {}
+  label();
+  if (button) button.addEventListener('click', () => {
+    root.dataset.theme = effective() === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem(key, root.dataset.theme); } catch (_error) {}
+    label();
+  });
+})();
+// tool-theme:end
+  </script>
+</body>
+</html>

@@ -72,9 +72,9 @@ def _write_texture_run(run_dir: Path, *, broken_seam: bool) -> None:
     )
 
 
-def _run(run_dir: Path) -> subprocess.CompletedProcess[str]:
+def _run(run_dir: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(CHECK), "--run-dir", str(run_dir)],
+        [sys.executable, str(CHECK), "--run-dir", str(run_dir), *args],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -95,6 +95,28 @@ def test_texture_repeat_gate_accepts_full_bleed_matching_edges(tmp_path: Path) -
     assert repeat["records"][0]["edge_coverage"] == 1.0
     assert repeat["records"][0]["horizontal_edge_error"] == 0.0
     assert repeat["records"][0]["vertical_edge_error"] == 0.0
+    with Image.open(run_dir / report["overlay"]) as overlay:
+        assert overlay.width >= 32  # The preview must include the full declared cell.
+    request_path = run_dir / "sprite-request.json"
+    original = request_path.read_bytes()
+    changes = (
+        ("cell", "width", 64, "frame size"),
+        ("states", "frames", 2, "expected 2 frames"),
+        ("asset_catalog", "pivot", [True, 1], "finite numbers"),
+    )
+    for section, key, value, message in changes:
+        request = json.loads(original)
+        target = request[section]
+        if section == "states":
+            target = target["materials"]
+        elif section == "asset_catalog":
+            target = target["items"]["moss-material"]
+        target[key] = value
+        request_path.write_text(json.dumps(request), encoding="utf-8")
+        invalid = _run(run_dir)
+        assert invalid.returncode == 1, invalid.stdout + invalid.stderr
+        assert message in invalid.stdout
+    request_path.write_bytes(original)
 
 
 def test_texture_repeat_gate_rejects_opposite_edge_mismatch(tmp_path: Path) -> None:
@@ -108,6 +130,32 @@ def test_texture_repeat_gate_rejects_opposite_edge_mismatch(tmp_path: Path) -> N
     repeat = report["repeat_validation"]
     assert repeat["ok"] is False
     assert any("opposite" in error.lower() for error in report["errors"])
+    report_path = run_dir / "qa" / "asset-slot-review.json"
+    report_bytes = report_path.read_bytes()
+    invalid = _run(run_dir, "--max-repeat-edge-error", "nan")
+    assert invalid.returncode == 2
+    assert "must be finite" in invalid.stderr
+    assert report_path.read_bytes() == report_bytes
+
+
+def test_asset_gate_preserves_a_frame_at_a_review_output_path(tmp_path: Path) -> None:
+    run_dir = tmp_path / "aliased"
+    _write_texture_run(run_dir, broken_seam=False)
+    manifest_path = run_dir / "frames" / "frames-manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    original = (run_dir / manifest["rows"][0]["files"][0]).read_bytes()
+    source = run_dir / "qa" / "asset-slot-overlay.png"
+    source.parent.mkdir()
+    source.write_bytes(original)
+    manifest["rows"][0]["files"] = ["qa/asset-slot-overlay.png"]
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    result = _run(run_dir)
+
+    assert result.returncode == 3, result.stdout + result.stderr
+    assert "cannot overwrite a source" in result.stdout
+    assert source.read_bytes() == original
+    assert not (run_dir / "qa" / "asset-slot-review.json").exists()
 
 
 def test_texture_repeat_gate_rejects_missing_repeat_mode_metadata(tmp_path: Path) -> None:

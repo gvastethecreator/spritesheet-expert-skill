@@ -376,6 +376,13 @@ def test_registration_resampling_follows_canonical_sampling_policy(
     manifest = json.loads((out_dir / "frames" / "frames-manifest.json").read_text(encoding="utf-8"))
     output = Image.open(out_dir / "frames" / "props" / "frame-0.png").convert("RGBA")
     assert manifest["sprite_registration"]["baseline_y"] == output.getbbox()[3]
+    clamped_dir = tmp_path / f"register-{sampling_filter}-clamped"
+    clamped = run_script("register_sprite_frames.py", "--run-dir", str(run_dir), "--out-dir", str(clamped_dir), "--target-bottom", "0")
+    assert clamped.returncode == 0, clamped.stdout + clamped.stderr
+    clamped_manifest = json.loads((clamped_dir / "frames/frames-manifest.json").read_text())
+    with Image.open(clamped_dir / "frames/props/frame-0.png") as frame:
+        assert clamped_manifest["sprite_registration"]["baseline_y"] == frame.getbbox()[3]
+    assert clamped_manifest["sprite_registration"]["requested_baseline_y"] == 0
     source_palette = {
         (0, 0, 0, 0),
         (32, 96, 224, 255),
@@ -386,6 +393,36 @@ def test_registration_resampling_follows_canonical_sampling_policy(
         assert set(output.getchannel("A").get_flattened_data()) <= {0, 255}
     else:
         assert set(output.get_flattened_data()) - source_palette
+
+
+def test_registration_rejects_incomplete_or_unsafe_inputs_before_writing(tmp_path: Path) -> None:
+    source = Image.new("RGBA", (8, 8), (0, 0, 0, 0))
+    ImageDraw.Draw(source).rectangle((1, 1, 6, 6), fill=(140, 100, 60, 255))
+    for case in ("short", "false-status", "outside-frame", "row-failed"):
+        run, output = tmp_path / case, tmp_path / f"{case}-out"
+        write_registration_run(run, source, sampling_filter="nearest")
+        request = json.loads((run / "sprite-request.json").read_text())
+        manifest = json.loads((run / "frames/frames-manifest.json").read_text())
+        if case == "short":
+            request["states"]["props"]["frames"] = 2
+            manifest["rows"][0]["frames"] = 2
+        elif case == "false-status":
+            manifest["ok"] = "false"
+        elif case == "row-failed":
+            manifest["rows"][0]["ok"] = False
+        else:
+            source.save(tmp_path / "outside.png")
+            manifest["rows"][0]["files"] = ["../outside.png"]
+        (run / "sprite-request.json").write_text(json.dumps(request))
+        (run / "frames/frames-manifest.json").write_text(json.dumps(manifest))
+        before = {path.relative_to(run): path.read_bytes() for path in run.rglob("*") if path.is_file()}
+        result = run_script("register_sprite_frames.py", "--run-dir", str(run), "--out-dir", str(output))
+        assert result.returncode != 0, case
+        assert not output.exists()
+        assert {path.relative_to(run): path.read_bytes() for path in run.rglob("*") if path.is_file()} == before
+    overlap = run_script("register_sprite_frames.py", "--run-dir", str(run), "--out-dir", str(run), "--force")
+    assert overlap.returncode != 0 and "must not overlap" in overlap.stderr
+    assert {path.relative_to(run): path.read_bytes() for path in run.rglob("*") if path.is_file()} == before
 
 
 def test_sprite_registration_keeps_edge_escape_as_a_hard_failure(

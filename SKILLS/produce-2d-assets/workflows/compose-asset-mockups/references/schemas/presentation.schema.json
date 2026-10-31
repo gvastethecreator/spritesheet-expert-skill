@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.openai.local/compose-asset-mockups/presentation.schema.json",
+  "title": "Validated asset presentation contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "presentation_id",
+    "brief",
+    "brand_kit",
+    "inventory",
+    "gameplay_scenes",
+    "compositions",
+    "licenses",
+    "provenance",
+    "manifest"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "presentation_id": {"$ref": "#/$defs/id"},
+    "brief": {
+      "$ref": "https://schemas.openai.local/compose-asset-mockups/presentation-brief.schema.json"
+    },
+    "brand_kit": {
+      "$ref": "https://schemas.openai.local/compose-asset-mockups/brand-kit.schema.json"
+    },
+    "inventory": {
+      "$ref": "https://schemas.openai.local/compose-asset-mockups/inventory.schema.json"
+    },
+    "gameplay_scenes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "https://schemas.openai.local/compose-asset-mockups/gameplay-scene.schema.json"
+      }
+    },
+    "compositions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "https://schemas.openai.local/compose-asset-mockups/composition.schema.json"
+      }
+    },
+    "licenses": {
+      "$ref": "https://schemas.openai.local/compose-asset-mockups/licenses.schema.json"
+    },
+    "provenance": {
+      "$ref": "https://schemas.openai.local/compose-asset-mockups/provenance.schema.json"
+    },
+    "manifest": {
+      "$ref": "https://schemas.openai.local/compose-asset-mockups/manifest.schema.json"
+    }
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"}
+  }
+}

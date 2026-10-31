@@ -65,6 +65,9 @@ def _write_video_state(run_dir: Path, state: str, raw_path: Path) -> Path:
     provider_dir.mkdir(parents=True, exist_ok=True)
     video = provider_dir / "source.mp4"
     video.write_bytes(f"quota-video-{state}".encode())
+    first_frame = provider_dir / "first-frame.png"
+    first_frame.write_bytes(f"approved-first-frame-{state}".encode())
+    request = run_dir / "sprite-request.json"
     output_path = raw_path
     report = {
         "version": 1,
@@ -72,6 +75,9 @@ def _write_video_state(run_dir: Path, state: str, raw_path: Path) -> Path:
         "status": "pass",
         "provider": "grok-imagine",
         "state": state,
+        "sprite_request": {"path": "sprite-request.json", "sha256": _digest(request), "size_bytes": request.stat().st_size},
+        "first_frame": {"path": first_frame.relative_to(run_dir).as_posix(), "sha256": _digest(first_frame), "size_bytes": first_frame.stat().st_size},
+        "exact_first_frame_preserved": True,
         "video": {
             "path": video.relative_to(run_dir).as_posix(),
             "sha256": _digest(video),
@@ -154,6 +160,7 @@ def _write_batch(repo_root: Path) -> tuple[Path, Path, Path]:
 
     repair_plan = {
         "version": 1,
+        "kind": "sprite-quota-sealed-repair-plan",
         "quota_sealed": True,
         "video_generation_frozen": True,
         "status": "completed",
@@ -211,6 +218,11 @@ def _write_batch(repo_root: Path) -> tuple[Path, Path, Path]:
             ],
         },
     )
+    for state in ("idle-step", "attack"):
+        for index in range(4):
+            frame = run_dir / "frames" / state / f"frame-{index}.png"
+            frame.parent.mkdir(exist_ok=True)
+            frame.write_bytes(f"extracted-{state}-{index}".encode())
     atlas = run_dir / "sprite-sheet-alpha.png"
     atlas.write_bytes(b"current-source-atlas")
     _write_json(run_dir / "manifest.json", {"frame_layout": {"rows": {}}})
@@ -229,6 +241,11 @@ def _write_batch(repo_root: Path) -> tuple[Path, Path, Path]:
             },
             "states": ["idle-step", "attack"],
             "self_contained": True,
+            "sources": [
+                {"role": "atlas", "path": "sprite-sheet-alpha.png", "sha256": _digest(atlas)},
+                {"role": "manifest", "path": "manifest.json", "sha256": _digest(run_dir / "manifest.json")},
+            ],
+            "evidence": [],
         },
     )
     validation_fingerprint = "a" * 64
@@ -237,9 +254,10 @@ def _write_batch(repo_root: Path) -> tuple[Path, Path, Path]:
         validation_path,
         {
             "version": 1,
-            "kind": "sprite-run-validation",
+            "kind": "sprite-run-validation-report",
             "ok": True,
             "status": "pass",
+            "complete": True,
             "stage": "pre-package",
             "input_fingerprint": validation_fingerprint,
         },
@@ -312,7 +330,7 @@ def _write_batch(repo_root: Path) -> tuple[Path, Path, Path]:
     return batch_path, run_dir, candidate_png
 
 
-def _run(batch_path: Path, repo_root: Path) -> subprocess.CompletedProcess[str]:
+def _run(batch_path: Path, repo_root: Path, *extra: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [
             sys.executable,
@@ -321,6 +339,7 @@ def _run(batch_path: Path, repo_root: Path) -> subprocess.CompletedProcess[str]:
             str(repo_root),
             "--batch-manifest",
             str(batch_path),
+            *extra,
         ],
         cwd=REPO_ROOT,
         capture_output=True,
@@ -368,6 +387,7 @@ def test_fails_when_quota_video_bytes_drift(tmp_path: Path) -> None:
         (tmp_path / "batch-completion-report.json").read_text(encoding="utf-8")
     )
     assert any("quota video for attack SHA-256 drift" in error for error in report["errors"])
+    assert report["entries"][0]["quota_videos"][1]["ok"] is False
 
 
 def test_fails_when_packaged_candidate_bytes_drift(tmp_path: Path) -> None:
@@ -382,3 +402,61 @@ def test_fails_when_packaged_candidate_bytes_drift(tmp_path: Path) -> None:
     )
     assert any("candidate PNG SHA-256 drift" in error for error in report["errors"])
     assert any("batch candidate hash drift" in error for error in report["errors"])
+
+
+def test_requires_current_frame_files_workbench_inputs_and_complete_validation(tmp_path: Path) -> None:
+    batch_path, run_dir, _ = _write_batch(tmp_path)
+    frames_path = run_dir / "frames/frames-manifest.json"
+    original = frames_path.read_bytes()
+    frames = json.loads(original)
+    frames["rows"][0]["files"][0] = "frames/absent.png"
+    _write_json(frames_path, frames)
+    missing = _run(batch_path, tmp_path)
+    assert missing.returncode == 1
+    assert "extracted frame is missing" in missing.stdout
+    frames_path.write_bytes(original)
+    validation_path = run_dir / "qa/run-validation-report.json"
+    original = validation_path.read_bytes()
+    validation = json.loads(original)
+    validation["complete"] = False
+    _write_json(validation_path, validation)
+    incomplete = _run(batch_path, tmp_path)
+    assert incomplete.returncode == 1
+    assert "not a passing pre-package report" in incomplete.stdout
+    validation_path.write_bytes(original)
+    manifest_path = run_dir / "manifest.json"
+    original = manifest_path.read_bytes()
+    _write_json(manifest_path, {"changed": True})
+    stale = _run(batch_path, tmp_path)
+    assert stale.returncode == 1
+    assert "workbench input SHA-256 drift" in stale.stdout
+    manifest_path.write_bytes(original)
+    restored = _run(batch_path, tmp_path)
+    assert restored.returncode == 0, restored.stdout + restored.stderr
+
+
+def test_preserves_report_inputs_and_reports_invalid_run_paths_without_crashing(tmp_path: Path) -> None:
+    batch_path, _, candidate = _write_batch(tmp_path)
+    original = batch_path.read_bytes()
+    alias = _run(batch_path, tmp_path, "--report", str(batch_path))
+    assert alias.returncode == 3
+    assert "cannot overwrite" in alias.stderr
+    assert batch_path.read_bytes() == original
+    candidate_bytes = candidate.read_bytes()
+    alias = _run(batch_path, tmp_path, "--report", str(candidate))
+    assert alias.returncode == 3
+    assert candidate.read_bytes() == candidate_bytes
+    batch = json.loads(original)
+    batch["entries"][0]["run"] = "../outside"
+    _write_json(batch_path, batch)
+    invalid = _run(batch_path, tmp_path)
+    assert invalid.returncode == 1
+    assert "must stay inside repo root" in invalid.stdout
+    report = json.loads((tmp_path / "batch-completion-report.json").read_text())
+    assert report["counts"]["failing_entries"] == 1
+    batch = json.loads(original)
+    batch["generation_policy"]["states_per_identity"] = ["../outside"]
+    _write_json(batch_path, batch)
+    invalid_state = _run(batch_path, tmp_path)
+    assert invalid_state.returncode == 3
+    assert "portable state slugs" in invalid_state.stderr

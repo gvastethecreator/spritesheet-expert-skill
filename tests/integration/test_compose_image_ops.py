@@ -253,6 +253,44 @@ def test_pixel_curation_preserves_palette_and_alpha_invariants(tmp_path: Path) -
     assert atlas_opaque_colors <= source_opaque_colors
     assert atlas_alpha <= source_alpha
 
+    frame_path = run_dir / "frames/idle/frame-0.png"
+    original = frame_path.read_bytes()
+    export_command = [sys.executable, str(SCRIPTS / "export_curated_pngs.py"), "--run-dir", str(run_dir)]
+    exported = subprocess.run(export_command, capture_output=True, text=True)
+    assert exported.returncode == 0, exported.stdout + exported.stderr
+    output = run_dir / "curated/frame-0.png"
+    with Image.open(output) as opened:
+        assert opened.convert("RGBA").tobytes() == atlas.tobytes()
+    accepted = output.read_bytes()
+    cycle = subprocess.run([sys.executable, str(SCRIPTS / "compose_selected_cycle.py"),
+                            "--run-dir", str(run_dir), "--state", "idle", "--name", "pixel-cycle"],
+                           capture_output=True, text=True)
+    assert cycle.returncode == 0, cycle.stdout + cycle.stderr
+    with Image.open(run_dir / "qa/pixel-cycle.gif") as opened:
+        colors = {pixel[:3] for pixel in opened.convert("RGBA").get_flattened_data() if pixel[3] == 255}
+    assert colors <= source_opaque_colors
+
+    overlap = subprocess.run(export_command + ["--out-dir", str(frame_path.parent)], capture_output=True, text=True)
+    assert overlap.returncode != 0 and "cannot replace source artifacts" in overlap.stderr
+    manifest_path = run_dir / "frames/frames-manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["rows"][0]["labels"] = ["../frames/idle/frame-0"]
+    _write_json(manifest_path, manifest)
+    escaped = subprocess.run(export_command, capture_output=True, text=True)
+    assert escaped.returncode != 0 and "must be filenames" in escaped.stderr
+
+    manifest["rows"][0]["labels"] = ["frame-0", "frame-1"]
+    _write_json(manifest_path, manifest)
+    request_path = run_dir / "sprite-request.json"
+    request = json.loads(request_path.read_text())
+    request["states"]["idle"]["frames"] = 2
+    _write_json(request_path, request)
+    missing = subprocess.run(export_command, capture_output=True, text=True)
+    assert missing.returncode != 0 and "missing frame" in missing.stderr
+    assert frame_path.read_bytes() == original
+    assert output.read_bytes() == accepted
+    assert not (run_dir / "curated/frame-1.png").exists()
+
 
 @pytest.mark.parametrize("asset_kind", ["tileset", "texture", "ui"])
 def test_full_cell_asset_profiles_allow_edge_contact_and_complete_occupancy(
@@ -354,6 +392,89 @@ def test_output_formats_write_png_and_lossless_webp_with_manifest_hashes(
             "lossless": True,
         },
     }
+    preserved = {path: path.read_bytes() for path in run_dir.rglob("*") if path.is_file()}
+    for option, target in (("--atlas", "frames/idle/frame-0.png"),
+                           ("--manifest", "frames/idle/frame-0.png"),
+                           ("--report", "sprite-request.json"),
+                           ("--report", "manifest.json"),
+                           ("--atlas", "../escaped.png")):
+        rejected = _compose(run_dir, option, target)
+        assert rejected.returncode != 0, rejected.stdout + rejected.stderr
+        assert all(path.read_bytes() == data for path, data in preserved.items())
+    assert not (tmp_path / "escaped.png").exists()
+    cycle_command = [sys.executable, str(SCRIPTS / "compose_selected_cycle.py"),
+                     "--run-dir", str(run_dir), "--state", "idle", "--frames", "1"]
+    selected = subprocess.run([*cycle_command, "--name", "cycle"], capture_output=True, text=True)
+    assert selected.returncode == 0, selected.stdout + selected.stderr
+    assert (run_dir / "qa/cycle.gif").is_file()
+    escaped = subprocess.run([*cycle_command, "--name", "../sprite-request"], capture_output=True, text=True)
+    assert escaped.returncode != 0 and "must be a basename" in escaped.stderr
+    assert all(path.read_bytes() == data for path, data in preserved.items())
+
+
+def test_gif_export_preserves_sources_colors_and_frame_evidence(tmp_path: Path) -> None:
+    from gif_utils import gif_report
+
+    sources = [tmp_path / "a.png", tmp_path / "b.png"]
+    frames = []
+    for index, path in enumerate(sources):
+        image = Image.new("RGBA", (8, 8))
+        image.putpixel((3 + index, 3), (200, 80, 40, 128))
+        image.save(path)
+        frames.append(image)
+    gif, contact, manifest = tmp_path / "preview.gif", tmp_path / "contact.png", tmp_path / "gif.json"
+    command = [sys.executable, str(SCRIPTS / "compose_sprite_gif.py"), *map(str, sources),
+               "--output", str(gif), "--contact-output", str(contact), "--manifest-output", str(manifest),
+               "--delay-ticks", "10"]
+    result = subprocess.run(command, capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert gif.read_bytes().startswith(b"GIF89a")
+    with Image.open(gif) as opened:
+        assert opened.convert("RGBA").getpixel((3, 3)) == (200, 80, 40, 255)
+    assert gif_report(gif)["delay_ticks"] == [10, 10]
+    preserved = {path: path.read_bytes() for path in [*sources, gif, contact, manifest]}
+    for option, target in (("--contact-output", sources[0]), ("--manifest-output", gif),
+                           ("--output", tmp_path / "wrong.png")):
+        rejected = subprocess.run([*command, option, str(target)], capture_output=True, text=True)
+        assert rejected.returncode != 0, rejected.stdout + rejected.stderr
+        assert all(path.read_bytes() == data for path, data in preserved.items())
+    assert not (tmp_path / "wrong.png").exists()
+    timed = tmp_path / "timed.gif"
+    frames[0].save(timed, save_all=True, append_images=frames[1:], duration=[100, 230], loop=0, disposal=2)
+    assert gif_report(timed)["delay_ticks"] == [10, 23]
+    _write_json(tmp_path / "sprite-request.json", {"states": {"idle": {"frames": 2, "fps": 4, "loop": True}}})
+    frames_manifest = tmp_path / "frames/frames-manifest.json"
+    _write_json(frames_manifest, {"rows": [{"state": "idle", "files": [path.name for path in sources]}]})
+    preview_command = [sys.executable, str(SCRIPTS / "preview_animation.py"), "--run-dir", str(tmp_path)]
+    preview = subprocess.run(preview_command, capture_output=True, text=True)
+    assert preview.returncode == 0, preview.stdout + preview.stderr
+    preview_path = tmp_path / "qa/idle.gif"
+    _write_json(tmp_path / "sprite-request.json", {"states": {"idle": {"frames": 2, "fps": 6, "loop": True}}})
+    fractional = subprocess.run(preview_command, capture_output=True, text=True)
+    assert fractional.returncode == 0, fractional.stdout + fractional.stderr
+    evidence = json.loads(fractional.stdout)["states"][0]
+    assert evidence["requested_duration_ms"] == 167
+    assert evidence["durations_ms"] == [160, 160]
+    assert evidence["delay_ticks"] == 16
+    assert evidence["encoded_frames"] == 2
+    accepted = preview_path.read_bytes()
+    _write_json(frames_manifest, {"rows": [{"state": "idle", "files": []}]})
+    empty = subprocess.run(preview_command, capture_output=True, text=True)
+    assert empty.returncode == 1 and json.loads(empty.stdout)["ok"] is False
+    assert preview_path.read_bytes() == accepted
+    alias = tmp_path / "qa/idle-contact.png"
+    alias.write_bytes(sources[0].read_bytes())
+    alias_bytes = alias.read_bytes()
+    _write_json(frames_manifest, {"rows": [{"state": "idle", "files": ["qa/idle-contact.png"]}]})
+    collision = subprocess.run(preview_command, capture_output=True, text=True)
+    assert collision.returncode == 3
+    assert "cannot overwrite a source" in collision.stderr
+    assert alias.read_bytes() == alias_bytes
+    _write_json(frames_manifest, {"rows": [{"state": "../../outside", "files": [path.name for path in sources]}]})
+    escaped = subprocess.run(preview_command, capture_output=True, text=True)
+    assert escaped.returncode == 3
+    assert "path traversal" in escaped.stderr
+    assert preview_path.read_bytes() == accepted
 
 
 def test_atlas_gutter_and_extrusion_keep_runtime_rects_on_cell_interiors(
@@ -458,3 +579,17 @@ def test_vfx_metadata_propagates_to_curated_runtime_animation_row(
         "loop": False,
         "vfx": expected_vfx,
     }
+    from serve_curation import build_run_state, run_export, write_curation_atomic
+
+    exported = run_export(run_dir)
+    assert exported["ok"] and exported["export"]["count"] == 3
+    assert {Path(path).name for path in exported["export"]["files"]} == {"frame-0.png", "frame-2.png", "frame-3.png"}
+    assert not (run_dir / "curated/frame-1.png").exists()
+    preserved = {path: path.read_bytes() for path in run_dir.rglob("*") if path.is_file()}
+    write_curation_atomic(run_dir, {"version": 1, "kind": "sprite-gen-curation", "states": {"burst": {"selected": []}}})
+    assert build_run_state(run_dir)["curation"]["states"]["burst"]["selected"] == []
+    empty = run_export(run_dir)
+    assert empty["ok"] and empty["export"]["count"] == 0 and empty["export"]["files"] == []
+    rejected = _compose(run_dir)
+    assert rejected.returncode != 0 and "no selected frames" in rejected.stderr
+    assert all(path.read_bytes() == data for path, data in preserved.items() if path.name != "curation.json")

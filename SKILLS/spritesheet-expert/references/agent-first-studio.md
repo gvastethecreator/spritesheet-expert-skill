@@ -73,7 +73,7 @@ A provider handoff must be explicit. The Studio does not:
 - fabricate output when a provider is blocked;
 - mark a job complete merely because a prompt was copied.
 
-A future provider adapter must begin with a dry run or equivalent preview and require current-task acknowledgement before a paid action.
+A provider adapter must show a dry run or equivalent preview and use current-task authorization before a paid action. Reuse authorization that already covers the action.
 
 ## Regeneration contract
 
@@ -100,7 +100,7 @@ The prompt must mention only the target category and prohibit:
 - alternate object categories;
 - reuse of a failed multi-object image as an image-to-image reference.
 
-When the result repeats another category, contains several categories, or otherwise fails semantic validation, discard that result and retry only the pending item. Do not advance the batch counter.
+When a result fails semantic validation, keep its evidence and exclude it from delivery. Diagnose the failure before retrying only the pending item with a concrete change and valid authorization. Do not advance the batch counter.
 
 ## Local file handling
 
@@ -151,7 +151,7 @@ The queue may contain deterministic and provider handoffs, but an executor must 
 
 ## Studio validation
 
-Run:
+From the source repository root, run the existing validator below. This repository command is not part of a standalone skill installation.
 
 ```powershell
 pnpm run validate:studio
@@ -181,4 +181,4 @@ A new playground should reuse the same principles:
 6. Reuse contract and UI validation for the changed workflow.
 7. At final integration, add one short case only for a meaningful uncovered failure at an existing seam. Reuse valid proof; do not introduce a test framework or duplicate layers for a small playground.
 
-Planned labs include animation curation, mask editing, tile adjacency, runtime placement, delivery reconciliation, and local model workers. They should share the workspace and handoff contracts instead of becoming isolated miniature applications.
+New labs should share the workspace and handoff contracts.

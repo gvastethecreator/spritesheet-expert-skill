@@ -29,8 +29,6 @@ TARGETS = {
     SCRIPTS_DIR / "motion-reference-review" / "index.html": [CSS_BLOCK, JS_BLOCK],
     SCRIPTS_DIR.parent / "studio" / "tool-theme.css": [CSS_BLOCK],
     SCRIPTS_DIR.parent / "studio" / "tool-theme.js": [JS_BLOCK],
-    SCRIPTS_DIR.parents[2] / "docs" / "tool-theme.css": [CSS_BLOCK],
-    SCRIPTS_DIR.parents[2] / "docs" / "tool-theme.js": [JS_BLOCK],
 }
 
 

@@ -32,10 +32,11 @@ def draw_frame(path: Path, pose: dict[str, tuple[tuple[int, int], tuple[int, int
     image.save(path)
 
 
-def run_check(frames: list[Path], report: Path) -> subprocess.CompletedProcess[str]:
+def run_check(frames: list[Path], report: Path, *extra: str) -> subprocess.CompletedProcess[str]:
     command = [sys.executable, str(CHECK), "--profile", "sideview-walk-6", "--report", str(report)]
     for frame in frames:
         command.extend(("--frame", str(frame)))
+    command.extend(extra)
     return subprocess.run(command, cwd=REPO_ROOT, capture_output=True, text=True, check=False)
 
 
@@ -68,6 +69,34 @@ def test_checker_accepts_continuous_articulated_fixture(tmp_path: Path) -> None:
     payload = json.loads(report.read_text(encoding="utf-8"))
     assert payload["ok"] is True
     assert all(item["active_transitions"] >= 4 for item in payload["trajectories"].values())
+    for frame in frames:
+        with Image.open(frame) as opened:
+            rgba = opened.convert("RGBA")
+        pixels = rgba.load()
+        for y in range(rgba.height):
+            for x in range(rgba.width):
+                if pixels[x, y][:3] == (255, 255, 255):
+                    pixels[x, y] = (255, 255, 255, 0)
+        rgba.save(frame)
+    visible_rgba = run_check(frames, report)
+    assert visible_rgba.returncode == 0, visible_rgba.stdout + visible_rgba.stderr
+    for frame in frames:
+        with Image.open(frame) as opened:
+            rgba = opened.convert("RGBA")
+        rgba.putalpha(0)
+        rgba.save(frame)
+    hidden = run_check(frames, report)
+    assert hidden.returncode == 1
+    assert "missing" in hidden.stdout
+    missing = json.loads(hidden.stdout)
+    assert missing["torso_x_range"] is None
+    assert missing["head_width_drift"] is None
+    assert missing["head_height_drift"] is None
+    report_bytes = report.read_bytes()
+    invalid = run_check(frames, report, "--max-step-ratio", "nan")
+    assert invalid.returncode == 2
+    assert "must be finite" in invalid.stderr
+    assert report.read_bytes() == report_bytes
 
 
 def test_checker_rejects_static_geometry_with_abrupt_color_swap(tmp_path: Path) -> None:
@@ -86,3 +115,26 @@ def test_checker_rejects_static_geometry_with_abrupt_color_swap(tmp_path: Path) 
     payload = json.loads(report.read_text(encoding="utf-8"))
     assert payload["ok"] is False
     assert any("active transitions" in error or "teleport or recolor jump" in error for error in payload["errors"])
+    for frame in frames:
+        draw_frame(frame, poses[0])
+    stationary = run_check(frames, report)
+    assert stationary.returncode == 1
+    def reject_nonfinite(value: str):
+        raise ValueError(f"nonfinite JSON number: {value}")
+    payload = json.loads(report.read_text(encoding="utf-8"), parse_constant=reject_nonfinite)
+    assert all(item["max_to_median_step_ratio"] is None for item in payload["trajectories"].values())
+
+
+def test_checker_preserves_an_input_used_as_the_report_path(tmp_path: Path) -> None:
+    frames = []
+    for index, pose in enumerate(valid_poses()):
+        frame = tmp_path / f"frame-{index}.png"
+        draw_frame(frame, pose)
+        frames.append(frame)
+    before = frames[0].read_bytes()
+
+    result = run_check(frames, frames[0])
+
+    assert result.returncode == 3
+    assert "cannot overwrite an input frame" in result.stdout
+    assert frames[0].read_bytes() == before

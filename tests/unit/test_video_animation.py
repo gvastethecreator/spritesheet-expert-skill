@@ -24,6 +24,7 @@ from spritecore.video_animation import (
     reviewed_selection_metrics,
     reviewed_sample_indices,
     uniform_sample_indices,
+    uniform_fallback_metrics,
     validate_reviewed_locomotion_scale,
 )
 
@@ -110,6 +111,9 @@ def test_cyclic_sampling_stays_half_open_to_avoid_a_duplicate_contact() -> None:
         4,
         sampling_mode="cyclic-half-open",
     ) == [0, 2, 4, 6]
+    candidates = uniform_fallback_metrics(8, [0, 2, 4, 6])["candidate_sets"]
+    assert candidates[0]["indices"] == [0, 2, 4, 6]
+    assert all("score" not in candidate for candidate in candidates)
 
 
 def test_reviewed_sampling_accepts_a_chronological_phase_selection() -> None:
@@ -441,7 +445,8 @@ def test_front_fps_creature_prompt_uses_declared_anatomy_not_biped_mirroring(
 
     assert "full-frontal fps view" in prompt
     assert "creature's declared anatomy" in prompt
-    assert "invoke image_to_video exactly once" in prompt
+    assert "invoke reference_to_video exactly once" in prompt
+    assert "exact supplied image as first_frame" in prompt
     assert "do not generate alternatives" in prompt
     assert "generic biped mirror" in prompt
     assert "exact supplied idle anchor" in prompt
@@ -619,10 +624,12 @@ def test_faceless_creature_prompt_keeps_declared_anatomy_and_forbids_a_face(
 
 def test_decode_selected_validates_unselected_second_pass_frames() -> None:
     class MalformedDecoder:
+        fps = 4.0
+
         @staticmethod
         def read_frames(_path: str, pix_fmt: str = "rgb24"):
             assert pix_fmt == "rgb24"
-            yield {"size": (2, 2), "fps": 4.0}
+            yield {"size": (2, 2), "fps": MalformedDecoder.fps}
             yield bytes((20, 30, 40)) * 4
             yield b"short"
 
@@ -634,6 +641,9 @@ def test_decode_selected_validates_unselected_second_pass_frames() -> None:
             (2, 2),
             2,
         )
+    MalformedDecoder.fps = float("nan")
+    with pytest.raises(VideoAnimationError, match="no valid fps"):
+        _decode_selected(MalformedDecoder, Path("unused.mp4"), [0], (2, 2), 2)
 
 
 def test_prepared_job_revalidation_detects_a_changed_request(tmp_path: Path) -> None:
@@ -726,7 +736,7 @@ def test_replacing_the_only_prior_state_does_not_leave_false_mixed_provenance(
     tmp_path: Path,
 ) -> None:
     prior = {
-        "source_type": "imagegen-generated",
+        "source_type": "imagegen",
         "art_engine": "imagegen",
         "accepted_sources": [
             {
@@ -734,7 +744,7 @@ def test_replacing_the_only_prior_state_does_not_leave_false_mixed_provenance(
                 "sha256": "0" * 64,
                 "size_bytes": 1,
                 "states": ["walk"],
-                "source_type": "imagegen-generated",
+                "source_type": "imagegen",
                 "art_engine": "imagegen",
             }
         ],
@@ -753,3 +763,15 @@ def test_replacing_the_only_prior_state_does_not_leave_false_mixed_provenance(
     assert provenance["source_type"] == "grok-imagine-video"
     assert provenance["art_engine"] == "grok-imagine"
     assert len(provenance["accepted_sources"]) == 1
+    prior["accepted_sources"][0] = {
+        "path": "raw/idle.png", "sha256": "0" * 64, "size_bytes": 1, "states": ["idle"]
+    }
+    request = _request()
+    request["states"]["idle"] = dict(request["states"]["walk"])
+    combined = _merged_provenance(
+        tmp_path, request, state="walk", raw_bytes=b"video-derived-grid",
+        report_path=tmp_path / "provider" / "video-source.json", prior=prior, force=False,
+    )
+    retained = next(entry for entry in combined["accepted_sources"] if entry["states"] == ["idle"])
+    assert retained["source_type"] == "imagegen"
+    assert retained["art_engine"] == "imagegen"

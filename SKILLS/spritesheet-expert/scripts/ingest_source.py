@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Validate and atomically ingest one selected provider bitmap as a raw row."""
+"""Validate and ingest one selected provider bitmap with atomic file writes."""
 
 from __future__ import annotations
 
 import argparse
 from io import BytesIO
 import json
-import os
 from pathlib import Path
-import tempfile
 from typing import Any
 
 from PIL import Image
 
-from runio import atomic_write_text
+from runio import atomic_write_bytes, atomic_write_text
 from spritecore.contracts import ContractError, normalize_contract
 from spritecore.locks import RunLockError, acquire_run_lock
 from spritecore.source_intake import (
@@ -24,21 +22,6 @@ from spritecore.source_intake import (
     load_source_intake,
     validate_source_intake,
 )
-
-
-def _atomic_write_bytes(target: Path, payload: bytes) -> None:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary = tempfile.mkstemp(
-        dir=str(target.parent), prefix=f".{target.name}.", suffix=".tmp"
-    )
-    try:
-        with os.fdopen(descriptor, "wb") as handle:
-            handle.write(payload)
-        os.replace(temporary, target)
-    except BaseException:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
-        raise
 
 
 def _normalized_png(plan: SourceIntakePlan) -> bytes:
@@ -137,7 +120,8 @@ def _provenance_for(
 
 
 def _failure_report(
-    *, issues: list[str] | tuple[str, ...], job_id: str | None, status: str = "fail"
+    *, issues: list[str] | tuple[str, ...], job_id: str | None, status: str = "fail",
+    mutated: bool = False,
 ) -> dict[str, Any]:
     return {
         "version": 1,
@@ -145,7 +129,7 @@ def _failure_report(
         "ok": False,
         "status": status,
         "job_id": job_id,
-        "mutated": False,
+        "mutated": mutated,
         "errors": list(issues),
         "warnings": [],
     }
@@ -223,6 +207,7 @@ def main() -> int:
         print(json.dumps(_failure_report(issues=exc.issues, job_id=job_id), indent=2))
         return 1
 
+    mutated = False
     try:
         with acquire_run_lock(args.run_dir, "ingest_source"):
             plan = validate_source_intake(
@@ -245,7 +230,8 @@ def main() -> int:
             )
             plan.output_path.parent.mkdir(parents=True, exist_ok=True)
             (plan.run_dir / "qa").mkdir(parents=True, exist_ok=True)
-            _atomic_write_bytes(plan.output_path, png_bytes)
+            atomic_write_bytes(plan.output_path, png_bytes)
+            mutated = True
             atomic_write_text(
                 plan.provenance_path,
                 json.dumps(provenance, ensure_ascii=False, indent=2) + "\n",
@@ -255,11 +241,11 @@ def main() -> int:
                 json.dumps(report, ensure_ascii=False, indent=2) + "\n",
             )
     except SourceIntakeError as exc:
-        print(json.dumps(_failure_report(issues=exc.issues, job_id=job_id), indent=2))
+        print(json.dumps(_failure_report(issues=exc.issues, job_id=job_id, mutated=mutated), indent=2))
         return 1
     except (RunLockError, ContractError, OSError, ValueError) as exc:
         report = _failure_report(
-            issues=[str(exc)], job_id=job_id, status="operational-error"
+            issues=[str(exc)], job_id=job_id, status="operational-error", mutated=mutated
         )
         print(json.dumps(report, indent=2))
         return 3

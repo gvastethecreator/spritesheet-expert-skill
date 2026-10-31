@@ -18,22 +18,19 @@ def test_prepare_writes_a_valid_v2_request(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
     request = {
         "states": {
-            "idle": {"frames": 2, "fps": 4, "loop": True, "action": "idle"},
+            "idle": {"frames": 2, "fps": 4, "loop": True, "action": "idle; never crouch or jump"},
         }
     }
-
+    request_path = tmp_path / "request.json"
+    request_path.write_text(json.dumps(request), encoding="utf-8")
+    registry = json.loads((PREPARE.parent.parent / "studio/workflows.json").read_text(encoding="utf-8"))
+    workflow = next(entry for entry in registry["workflows"] if entry["id"] == "prepare-sprite-production-run")
+    values = {"request": str(request_path), "runDir": str(run_dir), "characterId": "hero"}
+    argv = [argument if isinstance(argument, str) else values[argument["field"]]
+            for argument in workflow["argvTemplate"]]
     result = subprocess.run(
-        [
-            sys.executable,
-            str(PREPARE),
-            "--out-dir",
-            str(run_dir),
-            "--character-id",
-            "hero",
-            "--request-json",
-            json.dumps(request),
-        ],
-        cwd=REPO_ROOT,
+        [sys.executable, *argv[1:], "--alpha-mode", "hard", "--hard-alpha-threshold", "128"],
+        cwd=PREPARE.parent.parent,
         capture_output=True,
         text=True,
         check=False,
@@ -46,6 +43,9 @@ def test_prepare_writes_a_valid_v2_request(tmp_path: Path) -> None:
     assert written["sampling_policy"]["filter"] == "nearest"
     assert written["states"]["idle"]["raw_layout"]["columns"] == 2
     assert written["background_removal"]["method"] == "alpha"
+    assert written["background_removal"]["alpha_mode"] == "hard"
+    assert written["background_removal"]["hard_alpha_threshold"] == 128
+    assert "pose_geometry" not in written["states"]["idle"]
     assert written["grid_segmentation"] == "adaptive"
 
 
@@ -824,3 +824,14 @@ def test_prepare_reuses_approved_eight_frame_template_for_four_frame_left_walk(
     provenance = json.loads(output_path.with_suffix(".provenance.json").read_text(encoding="utf-8"))
     assert provenance["art_engine"] == "imagegen"
     assert provenance["selected_source"] == "template:side-right"
+    before = {path.relative_to(run_dir).as_posix(): path.read_bytes()
+              for path in run_dir.rglob("*") if path.is_file()}
+    catalog_path = template_root / "manifest.json"
+    catalog = json.loads(catalog_path.read_text())
+    catalog["templates"]["side-right"]["grid"] = {"columns": 2, "rows": 2}
+    catalog_path.write_text(json.dumps(catalog))
+    invalid = subprocess.run([*result.args, "--force"], cwd=REPO_ROOT, capture_output=True, text=True)
+    assert invalid.returncode == 1
+    assert "all eight source frames" in invalid.stderr
+    assert before == {path.relative_to(run_dir).as_posix(): path.read_bytes()
+                      for path in run_dir.rglob("*") if path.is_file()}

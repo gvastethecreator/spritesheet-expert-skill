@@ -4,8 +4,9 @@ import json
 from pathlib import Path
 
 from PIL import Image
+import pytest
 
-from smoke_presets_from_reference import write_raw_rows
+from smoke_presets_from_reference import crop_reference_frames, parse_grid, write_raw_rows
 
 
 def test_smoke_raw_fixture_follows_declared_compact_grid(tmp_path: Path) -> None:
@@ -39,6 +40,7 @@ def test_smoke_raw_fixture_follows_declared_compact_grid(tmp_path: Path) -> None
         assert raw.size == (32, 40)
         assert raw.getpixel((8, 12)) != (0, 255, 0, 255)
         assert raw.getpixel((24, 32)) != (0, 255, 0, 255)
+        assert raw.getpixel((0, 0))[3] == 0
 
 
 def test_smoke_full_cell_fixture_has_no_chroma_padding(tmp_path: Path) -> None:
@@ -75,3 +77,13 @@ def test_smoke_full_cell_fixture_has_no_chroma_padding(tmp_path: Path) -> None:
             for y in range(raw.height)
             for x in range(raw.width)
         )
+
+
+def test_smoke_reference_grid_rejects_zero_and_unequal_cells(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="positive"):
+        parse_grid("0x1")
+    reference = tmp_path / "reference.png"
+    Image.new("RGBA", (10, 8), (180, 120, 60, 255)).save(reference)
+    with pytest.raises(ValueError, match="divide exactly"):
+        crop_reference_frames(reference, (3, 1))
+    assert len(crop_reference_frames(reference, (2, 1))) == 2

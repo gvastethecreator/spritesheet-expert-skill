@@ -63,7 +63,7 @@ after preparation; rebuild the environment after moving the skill and reuse weig
 
 ## Mandatory Imagegen Rule And Grok Exception
 
-- Use `$imagegen` for new still artwork unless the user selects another supported provider. Imported sources keep imported provenance; local analysis does not make them provider-generated.
+- Use the available Imagegen image tool for new still artwork unless the user selects another supported provider. `$imagegen` is an optional client adapter, not an installation requirement. Keep the exact request and returned media, then follow the bundled source-intake contract. Without generation access, use approved imports or report the missing tool. Imported sources keep imported provenance; local analysis does not make them provider-generated.
 - Request native transparency for isolated stills. Keep valid provider alpha after checking exterior, semitransparent edges, halos and cross-slot bleed.
 - If alpha is absent or fails review, use flat gray, black, or white and reviewed model-backed removal. New production sources must not use chroma colors; green, blue, cyan, or magenta are legacy-import chroma only. Full-bleed textures follow their repeat contract.
 - Local procedural/PIL/SVG drawings are fixtures or geometry diagnostics, never representative production art.
@@ -71,10 +71,13 @@ after preparation; rebuild the environment after moving the skill and reuse weig
 
 ## Optional Grok Imagine Provider
 
-When the user selects Grok, load `$grok-imagine` and
+When the user selects Grok, read
 [references/grok-video-animation.md](references/grok-video-animation.md).
-Keep provider execution in its adapter: dry-run first, current-task consent before
-`--ack-run`. Never call paid inference from tests or hide it in skill scripts.
+Use the client's Grok Imagine tool or CLI. The verified-invocation route needs a
+runner that writes the `invocation.json` the prepared job names; without one, the
+bundled existing-video intake works and keeps imported provenance.
+Dry-run or preview the exact call first; a paid run needs current-task consent.
+Never call paid inference from tests or hide it in skill scripts.
 One successful media call completes that approved job; inspect it before requesting
 another. Provider errors and missing returned media remain blocked, not placeholders.
 

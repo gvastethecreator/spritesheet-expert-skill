@@ -5,9 +5,10 @@ import json
 from pathlib import Path
 
 from PIL import Image
+import pytest
 
 from spritecore.paths import create_run_marker
-from spritecore.source_intake import document_fingerprint, validate_source_intake
+from spritecore.source_intake import SourceIntakeError, document_fingerprint, validate_source_intake
 
 
 def test_source_intake_validation_is_read_only_and_returns_execution_plan(
@@ -101,3 +102,9 @@ def test_source_intake_validation_is_read_only_and_returns_execution_plan(
     assert plan.state == "idle"
     assert plan.candidate_path == candidate.resolve()
     assert plan.output_path == (run_dir / "raw" / "idle.png").resolve()
+
+    (run_dir / "qa/source-intake-report.json").mkdir(parents=True)
+    with pytest.raises(SourceIntakeError, match="report destination is not a file"):
+        validate_source_intake(intake, run_dir=run_dir)
+    assert not plan.output_path.exists()
+    assert not plan.provenance_path.exists()

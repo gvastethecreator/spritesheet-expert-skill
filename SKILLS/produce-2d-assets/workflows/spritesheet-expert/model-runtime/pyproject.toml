@@ -1,0 +1,37 @@
+[project]
+name = "spritesheet-expert-local-model-runtime"
+version = "0.1.0"
+description = "Optional local Qwen3-VL and SAM2 runtime for spritesheet-expert"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "accelerate==1.14.0",
+  "jsonschema==4.26.0",
+  "lm-format-enforcer==0.11.3",
+  "Pillow==12.3.0",
+  "transformers==4.57.6",
+]
+
+[project.optional-dependencies]
+cpu = ["torch==2.10.0", "torchvision==0.25.0"]
+nvidia = ["torch==2.10.0", "torchvision==0.25.0"]
+lucida = ["timm>=1.0", "einops>=0.8", "kornia>=0.8"]
+ben2 = ["ben2", "timm>=1.0", "einops>=0.8", "opencv-python-headless>=4.10"]
+
+[tool.uv]
+package = false
+conflicts = [[{extra = "cpu"}, {extra = "nvidia"}]]
+
+[tool.uv.sources]
+torch = [{index = "pytorch-cpu", extra = "cpu"}, {index = "pytorch-cuda", extra = "nvidia"}]
+torchvision = [{index = "pytorch-cpu", extra = "cpu"}, {index = "pytorch-cuda", extra = "nvidia"}]
+ben2 = {git = "https://github.com/PramaLLC/BEN2.git", rev = "2c99a5da477b5523585bfa5c893888a6e818a8f6"}
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cuda"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

@@ -46,7 +46,7 @@ The Studio audit ZIP includes `qa/delivery-check.json`; the static runtime expor
 
 ## Inspection versus editing versus delivery
 
-Use the main Studio for source ownership editing and review operations. Cross-check exact files here before production acceptance; the audit records known identity and replacement-race issues in the older portable writable Atlas Lab. Do not assume this separate verified viewer silently fixes that old path.
+Use the main Studio for source ownership editing and review operations. Atlas Lab checks exact source, atlas and crop hashes before enabling editing and binds pending replacements to their captured item and session. These browser checks still require the independent Python delivery validation before production acceptance.
 
 The static JSON Hash exporter uses actual native frames and stable IDs. Its `source-manifest.snapshot.json` is an audit snapshot whose source-run artifacts are not all copied into the runtime bundle. Select the original complete run for this inspector. A runtime export alone is intentionally not a complete editable source project.
 
@@ -56,6 +56,6 @@ Actual Phaser/Godot playback and placement tests remain a separate gate. The exi
 
 `tests/browser/check_delivery_lab.py` exercises folder loading, all four views, zoom/background controls, receipt matching, stale receipt rejection and corrupted atlas blocking using synthetic geometry in a real Chromium browser. The CI job installs a pinned Playwright package and its Chromium runtime. No provider or model is invoked.
 
-File selection and hashing need a modern browser with directory input and Web Crypto support; serve through the loopback Studio when file-origin behavior differs. Browser pixel-decoding and Canvas placement are not the independent Python validator. Very large runs still need the resource-budget/page work documented in the production backlog. Do not bypass a managed browser's security policy to run this tool.
+File selection and hashing need a modern browser with directory input and Web Crypto support; serve through the loopback Studio when file-origin behavior differs. Browser pixel-decoding and Canvas placement are not the independent Python validator. Keep configured page and pixel budgets within the target device's texture and memory limits; passing those budgets does not prove browser or engine performance. Do not bypass a managed browser's security policy to run this tool.
 
-See [production workflow](../references/production-workflow.md) and the repository audit/backlog for complete acceptance and known limitations.
+See [production workflow](../references/production-workflow.md) for processing and delivery requirements.

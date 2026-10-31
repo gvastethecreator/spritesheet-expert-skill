@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tiny end-to-end smoke for spritesheet-expert scripts."""
+"""Synthetic integration smoke for spritesheet-expert scripts."""
 
 from __future__ import annotations
 

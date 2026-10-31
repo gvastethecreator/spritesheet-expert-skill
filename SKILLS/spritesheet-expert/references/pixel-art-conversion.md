@@ -38,7 +38,7 @@ python <skill-dir>/scripts/convert_pixel_art.py convert --request conversion-req
 python <skill-dir>/scripts/convert_pixel_art.py validate work/pixel-conversion
 ```
 
-The output must be new. It contains an exact source snapshot, portable request, converted sheet, separate frames, nearest-neighbor reference, conversion metadata and standalone `index.html`. The viewer shows native and 4x views, plus playback at the declared FPS for temporal input. It starts paused and never treats a variant list as an animation.
+The output must be new. One byte snapshot supplies the decoded pixels, source hash and portable source copy, even if the live file later changes. The bundle also contains its request, converted sheet, separate frames, nearest-neighbor reference, metadata and standalone `index.html`. The viewer shows native and 4x views, plus playback at the declared FPS for temporal input. It starts paused and never treats a variant list as an animation.
 
 Validation recomputes palette, frames, layout and preview from the copied source and settings. It detects missing/extra frames, pixel changes and metadata drift. It is not an artistic review. The manifest records the Pillow version; use the same environment when reproducing palette choices.
 

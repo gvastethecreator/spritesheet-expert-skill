@@ -31,7 +31,9 @@ Then: serve_curation.py --run-dir <out-dir>
 from __future__ import annotations
 
 import argparse
+import atexit
 from hashlib import sha256
+from io import BytesIO
 import json
 import re
 from pathlib import Path
@@ -49,11 +51,12 @@ from extract_sprite_row_frames import (
     default_background_revision,
     remove_background,
 )
-from runio import acquire_run_dir_lock, atomic_save_image, atomic_write_text
+from runio import atomic_save_image, atomic_write_bytes, atomic_write_text
 from segmentation import projection_spans
 from spritecore.contracts import ContractError, normalize_contract
 from spritecore.models import is_state_slug
-from spritecore.paths import PathSafetyError, create_run_marker, remove_known_outputs
+from spritecore.locks import RunLock, RunLockError, acquire_run_lock
+from spritecore.paths import PathSafetyError, create_run_marker, remove_known_outputs, resolve_run_path
 
 ALPHA_THRESHOLD = 16  # a pixel counts as content above this alpha
 MIN_GUTTER = 1        # a fully-empty line of >= this many px separates frames
@@ -211,32 +214,34 @@ def make_segmentation_overlay(
     preview = atlas.convert("RGBA")
     if scale < 1.0:
         preview = preview.resize((round(atlas.width * scale), round(atlas.height * scale)), Image.Resampling.LANCZOS)
-    overlay = Image.new("RGBA", preview.size, (16, 16, 16, 255))
-    overlay.alpha_composite(preview)
-    draw = ImageDraw.Draw(overlay, "RGBA")
     try:
         font = ImageFont.truetype("arial.ttf", 14)
         small = ImageFont.truetype("arial.ttf", 11)
     except Exception:
         font = None
         small = None
+    caption = f"segmentation: {layout_source}; background: {background_method}"
+    header = 36
+    caption_width = ImageDraw.Draw(preview).textbbox((0, 0), caption, font=font)[2] + 20
+    overlay = Image.new("RGBA", (max(preview.width, caption_width), preview.height + header), (17, 17, 17, 255))
+    overlay.alpha_composite(preview, (0, header))
+    draw = ImageDraw.Draw(overlay, "RGBA")
     colors = [
-        (80, 190, 255, 230),
+        (220, 220, 220, 230),
         (245, 158, 11, 230),
         (132, 204, 22, 230),
         (244, 114, 182, 230),
         (196, 181, 253, 230),
     ]
-    draw.rectangle((0, 0, overlay.width, 36), fill=(0, 0, 0, 180))
-    draw.text((10, 8), f"segmentation: {layout_source}; background: {background_method}", fill=(245, 245, 245, 255), font=font)
+    draw.text((10, 8), caption, fill=(235, 235, 235, 255), font=font)
     for row_index, state in enumerate(states):
         color = colors[row_index % len(colors)]
         for frame_index, (x, y, w, h) in enumerate(state["rects"]):
             box = (
                 round(x * scale),
-                round(y * scale),
+                round(y * scale) + header,
                 round((x + w) * scale),
-                round((y + h) * scale),
+                round((y + h) * scale) + header,
             )
             draw.rectangle(box, outline=color, width=2)
             draw.text((box[0] + 4, box[1] + 4), f"{state['name']} f{frame_index + 1}", fill=color, font=small)
@@ -314,10 +319,9 @@ def _components(mask: list[bool], w: int, h: int, min_area: int) -> list[tuple[i
 def auto_detect(atlas: Image.Image) -> tuple[list[dict[str, Any]], tuple[int, int]]:
     """Read the sheet visually: find content blobs, cluster them into a grid.
 
-    Connected components survive a character's internal transparency (a single
-    pose stays one blob), which is why this is far more robust on packed grids
-    than cutting on transparent gutters. Blobs are clustered into rows by their
-    vertical center, then into frames within a row by horizontal overlap.
+    Blobs are clustered into rows by vertical center, then into frames by
+    horizontal overlap. Touching poses can merge and detached parts can split;
+    review the diagnostic overlay before authoring production rectangles.
 
     Returns (states, cell_size). Each frame rect is the blob's content bbox;
     write_run centers it in the cell.
@@ -386,12 +390,8 @@ def grid_layout(atlas: Image.Image, cols: int, rows: int) -> tuple[list[dict[str
         rects = []
         for c in range(cols):
             rect = (c * cell_w, r * cell_h, cell_w, cell_h)
-            crop = atlas.crop((rect[0], rect[1], rect[0] + cell_w, rect[1] + cell_h))
-            if crop.getchannel("A").getbbox() is None:
-                continue  # skip empty trailing cells
             rects.append(rect)
-        if rects:
-            states.append({"name": f"row-{r}", "rects": rects})
+        states.append({"name": f"row-{r}", "rects": rects})
     return states, (cell_w, cell_h)
 
 
@@ -424,10 +424,19 @@ def projection_grid_layout(atlas: Image.Image, cols: int, rows: int) -> tuple[li
 
 def _rect_from_json(value: Any) -> tuple[int, int, int, int]:
     if isinstance(value, dict):
-        return (int(value["x"]), int(value["y"]), int(value["w"]), int(value["h"]))
-    if isinstance(value, list) and len(value) == 4:
-        return (int(value[0]), int(value[1]), int(value[2]), int(value[3]))
-    raise SystemExit("authored boxes must be {x,y,w,h} objects or [x,y,w,h] arrays")
+        value = [value.get(key) for key in ("x", "y", "w", "h")]
+    if not isinstance(value, (list, tuple)) or len(value) != 4:
+        raise SystemExit("rectangles must be {x,y,w,h} objects or [x,y,w,h] arrays")
+    x, y, w, h = (_integer(item, "rectangle coordinate", minimum=0) for item in value)
+    if not w or not h:
+        raise SystemExit("rectangle width and height must be positive")
+    return x, y, w, h
+
+
+def _integer(value: Any, name: str, *, minimum: int = 1) -> int:
+    if type(value) is not int or value < minimum:
+        raise SystemExit(f"{name} must be an integer >= {minimum}")
+    return value
 
 
 def authored_boxes_layout(data: dict[str, Any]) -> tuple[list[dict[str, Any]], tuple[int, int], dict[str, Any]]:
@@ -438,11 +447,13 @@ def authored_boxes_layout(data: dict[str, Any]) -> tuple[list[dict[str, Any]], t
         for index, row in enumerate(raw_rows):
             if not isinstance(row, dict):
                 raise SystemExit("boxes-file rows must be objects")
-            name = str(row.get("state", row.get("name", f"row-{index}")))
+            name = row.get("state", row.get("name", f"row-{index}"))
+            if not is_state_slug(name):
+                raise SystemExit(f"invalid state id: {name!r}")
             rects = [_rect_from_json(rect) for rect in row.get("rects", [])]
             if rects:
                 states.append({"name": name, "rects": rects})
-                meta[name] = {"fps": int(row.get("fps", 6)), "loop": bool(row.get("loop", True))}
+                meta[name] = {key: row[key] for key in ("fps", "loop", "action", "animation_workflows") if key in row}
     else:
         for name, rects_raw in data.items():
             if name in {"cell", "meta", "kind", "version"}:
@@ -450,30 +461,29 @@ def authored_boxes_layout(data: dict[str, Any]) -> tuple[list[dict[str, Any]], t
             if isinstance(rects_raw, list):
                 rects = [_rect_from_json(rect) for rect in rects_raw]
                 if rects:
-                    states.append({"name": str(name), "rects": rects})
+                    states.append({"name": name, "rects": rects})
     if not states:
         raise SystemExit("boxes-file did not contain any rects")
     cell_raw = data.get("cell") if isinstance(data.get("cell"), dict) else {}
-    cell_w = int(cell_raw.get("width", cell_raw.get("w", 0)))
-    cell_h = int(cell_raw.get("height", cell_raw.get("h", 0)))
-    if cell_w <= 0:
-        cell_w = max(rect[2] for state in states for rect in state["rects"])
-    if cell_h <= 0:
-        cell_h = max(rect[3] for state in states for rect in state["rects"])
+    cell_w = _integer(cell_raw.get("width", cell_raw.get("w", max(rect[2] for state in states for rect in state["rects"]))), "cell width")
+    cell_h = _integer(cell_raw.get("height", cell_raw.get("h", max(rect[3] for state in states for rect in state["rects"]))), "cell height")
     return states, (cell_w, cell_h), meta
 
 
 def manifest_layout(
     manifest: dict[str, Any],
     direction: str | None,
+    cell_override: tuple[int, int] | None = None,
 ) -> tuple[list[dict[str, Any]], tuple[int, int], str, dict[str, Any]]:
     """Resolve frame rectangles from a known manifest format.
 
     Returns (states, cell, atlas_filename, per_state_meta).
     """
     cell = manifest.get("cell", {})
-    cell_w = int(cell.get("width", cell.get("size", 0)))
-    cell_h = int(cell.get("height", cell.get("size", 0)))
+    cell_w = cell.get("width", cell.get("size", 0))
+    cell_h = cell.get("height", cell.get("size", 0))
+    if cell_override:
+        cell_w, cell_h = cell_override
 
     # compose-format: explicit frame_layout rectangles
     if "frame_layout" in manifest and manifest["frame_layout"].get("rows"):
@@ -484,7 +494,7 @@ def manifest_layout(
         meta = {}
         anim = manifest.get("animation", {}).get("rows", {})
         for state, rects in fl["rows"].items():
-            states.append({"name": state, "rects": [(r["x"], r["y"], r["w"], r["h"]) for r in rects]})
+            states.append({"name": state, "rects": [_rect_from_json(r) for r in rects]})
             row_anim = anim.get(state, {})
             meta[state] = {"fps": row_anim.get("fps", 6), "loop": row_anim.get("loop", True)}
             for key in ("action", "animation_workflows"):
@@ -494,7 +504,6 @@ def manifest_layout(
         return states, (cell_w, cell_h), atlas_file, meta
 
     # archive-2dir-mirror / grid-row format: rows carry {row, frames, fps, loop}
-    cols = int(cell.get("columns", 0)) or None
     rows_src = None
     atlas_file = None
     if "directions" in manifest:
@@ -512,19 +521,45 @@ def manifest_layout(
         raise SystemExit("manifest has no frame_layout, directions, or animation rows to read")
     if not (cell_w and cell_h):
         raise SystemExit("manifest cell width/height missing; pass --cell WxH")
+    cell_w, cell_h = _integer(cell_w, "cell width"), _integer(cell_h, "cell height")
 
     states = []
     meta = {}
     for state, info in rows_src.items():
-        row = int(info["row"])
-        frames = int(info["frames"])
+        row = _integer(info["row"], "row index", minimum=0)
+        frames = _integer(info["frames"], "frame count")
         rects = [(c * cell_w, row * cell_h, cell_w, cell_h) for c in range(frames)]
         states.append({"name": state, "rects": rects})
-        meta[state] = {"fps": int(info.get("fps", 6)), "loop": bool(info.get("loop", True))}
+        meta[state] = {key: info[key] for key in ("fps", "loop", "action", "animation_workflows") if key in info}
     return states, (cell_w, cell_h), atlas_file, meta
 
 
 # --- writing ----------------------------------------------------------------
+
+def prepare_output(out_dir: Path, force: bool, input_paths: list[Path]) -> RunLock:
+    """Take ownership and the writer lock only after input validation succeeds."""
+    inputs = {path.resolve() for path in input_paths}
+    outputs = [name for name in UNPACK_KNOWN_OUTPUTS
+               if not (name == "manifest.json" and (out_dir / name).resolve() in inputs)]
+    for name in outputs:
+        target = (out_dir / name).resolve()
+        if any(path == target or path.is_relative_to(target) for path in inputs):
+            raise SystemExit(f"input overlaps output {name}; choose another --out-dir")
+    if out_dir.exists() and any(path.name != ".sprite-gen-run.json" for path in out_dir.iterdir()) and not force:
+        raise SystemExit(f"out-dir not empty: {out_dir} (use --force)")
+    try:
+        create_run_marker(out_dir, run_id=out_dir.name)
+    except PathSafetyError as exc:
+        raise SystemExit(f"cannot use run marker: {exc}") from exc
+    lease = acquire_run_lock(out_dir, "unpack_atlas_run")
+    try:
+        if force:
+            remove_known_outputs(out_dir, outputs)
+    except BaseException:
+        lease.release()
+        raise
+    return lease
+
 
 def write_run(
     out_dir: Path,
@@ -534,13 +569,27 @@ def write_run(
     meta: dict[str, Any],
     layout_source: str,
     provenance: dict[str, Any],
+    *,
+    force: bool = False,
+    input_paths: list[Path] | None = None,
 ) -> dict[str, Any]:
     invalid_states = [state.get("name") for state in states if not is_state_slug(state.get("name"))]
     if invalid_states:
         raise SystemExit(f"invalid state ids in imported layout: {invalid_states}")
-    cell_w, cell_h = cell
+    names = [state["name"] for state in states]
+    if not names or len(names) != len(set(names)):
+        raise SystemExit("imported layout must have distinct, non-empty states")
+    cell_w, cell_h = (_integer(value, "cell dimension") for value in cell)
+    for state in states:
+        rects = [_rect_from_json(rect) for rect in state["rects"]]
+        if not rects:
+            raise SystemExit(f"state {state['name']} has no frames")
+        for x, y, w, h in rects:
+            if x + w > atlas.width or y + h > atlas.height:
+                raise SystemExit(f"rectangle outside atlas bounds in {state['name']}: {(x, y, w, h)}")
+            if w > cell_w or h > cell_h:
+                raise SystemExit(f"rectangle exceeds target cell in {state['name']}")
     frames_root = out_dir / "frames"
-    frames_root.mkdir(parents=True, exist_ok=True)
     chroma_key = provenance.get("chroma_key")
     if not isinstance(chroma_key, dict):
         chroma_key = {"name": "magenta", "hex": "#FF00FF", "rgb": [255, 0, 255]}
@@ -552,30 +601,23 @@ def write_run(
     manifest_rows = []
     for state in states:
         name = state["name"]
-        labels = [str(label) for label in state.get("labels", [])]
+        labels = state.get("labels", [])
+        if "labels" in state and (not isinstance(labels, list) or len(labels) != len(state["rects"])
+                                   or any(not isinstance(label, str) or not label.strip() for label in labels)):
+            raise SystemExit(f"{name}: asset labels must contain one non-empty string per frame")
         state_dir = frames_root / name
-        state_dir.mkdir(parents=True, exist_ok=True)
-        files = []
-        for index, (x, y, w, h) in enumerate(state["rects"]):
-            crop = atlas.crop((x, y, x + w, y + h)).convert("RGBA")
-            # place into a clean cell; center when the crop is smaller (auto-detect)
-            if crop.size == (cell_w, cell_h):
-                framed = crop
-            else:
-                framed = Image.new("RGBA", (cell_w, cell_h), (0, 0, 0, 0))
-                framed.alpha_composite(crop, ((cell_w - w) // 2, (cell_h - h) // 2))
-            out = state_dir / f"frame-{index}.png"
-            atomic_save_image(framed, out)
-            files.append(str(out.relative_to(out_dir)))
+        files = [(state_dir / f"frame-{index}.png").relative_to(out_dir).as_posix() for index in range(len(state["rects"]))]
         m = meta.get(name, {})
         request_states[name] = {
             "frames": len(state["rects"]),
-            "fps": int(m.get("fps", 6)) if temporal else 1,
-            "loop": bool(m.get("loop", True)) if temporal else False,
-            "action": str(m.get("action", "")),
+            "fps": m.get("fps", 6) if temporal else 1,
+            "loop": m.get("loop", True) if temporal else False,
+            "action": m.get("action", ""),
         }
         if temporal and m.get("animation_workflows"):
-            request_states[name]["animation_workflows"] = list(m["animation_workflows"])
+            if not isinstance(m["animation_workflows"], list) or any(not isinstance(value, str) for value in m["animation_workflows"]):
+                raise SystemExit(f"{name}: animation_workflows must be a list of strings")
+            request_states[name]["animation_workflows"] = m["animation_workflows"]
         if labels:
             request_states[name]["asset_labels"] = labels
         row_record = {"state": name, "frames": len(state["rects"]), "method": "unpacked", "files": files, "ok": True}
@@ -603,6 +645,19 @@ def write_run(
         request = normalize_contract(request, expected_kind="sprite-request").to_dict()
     except ContractError as exc:
         raise SystemExit(str(exc)) from exc
+    lease = prepare_output(out_dir, force, input_paths or [])
+    # The CLI still writes QA and source evidence after this frame writer.
+    atexit.register(lease.release)
+    for state in states:
+        state_dir = frames_root / state["name"]
+        state_dir.mkdir(parents=True, exist_ok=True)
+        for index, (x, y, w, h) in enumerate(state["rects"]):
+            crop = atlas.crop((x, y, x + w, y + h)).convert("RGBA")
+            framed = crop
+            if crop.size != (cell_w, cell_h):
+                framed = Image.new("RGBA", (cell_w, cell_h), (0, 0, 0, 0))
+                framed.alpha_composite(crop, ((cell_w - w) // 2, (cell_h - h) // 2))
+            atomic_save_image(framed, state_dir / f"frame-{index}.png")
     atomic_write_text(out_dir / "sprite-request.json", json.dumps(request, ensure_ascii=False, indent=2) + "\n")
     atomic_write_text(
         frames_root / "frames-manifest.json",
@@ -619,7 +674,7 @@ def write_run(
     return {"layout_source": layout_source, "states": [s["name"] for s in states], "cell": [cell_w, cell_h]}
 
 
-def import_pngs(out_dir: Path, png_paths: list[Path], state_name: str, labels: list[str], iso: dict[str, Any] | None = None, source_type: str = "imported") -> dict[str, Any]:
+def import_pngs(out_dir: Path, png_paths: list[Path], state_name: str, labels: list[str], iso: dict[str, Any] | None = None, source_type: str = "imported", *, force: bool = False, input_paths: list[Path] | None = None) -> dict[str, Any]:
     """Import a folder of separate PNGs as one state's frames (e.g. furniture set).
 
     Each PNG becomes one frame so they can be compared side by side and given a
@@ -627,21 +682,24 @@ def import_pngs(out_dir: Path, png_paths: list[Path], state_name: str, labels: l
     """
     if not is_state_slug(state_name):
         raise SystemExit(f"invalid state id {state_name!r}; use a 1-64 character lowercase kebab slug")
-    imgs = [Image.open(p).convert("RGBA") for p in png_paths]
+    if not png_paths or not isinstance(labels, list) or len(labels) != len(png_paths) or any(not isinstance(label, str) or not label.strip() for label in labels):
+        raise SystemExit("PNG imports require one non-empty label per image")
+    if source_type not in {"imported", "fixture"}:
+        raise SystemExit("PNG imports must declare source_type imported or fixture")
+    payloads = [path.read_bytes() for path in png_paths]
+    imgs = []
+    for payload in payloads:
+        with Image.open(BytesIO(payload)) as image:
+            imgs.append(image.convert("RGBA"))
     cell_w = max(i.width for i in imgs)
     cell_h = max(i.height for i in imgs)
     state_dir = out_dir / "frames" / state_name
-    state_dir.mkdir(parents=True, exist_ok=True)
-    files = []
-    for index, im in enumerate(imgs):
-        if im.size == (cell_w, cell_h):
-            framed = im
-        else:
-            framed = Image.new("RGBA", (cell_w, cell_h), (0, 0, 0, 0))
-            framed.alpha_composite(im, ((cell_w - im.width) // 2, (cell_h - im.height) // 2))
-        out = state_dir / f"frame-{index}.png"
-        atomic_save_image(framed, out)
-        files.append(str(out.relative_to(out_dir)))
+    files = [f"frames/{state_name}/frame-{index}.png" for index in range(len(imgs))]
+    snapshots = [resolve_run_path(out_dir, f"source/imported-{index:04d}.png") for index in range(len(imgs))]
+    inputs = {path.resolve() for path in png_paths}
+    for target, payload in zip(snapshots, payloads):
+        if target in inputs and target.read_bytes() != payload:
+            raise SystemExit("source snapshot would overwrite an input; choose another --out-dir")
 
     request = {
         "version": 1,
@@ -661,33 +719,44 @@ def import_pngs(out_dir: Path, png_paths: list[Path], state_name: str, labels: l
         request = normalize_contract(request, expected_kind="sprite-request").to_dict()
     except ContractError as exc:
         raise SystemExit(str(exc)) from exc
-    atomic_write_text(out_dir / "sprite-request.json", json.dumps(request, ensure_ascii=False, indent=2) + "\n")
-    atomic_write_text(
-        out_dir / "frames" / "frames-manifest.json",
-        json.dumps({"ok": True, "engine": "component-row", "run_dir": str(out_dir), "cell": request["cell"],
-                    "rows": [{"state": state_name, "frames": len(imgs), "method": "imported-pngs", "files": files, "labels": labels, "ok": True}],
-                    "errors": [], "warnings": []}, ensure_ascii=False, indent=2) + "\n",
-    )
-    atomic_write_text(
-        out_dir / "unpack-source.json",
-        json.dumps({"version": 1, "kind": "sprite-gen-unpack-source", "layout_source": "imported-pngs",
-                    "cell": {"width": cell_w, "height": cell_h}, "source_dir": str(png_paths[0].parent),
-                    "files": [p.name for p in png_paths], "labels": labels}, ensure_ascii=False, indent=2) + "\n",
-    )
-    accepted = []
-    for index, path in enumerate(png_paths):
-        payload = path.read_bytes()
-        relative = f"source/imported-{index:04d}.png"
-        (out_dir / "source").mkdir(exist_ok=True)
-        (out_dir / relative).write_bytes(payload)
-        accepted.append({"path": relative, "sha256": sha256(payload).hexdigest(), "size_bytes": len(payload), "states": [state_name]})
-    atomic_write_text(out_dir / "source-provenance.json", json.dumps({"version": 2, "kind": "sprite-source-provenance",
-        "source_type": source_type, "art_engine": source_type, "fixture": source_type == "fixture",
-        "verification_status": "verified", "state_coverage": [state_name], "accepted_sources": accepted}, indent=2) + "\n")
-    return {"layout_source": "imported-pngs", "states": [state_name], "cell": [cell_w, cell_h], "frames": len(imgs)}
+    with prepare_output(out_dir, force, [*png_paths, *(input_paths or [])]):
+        state_dir.mkdir(parents=True, exist_ok=True)
+        for index, im in enumerate(imgs):
+            framed = im
+            if im.size != (cell_w, cell_h):
+                framed = Image.new("RGBA", (cell_w, cell_h), (0, 0, 0, 0))
+                framed.alpha_composite(im, ((cell_w - im.width) // 2, (cell_h - im.height) // 2))
+            atomic_save_image(framed, state_dir / f"frame-{index}.png")
+        atomic_write_text(out_dir / "sprite-request.json", json.dumps(request, ensure_ascii=False, indent=2) + "\n")
+        atomic_write_text(
+            out_dir / "frames" / "frames-manifest.json",
+            json.dumps({"ok": True, "engine": "component-row", "run_dir": str(out_dir), "cell": request["cell"],
+                        "rows": [{"state": state_name, "frames": len(imgs), "method": "imported-pngs", "files": files, "labels": labels, "ok": True}],
+                        "errors": [], "warnings": []}, ensure_ascii=False, indent=2) + "\n",
+        )
+        atomic_write_text(
+            out_dir / "unpack-source.json",
+            json.dumps({"version": 1, "kind": "sprite-gen-unpack-source", "layout_source": "imported-pngs",
+                        "cell": {"width": cell_w, "height": cell_h}, "source_dir": str(png_paths[0].parent),
+                        "files": [p.name for p in png_paths], "labels": labels}, ensure_ascii=False, indent=2) + "\n",
+        )
+        accepted = []
+        for index, payload in enumerate(payloads):
+            relative = f"source/imported-{index:04d}.png"
+            target = snapshots[index]
+            target.parent.mkdir(exist_ok=True)
+            if target not in inputs:
+                atomic_write_bytes(target, payload)
+            accepted.append({"path": relative, "sha256": sha256(payload).hexdigest(), "size_bytes": len(payload), "states": [state_name]})
+        atomic_write_text(out_dir / "source-provenance.json", json.dumps({"version": 2, "kind": "sprite-source-provenance",
+            "source_type": source_type, "art_engine": source_type, "fixture": source_type == "fixture",
+            "verification_status": "verified", "state_coverage": [state_name], "accepted_sources": accepted}, indent=2) + "\n")
+        return {"layout_source": "imported-pngs", "states": [state_name], "cell": [cell_w, cell_h], "frames": len(imgs)}
 
 
 def parse_grid(value: str) -> tuple[int, int]:
+    if re.fullmatch(r"[1-9][0-9]*[xX][1-9][0-9]*", value) is None:
+        raise argparse.ArgumentTypeError("expected positive integer dimensions, e.g. 8x4")
     cols, rows = value.lower().split("x")
     return int(cols), int(rows)
 
@@ -702,7 +771,7 @@ def load_asset_labels(path: Path | None) -> dict[str, list[str]]:
     for state, values in data.items():
         if not isinstance(values, list):
             raise SystemExit(f"asset labels for {state!r} must be a list")
-        labels[str(state)] = [str(value) for value in values]
+        labels[state] = values
     return labels
 
 
@@ -812,15 +881,8 @@ def main() -> int:
         else:
             raise SystemExit("need one of --pngs-dir / --atlas / --manifest / --boxes-file (or pass --out-dir)")
 
-    if out_dir.exists() and any(out_dir.iterdir()) and not args.force:
-        raise SystemExit(f"out-dir not empty: {out_dir} (use --force)")
-    try:
-        if out_dir.exists() and any(out_dir.iterdir()) and args.force:
-            remove_known_outputs(out_dir, UNPACK_KNOWN_OUTPUTS)
-        create_run_marker(out_dir, run_id=out_dir.name)
-    except (OSError, PathSafetyError) as exc:
-        raise SystemExit(f"cannot create run dir next to the input: {out_dir}\n  {exc}\n  pass --out-dir <writable path> to choose another location")
-    acquire_run_dir_lock(out_dir, "unpack_atlas_run")
+    input_paths = [getattr(args, name) for name in ("atlas", "manifest", "boxes_file", "asset_labels_file", "asset_catalog_file")
+                   if getattr(args, name) is not None]
 
     # --pngs-dir: import a folder of separate PNGs (e.g. a furniture set)
     if args.pngs_dir:
@@ -833,6 +895,7 @@ def main() -> int:
         iso = None
         meta_path = src / "meta.json"
         if meta_path.is_file():
+            input_paths.append(meta_path)
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
             file_to_name = {info.get("file"): name for name, info in meta.get("items", {}).items() if isinstance(info, dict)}
             labels = [file_to_name.get(p.name, p.stem) for p in png_paths]
@@ -845,7 +908,8 @@ def main() -> int:
                     "anchor_pixel": anchor.get("pixel", [128, 222]),
                     "canvas": meta.get("style", {}).get("canvas", [256, 256]),
                 }
-        result = import_pngs(out_dir, png_paths, args.state_name, labels, iso, args.source_type)
+        result = import_pngs(out_dir, png_paths, args.state_name, labels, iso, args.source_type,
+                             force=args.force, input_paths=input_paths)
         result["ok"] = True
         result["out_dir"] = str(out_dir)
         print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -853,6 +917,10 @@ def main() -> int:
 
     manifest = json.loads(args.manifest.read_text(encoding="utf-8")) if args.manifest else None
     boxes = json.loads(args.boxes_file.read_text(encoding="utf-8-sig")) if args.boxes_file else None
+    if args.manifest and not isinstance(manifest, dict):
+        raise SystemExit("manifest must be a JSON object")
+    if args.boxes_file and not isinstance(boxes, dict):
+        raise SystemExit("boxes-file must be a JSON object")
     chroma_rgb = chroma_key_from_manifest(manifest, parse_hex_color(args.chroma_key))
     provenance: dict[str, Any] = {
         "atlas": str(args.atlas) if args.atlas else None,
@@ -877,64 +945,58 @@ def main() -> int:
     meta: dict[str, Any] = {}
     uses_visual_auto_detect = bool(args.projection_grid or (not args.grid and not boxes and not (manifest and not args.auto)))
     background_mode = args.background_removal or ("auto" if uses_visual_auto_detect else "none")
+    if not boxes and not args.grid and not args.projection_grid and manifest and not args.auto:
+        states, cell, atlas_name, meta = manifest_layout(manifest, args.direction, args.cell)
+        for key in ("asset_kind", "extraction_mode"):
+            if key in manifest:
+                provenance[key] = manifest[key]
+        if not atlas_path:
+            atlas_path = (args.manifest.parent / atlas_name) if atlas_name else None
+    if not atlas_path or not Path(atlas_path).is_file():
+        raise SystemExit("could not locate atlas image; pass --atlas or a manifest with an image path")
+    atlas_path = Path(atlas_path).resolve()
+    input_paths.append(atlas_path)
+    original_bytes = atlas_path.read_bytes()
+    with Image.open(BytesIO(original_bytes)) as image:
+        source_atlas = image.convert("RGBA")
+    atlas, background_method, background_config = preprocess_atlas_background(source_atlas, background_mode, chroma_rgb, args)
+    source_snapshot = resolve_run_path(out_dir, "source/imported-atlas.png")
+    if source_snapshot in {path.resolve() for path in input_paths} and source_snapshot.read_bytes() != original_bytes:
+        raise SystemExit("source snapshot would overwrite an input; choose another --out-dir")
     if boxes:
         layout_source = "authored-boxes"
-        if not atlas_path:
-            raise SystemExit("--boxes-file needs --atlas")
-        source_atlas = Image.open(atlas_path).convert("RGBA")
-        atlas, background_method, background_config = preprocess_atlas_background(source_atlas, background_mode, chroma_rgb, args)
         states, cell, meta = authored_boxes_layout(boxes)
     elif args.grid:
         layout_source = "grid-explicit"
-        if not atlas_path:
-            raise SystemExit("--grid needs --atlas")
-        source_atlas = Image.open(atlas_path).convert("RGBA")
         cols, grid_rows = args.grid
         if source_atlas.width % cols or source_atlas.height % grid_rows:
             layout_warnings.append(
                 f"explicit grid {cols}x{grid_rows} does not divide source {source_atlas.width}x{source_atlas.height}; "
                 "crop/resize or provide authored boxes before production slicing"
             )
-        atlas, background_method, background_config = preprocess_atlas_background(source_atlas, background_mode, chroma_rgb, args)
         states, cell = grid_layout(atlas, *args.grid)
     elif args.projection_grid:
         layout_source = "projection-grid"
-        if not atlas_path:
-            raise SystemExit("--projection-grid needs --atlas")
-        source_atlas = Image.open(atlas_path).convert("RGBA")
-        atlas, background_method, background_config = preprocess_atlas_background(source_atlas, background_mode, chroma_rgb, args)
         states, cell, projection_warnings = projection_grid_layout(atlas, *args.projection_grid)
         layout_warnings.extend(projection_warnings)
     elif manifest and not args.auto:
         layout_source = "manifest"
-        states, cell, atlas_name, meta = manifest_layout(manifest, args.direction)
-        if isinstance(manifest.get("asset_kind"), str):
-            provenance["asset_kind"] = manifest["asset_kind"]
-        if isinstance(manifest.get("extraction_mode"), str):
-            provenance["extraction_mode"] = manifest["extraction_mode"]
-        if not atlas_path:
-            atlas_path = (args.manifest.parent / atlas_name) if atlas_name else None
-        if not atlas_path or not Path(atlas_path).is_file():
-            raise SystemExit(f"could not locate atlas image (manifest pointed to {atlas_name}); pass --atlas")
-        source_atlas = Image.open(atlas_path).convert("RGBA")
-        atlas, background_method, background_config = preprocess_atlas_background(source_atlas, background_mode, chroma_rgb, args)
     else:
         layout_source = "auto-detect"
-        if not atlas_path:
-            raise SystemExit("auto-detect needs --atlas")
-        source_atlas = Image.open(atlas_path).convert("RGBA")
-        atlas, background_method, background_config = preprocess_atlas_background(source_atlas, background_mode, chroma_rgb, args)
         states, cell = auto_detect(atlas)
 
     expected_names = [name.strip() for name in args.states.split(",")] if args.states else None
     if args.states:
+        renamed_meta = {}
         for i, name in enumerate(expected_names or []):
             if i < len(states):
+                renamed_meta[name] = meta.get(states[i]["name"], {})
                 states[i]["name"] = name
+        meta.update(renamed_meta)
     asset_labels = load_asset_labels(args.asset_labels_file)
     for state in states:
         labels = asset_labels.get(state["name"])
-        if labels:
+        if labels is not None:
             state["labels"] = labels
     provenance["asset_labels_file"] = str(args.asset_labels_file) if args.asset_labels_file else None
     provenance["asset_catalog_file"] = str(args.asset_catalog_file) if args.asset_catalog_file else None
@@ -942,13 +1004,19 @@ def main() -> int:
     provenance["atlas"] = str(atlas_path)
     provenance["background_method"] = background_method
     provenance["background_removal"] = background_config
+    provenance["segmentation_overlay"] = "qa/segmentation-overlay.png"
+    provenance["segmentation_warnings"] = segmentation_warnings(states, expected_names, layout_source) + layout_warnings
+    provenance["frame_semantics"] = args.frame_semantics or (manifest or {}).get("frame_semantics")
+    if background_mode != "none":
+        provenance["preprocessed_atlas"] = "qa/preprocessed-atlas-alpha.png"
+    result = write_run(out_dir, atlas, states, cell, meta, layout_source, provenance,
+                       force=args.force, input_paths=input_paths)
     if background_mode != "none":
         qa_dir = out_dir / "qa"
         qa_dir.mkdir(parents=True, exist_ok=True)
         preprocessed = qa_dir / "preprocessed-atlas-alpha.png"
         atomic_save_image(atlas, preprocessed)
-        provenance["preprocessed_atlas"] = str(preprocessed.relative_to(out_dir))
-    segmentation_overlay, segmentation_warnings = write_segmentation_report(
+    segmentation_overlay, warnings = write_segmentation_report(
         out_dir,
         atlas,
         states,
@@ -960,30 +1028,25 @@ def main() -> int:
         layout_warnings,
         args.diagnostic,
     )
-    provenance["segmentation_overlay"] = segmentation_overlay
-    provenance["segmentation_warnings"] = segmentation_warnings
-    provenance["frame_semantics"] = args.frame_semantics or (manifest or {}).get("frame_semantics")
-    result = write_run(out_dir, atlas, states, cell, meta, layout_source, provenance)
-    original_bytes = Path(atlas_path).read_bytes()
-    source_snapshot = out_dir / "source/imported-atlas.png"
     source_snapshot.parent.mkdir(exist_ok=True)
-    source_snapshot.write_bytes(original_bytes)
+    if source_snapshot != atlas_path:
+        atomic_write_bytes(source_snapshot, original_bytes)
     covered_states = [state["name"] for state in states]
     atomic_write_text(out_dir / "source-provenance.json", json.dumps({"version": 2,
         "kind": "sprite-source-provenance", "source_type": args.source_type, "art_engine": args.source_type,
         "fixture": args.source_type == "fixture", "verification_status": "verified", "state_coverage": covered_states,
         "accepted_sources": [{"path": "source/imported-atlas.png", "sha256": sha256(original_bytes).hexdigest(),
             "size_bytes": len(original_bytes), "states": covered_states}]}, indent=2) + "\n")
-    result["ok"] = not segmentation_warnings
-    result["segmentation_ok"] = not segmentation_warnings
+    result["ok"] = not warnings
+    result["segmentation_ok"] = not warnings
     result["out_dir"] = str(out_dir)
     result["background_method"] = background_method
     result["segmentation_overlay"] = segmentation_overlay
-    result["segmentation_warnings"] = segmentation_warnings
+    result["segmentation_warnings"] = warnings
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if args.diagnostic:
         return 0
-    if segmentation_warnings:
+    if warnings:
         return 1
     if layout_source in {"auto-detect", "projection-grid"}:
         return 2
@@ -991,4 +1054,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, RunLockError) as exc:
+        raise SystemExit(f"cannot unpack atlas: {exc}") from exc

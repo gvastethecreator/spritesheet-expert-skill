@@ -30,14 +30,40 @@ def _fingerprint(*documents: Mapping[str, Any]) -> str:
     return sha256(payload).hexdigest()
 
 
+def _source_record_error(
+    run_root: Path, record: Any, label: str, *, allow_external: bool = False
+) -> str | None:
+    if not isinstance(record, Mapping) or not isinstance(record.get("path"), str):
+        return f"video source report has no valid {label} record"
+    try:
+        candidate = Path(record["path"]).expanduser()
+        if candidate.is_absolute():
+            path = candidate.resolve()
+            if not allow_external:
+                path = resolve_run_path(run_root, path.relative_to(run_root))
+        else:
+            path = resolve_run_path(run_root, candidate)
+        if not path.is_file():
+            return f"video source {label} is missing: {record['path']}"
+        if _file_sha256(path) != record.get("sha256") or path.stat().st_size != record.get("size_bytes"):
+            return f"video source {label} bytes changed: {record['path']}"
+    except (OSError, ValueError) as exc:
+        return f"video source {label} is unreadable or unsafe: {exc}"
+    return None
+
+
 def _validate_video_selector(
     run_root: Path,
     *,
     source_entry: Mapping[str, Any],
     source_index: int,
+    source_type: str,
 ) -> tuple[list[str], dict[str, Any] | None]:
+    requires_grok_video = source_entry.get("source_type", source_type) == "grok-imagine-video"
     upstream = source_entry.get("upstream_report")
     if not isinstance(upstream, str):
+        if requires_grok_video:
+            return [f"accepted_sources[{source_index}] requires a Grok video source report"], None
         return [], None
     try:
         report_path = resolve_run_path(run_root, upstream)
@@ -50,14 +76,44 @@ def _validate_video_selector(
         report = json.loads(report_bytes.decode("utf-8"))
     except (OSError, UnicodeError, ValueError) as exc:
         return [f"video source report is unreadable: {upstream}: {exc}"], None
-    if report.get("kind") not in {"sprite-video-source", "sprite-grok-video-source"}:
+    if not isinstance(report, Mapping):
+        return [f"upstream source report must be a JSON object: {upstream}"], None
+    kind = report.get("kind")
+    # Generic non-video receipts may omit kind; Grok video must still match below.
+    if kind is not None and not isinstance(kind, str):
+        return [f"upstream source report kind must be a string: {upstream}"], None
+    if kind not in {"sprite-video-source", "sprite-grok-video-source"}:
+        if requires_grok_video:
+            return [f"accepted_sources[{source_index}] requires a Grok video source report"], None
         return [], None
     states = source_entry.get("states")
     state = report.get("state")
     errors: list[str] = []
+    if report.get("status") != "pass":
+        errors.append(f"video source report does not pass: {upstream}")
+    if requires_grok_video and kind != "sprite-grok-video-source":
+        errors.append(f"Grok video provenance has a mismatched source report: {upstream}")
     if not isinstance(states, (list, tuple)) or state not in states:
         errors.append(f"video source report state does not match accepted source: {upstream}")
         return errors, None
+    for label in ("sprite_request", "video", "first_frame"):
+        record = report.get(label)
+        if label == "first_frame" and record is None and report.get("exact_first_frame_preserved") is False:
+            continue
+        issue = _source_record_error(
+            run_root, record, label,
+            allow_external=label == "video" and kind == "sprite-grok-video-source",
+        )
+        if issue:
+            errors.append(issue)
+    request_record = report.get("sprite_request")
+    if isinstance(request_record, Mapping) and request_record.get("path") != "sprite-request.json":
+        errors.append(f"video source report does not bind sprite-request.json: {upstream}")
+    indices = report.get("sampled_video_indices")
+    if not isinstance(indices, list) or not indices or any(
+        type(index) is not int or index < 0 for index in indices
+    ):
+        return [f"video source report has invalid sampled_video_indices: {upstream}"], None
     output = report.get("output")
     if not isinstance(output, Mapping):
         errors.append(f"video source report has no output record: {upstream}")
@@ -67,7 +123,10 @@ def _validate_video_selector(
     ):
         errors.append(f"video source report output does not match accepted source: {upstream}")
     selector_relative = f"qa/{state}-video-frame-selector/selector.evidence.json"
-    selector_path = run_root / selector_relative
+    try:
+        selector_path = resolve_run_path(run_root, selector_relative)
+    except PathSafetyError as exc:
+        return [*errors, f"video frame selector path is unsafe: {exc}"], None
     if not selector_path.is_file():
         errors.append(f"required video frame selector is missing: {selector_relative}")
         return errors, None
@@ -76,7 +135,10 @@ def _validate_video_selector(
     except (OSError, ValueError) as exc:
         errors.append(f"video frame selector evidence is unreadable: {selector_relative}: {exc}")
         return errors, None
-    expected_report_hash = _file_sha256(report_path)
+    if not isinstance(selector, Mapping):
+        errors.append(f"video frame selector evidence must be a JSON object: {selector_relative}")
+        return errors, None
+    expected_report_hash = sha256(report_bytes).hexdigest()
     if (
         selector.get("kind") != "sprite-video-frame-selector-evidence"
         or selector.get("status") != "pass"
@@ -84,17 +146,24 @@ def _validate_video_selector(
     ):
         errors.append(f"video frame selector evidence is invalid: {selector_relative}")
     source_report = selector.get("source_report")
-    if not isinstance(source_report, Mapping) or source_report.get("sha256") != expected_report_hash:
+    if not isinstance(source_report, Mapping) or (
+        source_report.get("sha256") != expected_report_hash or source_report.get("path") != upstream
+    ):
         errors.append(f"video frame selector is stale for source report: {upstream}")
-    if selector.get("selected_indices") != report.get("sampled_video_indices"):
+    video = report.get("video")
+    if not isinstance(video, Mapping) or selector.get("video") != {
+        "path": video.get("path"), "sha256": video.get("sha256")
+    }:
+        errors.append(f"video frame selector video record is stale: {upstream}")
+    if selector.get("selected_indices") != indices:
         errors.append(f"video frame selector selection is stale for state {state}")
     candidate_count = selector.get("candidate_count")
     decoded = report.get("decoded")
     decoded_count = decoded.get("frame_count") if isinstance(decoded, Mapping) else None
-    requested_count = len(report.get("sampled_video_indices", []))
+    requested_count = len(indices)
     minimum_candidates = 2 if isinstance(decoded_count, int) and decoded_count > requested_count else 1
-    if not isinstance(candidate_count, int) or candidate_count < minimum_candidates:
-        errors.append(f"video frame selector has fewer than two candidate cycles for state {state}")
+    if type(candidate_count) is not int or candidate_count < minimum_candidates:
+        errors.append(f"video frame selector needs at least {minimum_candidates} candidate cycles for state {state}")
     html_record = selector.get("html")
     if isinstance(html_record, Mapping) and isinstance(html_record.get("path"), str):
         try:
@@ -217,6 +286,7 @@ def validate_provenance(
             run_root,
             source_entry=entry,
             source_index=index,
+            source_type=source_type,
         )
         errors.extend(selector_errors)
         if selector_evidence is not None:

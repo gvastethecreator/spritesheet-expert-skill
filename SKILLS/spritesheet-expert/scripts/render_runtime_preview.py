@@ -5,32 +5,16 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
-import tempfile
 
-from runio import atomic_write_text
-from spritecore.locks import acquire_run_lock
+from runio import atomic_write_bytes, atomic_write_text
+from spritecore.locks import RunLockError, acquire_run_lock
 from spritecore.runtime_preview import (
     RuntimePreviewError,
     build_evidence,
     encode_preview,
     prepare_preview,
 )
-
-
-def _atomic_write_bytes(target: Path, content: bytes) -> None:
-    descriptor, temporary = tempfile.mkstemp(
-        dir=str(target.parent), prefix=f".{target.name}.", suffix=".tmp"
-    )
-    try:
-        with os.fdopen(descriptor, "wb") as handle:
-            handle.write(content)
-        os.replace(temporary, target)
-    except BaseException:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
-        raise
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -86,23 +70,24 @@ def main() -> int:
             force=args.force,
         )
         artifact_bytes, placements = encode_preview(plan)
-        evidence = build_evidence(plan, artifact_bytes, placements)
     except (OSError, RuntimePreviewError, ValueError) as exc:
         return _error(str(exc))
 
     try:
         with acquire_run_lock(plan.run_dir, "render-runtime-preview"):
+            evidence = build_evidence(plan, artifact_bytes, placements)
             plan.output_path.parent.mkdir(parents=True, exist_ok=True)
+            plan.report_path.parent.mkdir(parents=True, exist_ok=True)
             if not plan.force and (plan.output_path.exists() or plan.report_path.exists()):
                 raise RuntimePreviewError(
                     "output appeared during render; pass --force to replace known outputs"
                 )
-            _atomic_write_bytes(plan.output_path, artifact_bytes)
+            atomic_write_bytes(plan.output_path, artifact_bytes)
             atomic_write_text(
                 plan.report_path,
                 json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
             )
-    except (OSError, RuntimePreviewError, ValueError) as exc:
+    except (OSError, RunLockError, RuntimePreviewError, ValueError) as exc:
         return _error(str(exc))
 
     print(

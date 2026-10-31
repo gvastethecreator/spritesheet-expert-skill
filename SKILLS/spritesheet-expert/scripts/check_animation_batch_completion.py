@@ -8,11 +8,16 @@ import argparse
 from collections import Counter
 from hashlib import sha256
 import json
+import os
 from pathlib import Path
+import stat
 import sys
 from typing import Any, Mapping, Sequence
 
 from runio import atomic_write_text
+from check_animation_contracts import frame_rows_by_state
+from spritecore.paths import resolve_run_path
+from spritecore.models import is_state_slug
 from spritecore.provenance import validate_provenance
 
 
@@ -71,7 +76,9 @@ def _check_file_record(
         return None
     actual_size = path.stat().st_size
     expected_size = record.get("size_bytes")
-    if isinstance(expected_size, int) and actual_size != expected_size:
+    if expected_size is not None and (type(expected_size) is not int or expected_size < 0):
+        errors.append(f"{label} size must be a non-negative integer: {path}")
+    elif expected_size is not None and actual_size != expected_size:
         errors.append(
             f"{label} size drift: expected {expected_size}, found {actual_size}: {path}"
         )
@@ -106,9 +113,9 @@ def _states_for_batch(
         policy = manifest.get("generation_policy")
         raw = policy.get("states_per_identity") if isinstance(policy, Mapping) else None
         states = list(raw) if isinstance(raw, list) else []
-    if not states or any(not isinstance(state, str) or not state for state in states):
+    if not states or any(not isinstance(state, str) or not is_state_slug(state) for state in states):
         raise BatchCompletionError(
-            "required states are missing; set generation_policy.states_per_identity or --states"
+            "required states must be non-empty portable state slugs; set generation_policy.states_per_identity or --states"
         )
     if len(states) != len(set(states)):
         raise BatchCompletionError("required states must be unique")
@@ -257,7 +264,7 @@ def _audit_selector(
     if (
         not isinstance(indices, list)
         or not indices
-        or any(not isinstance(index, int) or index < 0 for index in indices)
+        or any(type(index) is not int or index < 0 for index in indices)
         or indices != sorted(set(indices))
     ):
         errors.append(f"selector indices must be non-empty, unique, and chronological for {state}")
@@ -268,9 +275,13 @@ def _audit_selector(
         errors.append(f"selector selection is stale for quota video state {state}")
     decoded = report.get("decoded")
     decoded_count = decoded.get("frame_count") if isinstance(decoded, Mapping) else None
-    minimum_candidates = 2 if isinstance(decoded_count, int) and decoded_count > len(selected) else 1
+    if type(decoded_count) is not int or decoded_count <= 0:
+        errors.append(f"decoded frame count must be a positive integer for {state}")
+    elif any(index >= decoded_count for index in selected):
+        errors.append(f"selector index is outside the decoded timeline for {state}")
+    minimum_candidates = 2 if type(decoded_count) is int and decoded_count > len(selected) else 1
     if (
-        not isinstance(selector.get("candidate_count"), int)
+        type(selector.get("candidate_count")) is not int
         or selector["candidate_count"] < minimum_candidates
     ):
         errors.append(
@@ -280,7 +291,7 @@ def _audit_selector(
     html = selector.get("html")
     if isinstance(html, Mapping):
         try:
-            html_path = _resolve_media(run_dir, html.get("path"), f"selector HTML for {state}")
+            html_path = _resolve_under(run_dir, html.get("path"), f"selector HTML for {state}")
             _check_file_record(
                 path=html_path,
                 record=html,
@@ -302,7 +313,7 @@ def _audit_selector(
                 errors.append(f"selector timeline page {index} is invalid for {state}")
                 continue
             try:
-                page_path = _resolve_media(
+                page_path = _resolve_under(
                     selector_path.parent,
                     page.get("path"),
                     f"selector timeline page {index} for {state}",
@@ -319,7 +330,7 @@ def _audit_selector(
         manifest_hash = timeline.get("manifest_sha256")
         if isinstance(manifest_name, str) and isinstance(manifest_hash, str):
             try:
-                timeline_manifest = _resolve_media(
+                timeline_manifest = _resolve_under(
                     selector_path.parent,
                     manifest_name,
                     f"selector timeline manifest for {state}",
@@ -344,6 +355,7 @@ def _audit_quota_report(
     report_path: Path,
     errors: list[str],
 ) -> dict[str, Any]:
+    error_count = len(errors)
     try:
         report = _load_json(report_path, f"quota video report for {state}")
     except BatchCompletionError as exc:
@@ -358,7 +370,7 @@ def _audit_quota_report(
     if not isinstance(video, Mapping):
         errors.append(f"quota video record is missing for {state}: {report_path}")
     else:
-        if not isinstance(video.get("size_bytes"), int) or video["size_bytes"] < 1:
+        if type(video.get("size_bytes")) is not int or video["size_bytes"] < 1:
             errors.append(f"quota video size record is missing for {state}: {report_path}")
         try:
             video_path = _resolve_media(run_dir, video.get("path"), f"quota video for {state}")
@@ -383,7 +395,7 @@ def _audit_quota_report(
         "kind": report.get("kind"),
         "video_sha256": video_hash,
         "selected_indices": selected,
-        "ok": video_hash is not None,
+        "ok": video_hash is not None and len(errors) == error_count,
     }
 
 
@@ -394,19 +406,38 @@ def _audit_workbench(run_dir: Path, required_states: Sequence[str], errors: list
     except BatchCompletionError as exc:
         errors.append(str(exc))
         return
-    if evidence.get("kind") != "sprite-preview-workbench" or not evidence.get(
-        "self_contained"
-    ):
+    if evidence.get("kind") != "sprite-preview-workbench" or evidence.get("self_contained") is not True:
         errors.append(f"preview workbench evidence is invalid: {evidence_path}")
     states = evidence.get("states")
     if not isinstance(states, list) or any(state not in states for state in required_states):
         errors.append(f"preview workbench does not cover every required state: {evidence_path}")
+    sources = evidence.get("sources")
+    if (
+        not isinstance(sources, list) or len(sources) != 2
+        or any(not isinstance(item, Mapping) or not isinstance(item.get("role"), str) for item in sources)
+        or {item["role"] for item in sources} != {"atlas", "manifest"}
+    ):
+        errors.append(f"preview workbench must bind its atlas and manifest: {evidence_path}")
+        sources = []
+    linked = evidence.get("evidence")
+    if not isinstance(linked, list):
+        errors.append(f"preview workbench linked evidence must be an array: {evidence_path}")
+        linked = []
+    for record in [*sources, *linked]:
+        if not isinstance(record, Mapping):
+            errors.append(f"preview workbench file record is invalid: {evidence_path}")
+            continue
+        try:
+            path = _resolve_under(run_dir, record.get("path"), "workbench input")
+            _check_file_record(path=path, record=record, label="workbench input", errors=errors)
+        except BatchCompletionError as exc:
+            errors.append(str(exc))
     artifact = evidence.get("artifact")
     if not isinstance(artifact, Mapping):
         errors.append(f"preview workbench artifact record is missing: {evidence_path}")
         return
     try:
-        artifact_path = _resolve_media(run_dir, artifact.get("path"), "preview workbench")
+        artifact_path = _resolve_under(run_dir, artifact.get("path"), "preview workbench")
         _check_file_record(
             path=artifact_path,
             record=artifact,
@@ -448,7 +479,7 @@ def _audit_candidate(
         errors.append(f"candidate manifest has no outputs.png record: {candidate_path}")
         return
     try:
-        png_path = _resolve_media(candidate_path, png.get("path"), "candidate PNG")
+        png_path = _resolve_under(candidate_path, png.get("path"), "candidate PNG")
         actual_hash = _check_file_record(
             path=png_path,
             record=png,
@@ -507,7 +538,11 @@ def _audit_entry(
     try:
         run_dir = _resolve_under(repo_root, entry.get("run"), f"{identity} run")
     except BatchCompletionError as exc:
-        return {"identity": identity, "ok": False, "errors": [str(exc)], "warnings": []}
+        return {
+            "identity": identity, "ok": False, "errors": [str(exc)], "warnings": [],
+            "accepted_source_types": {}, "quota_videos": [], "completed_repairs": [],
+            "archived_video_reports": [],
+        }
 
     states = entry.get("states")
     if not isinstance(states, Mapping):
@@ -548,11 +583,8 @@ def _audit_entry(
         frames = _load_json(run_dir / "frames" / "frames-manifest.json", "frames manifest")
         if frames.get("ok") is not True:
             errors.append("frames manifest is not ok")
-        rows = frames.get("rows")
-        rows_by_state = {
-            row.get("state"): row for row in rows if isinstance(row, Mapping)
-        } if isinstance(rows, list) else {}
-    except BatchCompletionError as exc:
+        rows_by_state = frame_rows_by_state(frames)
+    except ValueError as exc:
         errors.append(str(exc))
         rows_by_state = {}
     for state in required_states:
@@ -567,12 +599,20 @@ def _audit_entry(
         expected_frames = contract.get("frames")
         files = row.get("files")
         if (
-            not isinstance(expected_frames, int)
+            type(expected_frames) is not int
             or expected_frames < 1
             or not isinstance(files, list)
             or len(files) != expected_frames
         ):
             errors.append(f"extracted frame count does not match request for {state!r}")
+        if isinstance(files, list):
+            for relative in files:
+                try:
+                    path = resolve_run_path(run_dir, relative)
+                    if not path.is_file():
+                        errors.append(f"extracted frame is missing for {state!r}: {relative}")
+                except (ValueError, TypeError) as exc:
+                    errors.append(f"extracted frame path is invalid for {state!r}: {exc}")
 
     provenance_result = validate_provenance(
         run_dir, allow_imported=True, allow_fixture=False
@@ -629,6 +669,8 @@ def _audit_entry(
         validation_fingerprint = str(validation.get("input_fingerprint") or "")
         if (
             validation.get("ok") is not True
+            or validation.get("kind") != "sprite-run-validation-report"
+            or validation.get("complete") is not True
             or validation.get("status") != "pass"
             or validation.get("stage") != "pre-package"
         ):
@@ -649,7 +691,17 @@ def _audit_entry(
 
     _audit_workbench(run_dir, required_states, errors)
 
-    all_reports = sorted((run_dir / "provider").glob("**/video-source.json"))
+    provider_dir = run_dir / "provider"
+    all_reports = []
+    def directory_link(path: Path) -> bool:
+        return path.is_symlink() or bool(getattr(path.lstat(), "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
+    if provider_dir.exists() and directory_link(provider_dir):
+        raise BatchCompletionError("provider report discovery does not follow directory links")
+    for parent, directories, names in os.walk(provider_dir, followlinks=False):
+        directories[:] = [name for name in directories if not directory_link(Path(parent) / name)]
+        if "video-source.json" in names:
+            all_reports.append(_resolve_under(run_dir, str(Path(parent) / "video-source.json"), "provider report"))
+    all_reports.sort()
     quota_records: list[dict[str, Any]] = []
     selected_reports: set[Path] = set()
     if quota_sealed:
@@ -881,6 +933,10 @@ def main() -> int:
         print("--expected-videos-per-identity must be a positive integer", file=sys.stderr)
         return 3
     try:
+        if report_path.exists():
+            previous = _load_json(report_path, "existing report output")
+            if previous.get("kind") != "sprite-animation-batch-completion-report":
+                raise BatchCompletionError("report output cannot overwrite an input or unrelated file")
         report = audit_batch(
             manifest_path=manifest_path,
             repo_root=repo_root,
@@ -892,7 +948,7 @@ def main() -> int:
         report_path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write_text(
             report_path,
-            json.dumps(report, indent=2, ensure_ascii=False) + "\n",
+            json.dumps(report, indent=2, ensure_ascii=False, allow_nan=False) + "\n",
         )
     except (BatchCompletionError, OSError) as exc:
         print(json.dumps({"ok": False, "error": str(exc)}), file=sys.stderr)

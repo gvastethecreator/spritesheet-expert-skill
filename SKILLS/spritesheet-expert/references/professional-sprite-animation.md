@@ -10,7 +10,7 @@ Use when improving prompts, presets, curation, QA, or generated assets in
 - Every sprite frame needs consistent origin/pivot. Side-view characters
  anchor at feet or center-of-mass projection; top-down near ground
  contact; VFX at emitter/contact point; tiles to grid.
-- Pad/extrude sprites so linear filtering, mipmaps, and compression don't bleed neighboring frames.
+- Select padding/extrusion for the runtime filter, mipmap and compression settings; verify neighboring frames do not bleed at the intended scale.
 - Preserve frame count, FPS, loop flag, and animation tags/row semantics from
  preset or request. Don't silently convert animation frames into variant
  stills.
@@ -64,8 +64,8 @@ Use when improving prompts, presets, curation, QA, or generated assets in
 
 - Bones/rig as mental model for generated frames: root/pelvis,
  chest, head, upper/lower limbs, hands/feet, weapon/prop, hair/cloth overlap.
-- Rigged/cutout preserves identity but can go stiff. Add pose-specific redraws at joints, hands, face, cloth, contact frames.
-- Frame-by-frame is better for attacks, squash, VFX, expressive reactions, but stay constrained by idle anchor and feature-scale QA.
+- Rigged/cutout animation reuses artwork; inspect identity and pose stiffness after deformation. Use approved pose-specific redraws where needed.
+- Frame-by-frame redraws can support attacks, squash, VFX and expressive reactions; keep the accepted idle anchor and feature-scale QA.
 - If generated row drifts, promote corrected frame/anchor and regenerate
  only failing row before replacing whole sheet.
 
@@ -85,15 +85,15 @@ Use when improving prompts, presets, curation, QA, or generated assets in
 
 ## Background Removal Standard
 
-- New sources: flat neutral gray, black, or white background. Don't exclude neutral colors from subject palette.
-- Trustworthy alpha first. Edge-connected matte only for clean flat border — avoids globally deleting white clothing, black outlines, gray materials, highlights, or interior holes.
+- Request and preserve reviewed native transparency for isolated stills. If alpha is unavailable or fails review, use flat neutral gray, black or white; keep those colors available in the subject palette.
+- Edge-connected matting is for a clean flat border. It can still remove connected subject pixels; inspect clothing, outlines, materials, highlights and holes.
 - Pinned Lucida model for new Imagegen character/creature grids.
  Prefer black when there's no identity image. Adaptive frame bounds after
  matting. Hard alpha threshold `64` for pixel art; soft alpha for
  illustrated sprites that need translucent edges.
 - `rembg` + `birefnet-general` for ambiguous, soft, dirty, photographic,
  painterly, or breathing video backgrounds. `birefnet-general-lite` is
- speed option, not quality default.
+ an optional comparison; measure time and review its matte on the actual source.
 - BEN2 for hard/final comparisons where BiRefNet clips hair, fur, spikes,
  small limbs, or painterly edges. Backend choice isn't proof; best reviewed
  matte wins.
@@ -128,7 +128,9 @@ Use when improving prompts, presets, curation, QA, or generated assets in
 
 ## Sources
 
-- Unity Sprite Atlas manual: https://docs.unity3d.com/Manual/class-SpriteAtlas.html
+Use documentation for the project's actual engine and package versions. The Godot skeleton tutorial flags its own version coverage as incomplete; it is not compatibility proof.
+
+- Unity Sprite Atlas manual: https://docs.unity3d.com/Manual/sprite/atlas/sprite-atlas-reference.html
 - Unity 2D Animation package manual: https://docs.unity3d.com/Packages/com.unity.2d.animation@latest
 - Godot 2D sprite animation docs: https://docs.godotengine.org/en/stable/tutorials/2d/2d_sprite_animation.html
 - Godot 2D skeletons docs: https://docs.godotengine.org/en/stable/tutorials/animation/2d_skeletons.html

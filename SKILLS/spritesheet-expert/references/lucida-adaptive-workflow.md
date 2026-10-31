@@ -33,7 +33,7 @@ Request contract:
 }
 ```
 
-Pixel art: `alpha_mode: hard`, threshold `64` — converts Lucida's soft mask into stable runtime pixels. Illustrated sprites that need translucent hair, smoke, or glow: `alpha_mode: soft`.
+Pixel art: `alpha_mode: hard`, threshold `64` — converts Lucida's soft mask to binary alpha; inspect edge loss and frame-to-frame flicker. Illustrated sprites that need translucent hair, smoke, or glow: `alpha_mode: soft`.
 
 Keep the model revision pinned. Lucida uses custom Transformers code. Do not run a floating branch or an unreviewed revision.
 
@@ -53,10 +53,10 @@ Prepare the run with an explicit Lucida fallback request. For a verified
 transparent source, select `alpha` instead:
 
 ```bash
-python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id enemy --request /abs/run/request.json --force
+python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id enemy --request /abs/request.json
 ```
 
-Generate each compact grid with `$imagegen`. Use the prepared prompt and guide. Copy the accepted image to `raw/<state>.png`. Record source provenance.
+Generate each compact grid through the selected provider. Use the prepared prompt and guide. Copy the accepted image to `raw/<state>.png`. Record source provenance.
 
 Four-frame creature state: one complete `2x2` grid. Do not generate frames separately by default. If the whole grid repeatedly changes identity, document the failure before regenerating complete active sprites separately. Never paste a local body-part patch over an existing frame.
 
@@ -67,7 +67,7 @@ python scripts/check_generation_provenance.py --run-dir /abs/run
 python scripts/extract_sprite_row_frames.py --run-dir /abs/run
 ```
 
-Video ingestion: replace repeated neutral idles with exact copies of the accepted idle frame before extraction. Similar generated idles are not interchangeable.
+For video workflows that declare shared-idle slots, use exact copies of the accepted idle in those slots before extraction. Other cycles retain their declared pose and timing contract.
 
 Read the game's runtime cell and actor pivot before extraction. Anchor from stable anatomy: `body-bottom` for stable lower body mass, `center` for hovering. Use `bbox-bottom` only when the lowest opaque point is a stable contact in every frame. Do not align a multi-legged body from one changing foot tip. This fragment matches a `512x512` cell with body bottom at `440`:
 
@@ -127,4 +127,4 @@ Neutral sources: black, gray, or white subject pixels are not chroma leakage. Ch
 
 If an identity proxy marks raised forearms or wings as a larger head or torso, keep the standard report. Inspect contact, onion, and runtime playback. Run a pose-aware comparison only when those images prove stable body parts did not change. Record reason and thresholds. Do not excuse visible scale drift.
 
-Lucida is a BiRefNet fine-tune under MIT. Upstream docs also list mixed training-data licenses. Review those terms before commercial release.
+The [Lucida model card](https://huggingface.co/egeorcun/lucida) lists MIT for code and weights, and separate training-data terms. Review the applicable terms before commercial release.

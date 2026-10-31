@@ -18,6 +18,8 @@ from typing import Any
 from PIL import Image, ImageDraw, ImageFilter
 
 from runio import acquire_run_dir_lock, atomic_save_image, atomic_write_text
+from spritecore.models import is_state_slug
+from spritecore.paths import resolve_run_path
 from spritecore.image_ops import (
     ArtMode,
     ImagePolicyError,
@@ -398,10 +400,9 @@ def refine_cutout_edges(
 ) -> Image.Image:
     """Remove border fringe pixels that still match the removed background.
 
-    This is intentionally conservative: only pixels adjacent to transparent
-    background are touched, and only when their RGB remains close to the sampled
-    background palette. It helps opaque imagegen matte/key outputs with light
-    halos without globally deleting white clothing or bright highlights.
+    Only pixels near transparency whose RGB matches the sampled background
+    palette are touched. This heuristic can also remove matching foreground
+    colors along an edge; inspect the matte review before accepting the cutout.
     """
     if not background_colors or passes <= 0:
         return image.convert("RGBA")
@@ -444,7 +445,7 @@ def normalize_background_removal(request: dict[str, Any], args: argparse.Namespa
         method = args.background_removal
     if method not in BACKGROUND_REMOVAL_METHODS:
         raise SystemExit(
-            "background_removal.method must be none, chroma, matte, rembg, ben2, lucida, or auto"
+            "background_removal.method must be alpha, none, chroma, matte, rembg, ben2, lucida, or auto"
         )
     model = args.background_model or str(config.get("model", default_background_model(method)))
     revision = getattr(args, "background_revision", None) or config.get(
@@ -472,12 +473,9 @@ def normalize_background_removal(request: dict[str, Any], args: argparse.Namespa
     if not isinstance(post_rembg_chroma_cleanup, bool):
         raise SystemExit("background_removal.post_rembg_chroma_cleanup must be boolean")
     generation_background = request.get("generation_background")
-    inferred_family = (
-        "neutral"
-        if isinstance(generation_background, dict)
-        and generation_background.get("family") == "neutral"
-        else "legacy-chroma"
-    )
+    generation_family = generation_background.get("family") if isinstance(generation_background, dict) else None
+    inferred_family = (generation_family if generation_family in ("transparent", "neutral")
+                       else "legacy-chroma" if method == "chroma" else "unknown")
     source_family = str(config.get("source_family", inferred_family))
     if source_family not in {"transparent", "neutral", "legacy-chroma", "unknown"}:
         raise SystemExit(
@@ -784,14 +782,16 @@ def restore_source_foreground_regions(
     """Recover source-colored subject regions that a matte model erased.
 
     Candidate pixels must be clearly distinct from the sampled border matte.
-    A candidate component is restored only when it substantially overlaps the
-    model's accepted foreground, so real matte-colored holes between limbs stay
-    transparent. This also handles black torsos that open between horns and are
-    therefore not topologically enclosed.
+    Components need overlap with accepted foreground, or nearby foreground and
+    bounded geometry, unless detached recovery was explicitly enabled. These
+    are heuristics, not proof that a region belongs to the subject. Original
+    transparency and the opacity of restored source pixels are retained.
     """
 
     rgba_source = source.convert("RGBA")
     output = cutout.convert("RGBA").copy()
+    if rgba_source.size != output.size:
+        raise ValueError("source and cutout sizes must match for foreground recovery")
     if not background_colors:
         return output, 0
     alpha = output.getchannel("A")
@@ -814,8 +814,8 @@ def restore_source_foreground_regions(
     for index in range(width * height):
         x = index % width
         y = index // width
-        red, green, blue, _alpha = source_pixels[x, y]
-        if all(
+        red, green, blue, source_alpha = source_pixels[x, y]
+        if source_alpha and all(
             color_distance((red, green, blue), matte) > color_threshold
             for matte in background_colors
         ):
@@ -872,8 +872,8 @@ def restore_source_foreground_regions(
                 continue
             x = index % width
             y = index // width
-            red, green, blue, _alpha = source_pixels[x, y]
-            output_pixels[x, y] = (red, green, blue, 255)
+            red, green, blue, source_alpha = source_pixels[x, y]
+            output_pixels[x, y] = (red, green, blue, source_alpha)
             restored += 1
     return output, restored
 
@@ -890,9 +890,9 @@ def restore_enclosed_source_holes(
     Dark sprites on black mattes can contain subject pixels that no colour
     distance test can distinguish from the background. Lucida may erase those
     shadows even though the surrounding limb or torso was accepted. Only
-    transparent components that cannot reach the image border are eligible;
-    open spaces between legs, feelers, wings, and other silhouette gaps remain
-    transparent. Large enclosed openings are also left untouched.
+    components that cannot reach the image border and fit the size cap are
+    eligible. Source transparency is retained. For an opaque source this is a
+    heuristic: an enclosed gap can be genuine background, so inspect the result.
     """
 
     rgba_source = source.convert("RGBA")
@@ -927,7 +927,7 @@ def restore_enclosed_source_holes(
     visited = bytearray(width * height)
     source_pixels = rgba_source.load()
     output_pixels = output.load()
-    max_hole_pixels = max(1, round(width * height * max_hole_ratio))
+    max_hole_pixels = math.floor(width * height * max_hole_ratio)
     restored = 0
     for start, is_transparent in enumerate(transparent):
         if not is_transparent or exterior[start] or visited[start]:
@@ -959,9 +959,10 @@ def restore_enclosed_source_holes(
         for index in component:
             x = index % width
             y = index // width
-            red, green, blue, _alpha = source_pixels[x, y]
-            output_pixels[x, y] = (red, green, blue, 255)
-        restored += len(component)
+            red, green, blue, source_alpha = source_pixels[x, y]
+            if source_alpha:
+                output_pixels[x, y] = (red, green, blue, source_alpha)
+                restored += 1
     return output, restored
 
 
@@ -1087,7 +1088,10 @@ def remove_background(
                 0.0,
                 int(config.get("post_source_recovery_passes", 1)),
             )
-        return cutout, "lucida"
+        # Recovery can restore soft source alpha after the initial model mask.
+        return apply_alpha_policy(cutout, config), "lucida"
+    if method != "chroma":
+        raise ValueError(f"unsupported background removal method: {method}")
     cutout = remove_chroma_background(
         source,
         chroma_key,
@@ -1137,7 +1141,7 @@ def fit_preview(image: Image.Image, max_width: int, max_height: int) -> Image.Im
 
 
 def labeled_preview(label: str, image: Image.Image, width: int, height: int) -> Image.Image:
-    target = Image.new("RGBA", (width, height + 18), (18, 18, 18, 255))
+    target = Image.new("RGBA", (width, height + 18), (17, 17, 17, 255))
     target.alpha_composite(fit_preview(image, width, height), (0, 18))
     draw = ImageDraw.Draw(target)
     draw.text((4, 3), label, fill=(235, 235, 235, 255))
@@ -1160,7 +1164,7 @@ def save_background_matte_review(
     label_height = 20
     row_width = panel_width * 6 + gutter * 7
     row_height = panel_height + label_height + gutter * 2
-    review = Image.new("RGBA", (row_width, row_height * len(entries)), (7, 7, 7, 255))
+    review = Image.new("RGBA", (row_width, row_height * len(entries)), (17, 17, 17, 255))
     draw = ImageDraw.Draw(review)
     for row_index, entry in enumerate(entries):
         y = row_index * row_height
@@ -1204,7 +1208,7 @@ def compose_state_matte_reviews(
             panels.append(opened.convert("RGBA"))
     width = max(panel.width for panel in panels)
     height = sum(panel.height for panel in panels)
-    review = Image.new("RGBA", (width, height), (7, 7, 7, 255))
+    review = Image.new("RGBA", (width, height), (17, 17, 17, 255))
     y = 0
     for panel in panels:
         review.alpha_composite(panel, (0, y))
@@ -1257,11 +1261,13 @@ def connected_components(image: Image.Image) -> list[dict[str, Any]]:
             max_x = max(max_x, x)
             max_y = max(max_y, y)
 
-            for neighbor in (current - 1, current + 1, current - width, current + width):
+            for neighbor in (
+                current - 1 if x > 0 else -1,
+                current + 1 if x + 1 < width else -1,
+                current - width,
+                current + width,
+            ):
                 if neighbor < 0 or neighbor >= len(data) or visited[neighbor]:
-                    continue
-                nx = neighbor % width
-                if abs(nx - x) > 1:
                     continue
                 if data[neighbor] > 16:
                     visited[neighbor] = 1
@@ -1296,12 +1302,16 @@ def component_group_image(source: Image.Image, components: list[dict[str, Any]],
 
 
 def cell_geometry(cell: dict[str, Any]) -> tuple[int, int, int, int]:
-    width = int(cell.get("width", cell.get("size", 0)))
-    height = int(cell.get("height", cell.get("size", 0)))
-    safe_margin_x = int(cell.get("safe_margin_x", cell.get("safe_margin", 0)))
-    safe_margin_y = int(cell.get("safe_margin_y", cell.get("safe_margin", 0)))
-    if width <= 0 or height <= 0:
-        raise SystemExit("cell width/height must be positive in sprite-request.json")
+    if not isinstance(cell, dict):
+        raise SystemExit("cell must be an object in sprite-request.json")
+    width = cell.get("width", cell.get("size", 0))
+    height = cell.get("height", cell.get("size", 0))
+    safe_margin_x = cell.get("safe_margin_x", cell.get("safe_margin", 0))
+    safe_margin_y = cell.get("safe_margin_y", cell.get("safe_margin", 0))
+    if any(type(value) is not int for value in (width, height, safe_margin_x, safe_margin_y)):
+        raise SystemExit("cell dimensions and margins must be integers")
+    if width <= 0 or height <= 0 or not 0 <= safe_margin_x * 2 < width or not 0 <= safe_margin_y * 2 < height:
+        raise SystemExit("cell dimensions must be positive and margins must leave usable pixels")
     return width, height, safe_margin_x, safe_margin_y
 
 
@@ -1714,12 +1724,15 @@ def stable_feature_metrics(image: Image.Image) -> dict[str, int]:
 
 def raw_layout_grid(entry: dict[str, Any], frame_count: int) -> tuple[int, int]:
     raw = entry.get("raw_layout") if isinstance(entry, dict) else None
-    if isinstance(raw, dict):
-        columns = int(raw.get("columns", raw.get("cols", frame_count)))
-        rows = int(raw.get("rows", 1))
-        if columns > 0 and rows > 0 and columns * rows >= frame_count:
-            return columns, rows
-    return frame_count, 1
+    if raw is None:
+        return frame_count, 1
+    if not isinstance(raw, dict):
+        raise SystemExit("raw_layout must be an object")
+    columns = raw.get("columns", raw.get("cols", frame_count))
+    rows = raw.get("rows", 1)
+    if type(columns) is not int or type(rows) is not int or columns <= 0 or rows <= 0 or columns * rows < frame_count:
+        raise SystemExit("raw_layout needs positive integer columns/rows with room for every frame")
+    return columns, rows
 
 
 def raw_cell_rect(sheet: Image.Image, columns: int, rows: int, index: int) -> tuple[int, int, int, int]:
@@ -1756,29 +1769,23 @@ def exact_idle_copy_pairs(
     return [candidate]
 
 
-def file_sha256(path: Path) -> str:
-    digest = sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def find_video_source_report(
     run_dir: Path,
     state: str,
     raw_path: Path,
+    raw_hash: str,
 ) -> tuple[Path, dict[str, Any]] | None:
     provider_root = run_dir / "provider"
     if not provider_root.is_dir():
         return None
     raw_relative = raw_path.relative_to(run_dir).as_posix()
-    raw_hash = file_sha256(raw_path)
     matches: list[tuple[Path, dict[str, Any]]] = []
     for candidate in provider_root.glob(f"**/{state}/video-source.json"):
         try:
             report = json.loads(candidate.read_text(encoding="utf-8"))
         except (OSError, ValueError):
+            continue
+        if not isinstance(report, dict):
             continue
         output = report.get("output")
         if (
@@ -1828,6 +1835,8 @@ def safe_alpha_crop(
     largest_area = max(component["area"] for component in components)
     keep_threshold = max(8, round(largest_area * 0.00025))
     kept = [component for component in components if component["area"] >= keep_threshold]
+    if not kept:
+        return None, None, []
     left = min(component["bbox"][0] for component in kept)
     top = min(component["bbox"][1] for component in kept)
     right = max(component["bbox"][2] for component in kept)
@@ -1908,12 +1917,18 @@ def extract_video_frame_sprites(
         cell = raw_source.crop(cell_rect).convert("RGBA")
         context_padding = max(12, min(48, round(min(cell.size) * 0.04)))
         crop_padding = max(4, min(32, round(min(cell.size) * 0.02)))
+        preserve_alpha = background_removal["method"] in {"alpha", "none"} or (
+            background_removal["method"] == "auto" and transparent_edge_ratio(cell) >= 0.70
+        )
         padded = Image.new(
             "RGBA",
             (cell.width + context_padding * 2, cell.height + context_padding * 2),
-            (*background_rgb, 255),
+            (*background_rgb, 0 if preserve_alpha else 255),
         )
-        padded.alpha_composite(cell, (context_padding, context_padding))
+        if preserve_alpha:
+            padded.paste(cell, (context_padding, context_padding))
+        else:
+            padded.alpha_composite(cell, (context_padding, context_padding))
         cache_key = sha256(cell.tobytes()).hexdigest()
         try:
             if cache_key in cache:
@@ -2044,12 +2059,10 @@ def extract_grid_adaptive_sprites(
 ) -> tuple[list[Image.Image] | None, dict[str, Any]]:
     """Segment each raw grid row by content instead of fixed cell boundaries.
 
-    Image generators frequently leave uneven gutters or let an arm/glow cross a
-    nominal cell edge.  We still use the declared grid only to identify the
-    visual rows and frame order; the x extents are then recovered from alpha
-    components (with projection cuts as a deterministic fallback).  This keeps
-    disconnected limbs/effects attached to the nearest pose while avoiding
-    hard half-cell cuts.
+    Alpha components provide candidate body bounds; remaining significant
+    components are assigned to the nearest body center. This is a heuristic for
+    uneven gutters and detached parts. Declared row counts must match observed
+    body rows; inspect the source-bound overlay before accepting the cuts.
     """
 
     components = connected_components(sheet)
@@ -2093,7 +2106,9 @@ def extract_grid_adaptive_sprites(
         )
         row_buckets[row_index].append(seed)
     expected_row_counts = [min(columns, max(0, frame_count - row * columns)) for row in range(rows)]
-    if [len(bucket) for bucket in row_buckets] != expected_row_counts:
+    row_counts = [len(bucket) for bucket in row_buckets]
+    rows_match = row_counts == expected_row_counts
+    if not rows_match:
         ordered_seeds = sorted(
             seeds,
             key=lambda component: (
@@ -2134,15 +2149,16 @@ def extract_grid_adaptive_sprites(
         ]
         for group in groups
     ]
-    row_counts = expected_row_counts
-    return sprites if len(sprites) == frame_count else None, {
+    return sprites if len(sprites) == frame_count and rows_match else None, {
         "layout": "grid",
         "segmentation": "adaptive",
         "columns": columns,
         "rows": rows,
-        "ok": len(sprites) == frame_count,
+        "ok": len(sprites) == frame_count and rows_match,
         "assignment": "nearest-component-center-2d",
         "row_counts": row_counts,
+        "expected_row_counts": expected_row_counts,
+        **({"reason": f"observed body rows {row_counts} do not match declared rows {expected_row_counts}"} if not rows_match else {}),
         "spans": [
             {
                 "source_bbox": source_bbox,
@@ -2164,11 +2180,11 @@ def save_adaptive_segmentation_overlay(
     spans = report.get("spans")
     if not isinstance(spans, list) or not spans:
         return None
-    overlay = composite_on_color(source.convert("RGBA"), (24, 24, 28))
+    overlay = composite_on_color(source.convert("RGBA"), (17, 17, 17))
     draw = ImageDraw.Draw(overlay)
     palette = (
         (255, 99, 99, 255),
-        (102, 217, 255, 255),
+        (220, 220, 220, 255),
         (255, 207, 92, 255),
         (156, 231, 129, 255),
         (205, 144, 255, 255),
@@ -2319,7 +2335,7 @@ def reference_metrics_for_rows(
     cell_height: int,
     safe_margin_x: int,
     safe_margin_y: int,
-) -> int | None:
+) -> dict[str, float] | None:
     if str(request.get("asset_kind", "sprite")) != "sprite":
         return None
     states = request.get("states", {})
@@ -2773,10 +2789,25 @@ def main() -> int:
     run_dir = args.run_dir.expanduser().resolve()
     acquire_run_dir_lock(run_dir, "extract_sprite_row_frames")
     request = json.loads((run_dir / "sprite-request.json").read_text(encoding="utf-8"))
+    if not isinstance(request, dict) or not isinstance(request.get("states"), dict) or not request["states"]:
+        raise SystemExit("sprite-request.json requires a nonempty states object")
     extraction_mode = str(request.get("extraction_mode", "components"))
     if extraction_mode not in {"components", "slots"}:
         raise SystemExit("sprite-request.json extraction_mode must be components or slots")
     states = list(request["states"]) if args.states == "all" else [state.strip() for state in args.states.split(",") if state.strip()]
+    if not states or len(states) != len(set(states)):
+        raise SystemExit("select at least one state, without duplicates")
+    if set(states) - set(request["states"]):
+        raise SystemExit(f"unknown states: {sorted(set(states) - set(request['states']))}")
+    for state, entry in request["states"].items():
+        if not is_state_slug(state):
+            raise SystemExit(f"invalid state id: {state!r}")
+        if not isinstance(entry, dict) or type(entry.get("frames")) is not int or entry["frames"] < 1:
+            raise SystemExit(f"{state}: frames must be a positive integer")
+        raw_layout_grid(entry, entry["frames"])
+        resolve_run_path(run_dir, f"raw/{state}.png")
+        resolve_run_path(run_dir, f"frames/{state}")
+    resolve_run_path(run_dir, "qa")
     cell_width, cell_height, safe_margin_x, safe_margin_y = cell_geometry(request["cell"])
     if (
         extraction_mode == "slots"
@@ -2790,10 +2821,12 @@ def main() -> int:
         raise SystemExit(
             "sprite-request.json requires chroma_key.rgb or generation_background.rgb"
         )
-    chroma_key = tuple(int(value) for value in background_key["rgb"])
-    frames_root = run_dir / "frames"
-    frames_root.mkdir(parents=True, exist_ok=True)
-    frames_manifest_path = frames_root / "frames-manifest.json"
+    rgb = background_key["rgb"]
+    if len(rgb) != 3 or any(type(value) is not int or not 0 <= value <= 255 for value in rgb):
+        raise SystemExit("background RGB must contain three integers from 0 to 255")
+    chroma_key = tuple(rgb)
+    frames_root = resolve_run_path(run_dir, "frames")
+    frames_manifest_path = resolve_run_path(run_dir, "frames/frames-manifest.json")
     existing_frames_manifest: dict[str, Any] | None = None
     if args.states != "all" and frames_manifest_path.is_file():
         existing_frames_manifest = json.loads(
@@ -2811,6 +2844,7 @@ def main() -> int:
     args.allow_sparse = asset_kind == "vfx"
     background_removal = normalize_background_removal(request, args)
     grid_segmentation = normalize_grid_segmentation(request, args, extraction_mode)
+    frames_root.mkdir(parents=True, exist_ok=True)
     background_sessions: dict[str, Any] = {}
     matte_review_entries: list[dict[str, Any]] = []
     pending_rows: list[dict[str, Any]] = []
@@ -2821,7 +2855,7 @@ def main() -> int:
     for state in states:
         if state not in request["states"]:
             raise SystemExit(f"unknown state in request: {state}")
-        raw_path = run_dir / "raw" / f"{state}.png"
+        raw_path = resolve_run_path(run_dir, f"raw/{state}.png")
         if not raw_path.is_file():
             all_errors.append(f"{state}: missing raw strip {raw_path}")
             continue
@@ -2837,8 +2871,9 @@ def main() -> int:
         uses_grid_layout = layout_rows > 1 or columns != frame_count
         independent_sprites: list[Image.Image] | None = None
         independent_report: dict[str, Any] | None = None
-        video_source = find_video_source_report(run_dir, state, raw_path)
-        with Image.open(raw_path) as opened:
+        raw_bytes = raw_path.read_bytes()
+        video_source = find_video_source_report(run_dir, state, raw_path, sha256(raw_bytes).hexdigest())
+        with Image.open(io.BytesIO(raw_bytes)) as opened:
             raw_source = opened.convert("RGBA")
             shared_idle = bool(
                 isinstance(request.get("creature_motion"), dict)
@@ -3191,6 +3226,14 @@ def main() -> int:
             for warning in existing_frames_manifest.get("warnings", [])
             if not any(str(warning).startswith(f"{state}:") for state in selected_states)
         ] + all_warnings
+
+    for state in dict.fromkeys([*states, *(row["state"] for row in rows)]):
+        entry = request["states"][state]
+        row = next((row for row in rows if row.get("state") == state), None)
+        if row is None:
+            all_errors.append(f"{state}: no extracted row is available")
+        elif ("ok" in row and row["ok"] is not True) or not isinstance(row.get("files"), list) or len(row["files"]) != entry["frames"]:
+            all_errors.append(f"{state}: extracted row is failed or incomplete")
 
     matte_review = save_state_and_combined_matte_reviews(
         matte_review_entries,

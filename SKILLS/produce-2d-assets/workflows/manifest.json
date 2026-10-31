@@ -1,0 +1,1117 @@
+{
+  "schema_version": 1,
+  "families": [
+    "spritesheet-expert",
+    "build-static-game-assets",
+    "build-game-backgrounds",
+    "build-game-ui-kits",
+    "compose-asset-mockups"
+  ],
+  "files": [
+    {
+      "source": "SKILLS/build-game-backgrounds/LICENSE",
+      "path": "build-game-backgrounds/LICENSE",
+      "sha256": "46ab30571250004deefdb7c01929666d65799880c91011a696109dca0d0f2912"
+    },
+    {
+      "source": "SKILLS/build-game-backgrounds/SKILL.md",
+      "path": "build-game-backgrounds/WORKFLOW.md",
+      "sha256": "ad1780656f4f7ca9a2ccd1edd1b6c712342572ae0035d051bd2eec91b4800bb1"
+    },
+    {
+      "source": "SKILLS/build-game-backgrounds/references/schemas/background-pack-v1.schema.json",
+      "path": "build-game-backgrounds/references/schemas/background-pack-v1.schema.json",
+      "sha256": "c0c742d5556a185f842bf1c9e43e37b33caac8ab3eef0b22f5d166b8905af959"
+    },
+    {
+      "source": "SKILLS/build-game-backgrounds/requirements-runtime.txt",
+      "path": "build-game-backgrounds/requirements-runtime.txt",
+      "sha256": "80cd8daa4cb2ead1403f12d7f9beff72046e3d404b50c35df4c03027ab16eaa1"
+    },
+    {
+      "source": "SKILLS/build-game-backgrounds/scripts/background_pack/__init__.py",
+      "path": "build-game-backgrounds/scripts/background_pack/__init__.py",
+      "sha256": "592380753c42d20d591a5abdc7c82f6d4d13fdf4534d3fad77a2e3a80a6ba27f"
+    },
+    {
+      "source": "SKILLS/build-game-backgrounds/scripts/background_pack/validation.py",
+      "path": "build-game-backgrounds/scripts/background_pack/validation.py",
+      "sha256": "e6c146e908a708876c1d21630861b71228ffc988c8a8c977cc3b18606461d373"
+    },
+    {
+      "source": "SKILLS/build-game-backgrounds/scripts/validate_background_pack.py",
+      "path": "build-game-backgrounds/scripts/validate_background_pack.py",
+      "sha256": "d319a3b8aef4d3f31c2ff2b7a20ea18ea2977b807b930c34a441c21977ebe731"
+    },
+    {
+      "source": "SKILLS/build-game-ui-kits/LICENSE",
+      "path": "build-game-ui-kits/LICENSE",
+      "sha256": "46ab30571250004deefdb7c01929666d65799880c91011a696109dca0d0f2912"
+    },
+    {
+      "source": "SKILLS/build-game-ui-kits/SKILL.md",
+      "path": "build-game-ui-kits/WORKFLOW.md",
+      "sha256": "a360a3b5ba4df7f589cee77a902b182ce275f5cfde9fb5df07ea54f8ee8cc7d0"
+    },
+    {
+      "source": "SKILLS/build-game-ui-kits/references/schemas/ui-kit-v1.schema.json",
+      "path": "build-game-ui-kits/references/schemas/ui-kit-v1.schema.json",
+      "sha256": "4dcb11af015f7d74c9450d90fab21d641043ab8ff00f71d172b1ecd107e45cab"
+    },
+    {
+      "source": "SKILLS/build-game-ui-kits/requirements-runtime.txt",
+      "path": "build-game-ui-kits/requirements-runtime.txt",
+      "sha256": "80cd8daa4cb2ead1403f12d7f9beff72046e3d404b50c35df4c03027ab16eaa1"
+    },
+    {
+      "source": "SKILLS/build-game-ui-kits/scripts/ui_kit/__init__.py",
+      "path": "build-game-ui-kits/scripts/ui_kit/__init__.py",
+      "sha256": "0c91682c0cba7e4574f4631956ade2d0495e5d048f5ad268c3a9b9eb72e7267f"
+    },
+    {
+      "source": "SKILLS/build-game-ui-kits/scripts/ui_kit/validation.py",
+      "path": "build-game-ui-kits/scripts/ui_kit/validation.py",
+      "sha256": "8379d0ddd763877716e450499634143ee5ff703abf7d2e75609e352cb3181155"
+    },
+    {
+      "source": "SKILLS/build-game-ui-kits/scripts/validate_ui_kit.py",
+      "path": "build-game-ui-kits/scripts/validate_ui_kit.py",
+      "sha256": "51c897e285712106c88c15bd609cac019b18c0129f2955a49b84c94dba2fc50a"
+    },
+    {
+      "source": "SKILLS/build-static-game-assets/LICENSE",
+      "path": "build-static-game-assets/LICENSE",
+      "sha256": "46ab30571250004deefdb7c01929666d65799880c91011a696109dca0d0f2912"
+    },
+    {
+      "source": "SKILLS/build-static-game-assets/SKILL.md",
+      "path": "build-static-game-assets/WORKFLOW.md",
+      "sha256": "35f763438892b82523740ba861e0b0c181d97053175677b9ec33fd6710315c71"
+    },
+    {
+      "source": "SKILLS/build-static-game-assets/references/schemas/static-asset-pack-v1.schema.json",
+      "path": "build-static-game-assets/references/schemas/static-asset-pack-v1.schema.json",
+      "sha256": "a08932d5c874eb6b484890a2778707009697cd5aab38ad3651ab999389b9764b"
+    },
+    {
+      "source": "SKILLS/build-static-game-assets/requirements-runtime.txt",
+      "path": "build-static-game-assets/requirements-runtime.txt",
+      "sha256": "80cd8daa4cb2ead1403f12d7f9beff72046e3d404b50c35df4c03027ab16eaa1"
+    },
+    {
+      "source": "SKILLS/build-static-game-assets/scripts/static_assets/__init__.py",
+      "path": "build-static-game-assets/scripts/static_assets/__init__.py",
+      "sha256": "c173d22afbcecd16460964fe05c108d89209a5806782f66855b6120f9d0a1182"
+    },
+    {
+      "source": "SKILLS/build-static-game-assets/scripts/static_assets/validation.py",
+      "path": "build-static-game-assets/scripts/static_assets/validation.py",
+      "sha256": "cd0ae50009d21fc41df58ae07cfff5fcb3e8a68c813f378bb87d9567b2300671"
+    },
+    {
+      "source": "SKILLS/build-static-game-assets/scripts/validate_static_pack.py",
+      "path": "build-static-game-assets/scripts/validate_static_pack.py",
+      "sha256": "b920401c9d8bc1fb181fa4ca144b48f2bf128f1d34cd8f1cabcf55d8bb59075d"
+    },
+    {
+      "source": "SKILLS/compose-asset-mockups/LICENSE",
+      "path": "compose-asset-mockups/LICENSE",
+      "sha256": "46ab30571250004deefdb7c01929666d65799880c91011a696109dca0d0f2912"
+    },
+    {
+      "source": "SKILLS/compose-asset-mockups/SKILL.md",
+      "path": "compose-asset-mockups/WORKFLOW.md",
+      "sha256": "baa74058a9cb67ac657aa263a19147660098b724a771778e028b6e3f91cc296c"
+    },
+    {
+      "source": "SKILLS/compose-asset-mockups/references/schemas/brand-kit.schema.json",
+      "path": "compose-asset-mockups/references/schemas/brand-kit.schema.json",
+      "sha256": "92d1be83f3253a05fdb1935f87fd4be6c993396af22eca34d6a4c564082c4a3c"
+    },
+    {
+      "source": "SKILLS/compose-asset-mockups/references/schemas/capture-evidence.schema.json",
+      "path": "compose-asset-mockups/references/schemas/capture-evidence.schema.json",
+      "sha256": "6d020125a8e572747b79c00d140f1f68c3a7478d3d3b8d829ab4691edbaec8f9"
+    },
+    {
+      "source": "SKILLS/compose-asset-mockups/references/schemas/composition.schema.json",
+      "path": "compose-asset-mockups/references/schemas/composition.schema.json",
+      "sha256": "a8aef3335d3b89e8e08a7f13f4de2250253782bd586ee4a7993fb15e1cd420d7"
+    },
+    {
+      "source": "SKILLS/compose-asset-mockups/references/schemas/content-reference.schema.json",
+      "path": "compose-asset-mockups/references/schemas/content-reference.schema.json",
+      "sha256": "b4e30d027d2deb150d286eb9d8b6cd3b10c2b5fd829b2635ff0036498a882f41"
+    },
+    {
+      "source": "SKILLS/compose-asset-mockups/references/schemas/gameplay-scene.schema.json",
+      "path": "compose-asset-mockups/references/schemas/gameplay-scene.schema.json",
+      "sha256": "d0dcdbd3979286672244bcb5d7fb52b64fc5b27255aaf3a7c22ce4bd3cf21e1e"
+    },
+    {
+      "source": "SKILLS/compose-asset-mockups/references/schemas/inventory.schema.json",
+      "path": "compose-asset-mockups/references/schemas/inventory.schema.json",
+      "sha256": "0068497bcd205caa3b5f9c38c9613792615efcd112c35d06a200df35f9ec6684"
+    },
+    {
+      "source": "SKILLS/compose-asset-mockups/references/schemas/licenses.schema.json",
+      "path": "compose-asset-mockups/references/schemas/licenses.schema.json",
+      "sha256": "e2701020a7749bd92622df9b6ab0ec6304e6ee2d919b2576cc696c4e91d00e0c"
+    },
+    {
+      "source": "SKILLS/compose-asset-mockups/references/schemas/manifest.schema.json",
+      "path": "compose-asset-mockups/references/schemas/manifest.schema.json",
+      "sha256": "fe9c8c2258e8cd74e61487481d3446b6c9f3e45d8eb950f01a601ed065e652e5"
+    },
+    {
+      "source": "SKILLS/compose-asset-mockups/references/schemas/prepared-presentation.schema.json",
+      "path": "compose-asset-mockups/references/schemas/prepared-presentation.schema.json",
+      "sha256": "79e972f82fcff8d3775087719647d92e519b7ec6bb58b96afd259f601be85b44"
+    },
+    {
+      "source": "SKILLS/compose-asset-mockups/references/schemas/presentation-brief.schema.json",
+      "path": "compose-asset-mockups/references/schemas/presentation-brief.schema.json",
+      "sha256": "860204bb561dcfee3b8023d3806c7e0ee8f2180ac972037609d44606ac3d546d"
+    },
+    {
+      "source": "SKILLS/compose-asset-mockups/references/schemas/presentation.schema.json",
+      "path": "compose-asset-mockups/references/schemas/presentation.schema.json",
+      "sha256": "a6029ac9018d0a0fdac6432377f3aec60811d943ea427d0cc0de81d0b24c8950"
+    },
+    {
+      "source": "SKILLS/compose-asset-mockups/references/schemas/provenance.schema.json",
+      "path": "compose-asset-mockups/references/schemas/provenance.schema.json",
+      "sha256": "9f0ac1b8a9b8b1a836c6ac4c6b857aed031c234bac3018a0298aea6636b94b8f"
+    },
+    {
+      "source": "SKILLS/compose-asset-mockups/requirements-runtime.txt",
+      "path": "compose-asset-mockups/requirements-runtime.txt",
+      "sha256": "756cc9e506ae4ee1a6f6c0507088b5cfc0dc8ba350fb2d2d46f1ffa72033adb6"
+    },
+    {
+      "source": "SKILLS/compose-asset-mockups/scripts/prepare_presentation.py",
+      "path": "compose-asset-mockups/scripts/prepare_presentation.py",
+      "sha256": "edc1df0523313562bbd2f758c65c756736d62831366e9acb4d2e0fc541cc94ba"
+    },
+    {
+      "source": "SKILLS/compose-asset-mockups/scripts/presentation_pipeline/__init__.py",
+      "path": "compose-asset-mockups/scripts/presentation_pipeline/__init__.py",
+      "sha256": "7d616de9b2d7a9120b4dcc66268b48e132f3ecd29d33c122d33630f82844dafc"
+    },
+    {
+      "source": "SKILLS/compose-asset-mockups/scripts/presentation_pipeline/contracts.py",
+      "path": "compose-asset-mockups/scripts/presentation_pipeline/contracts.py",
+      "sha256": "d7c135e90087b0735ce6b484e8adcf2e1904834a3abf671fc4e0b5e4034745de"
+    },
+    {
+      "source": "SKILLS/compose-asset-mockups/scripts/presentation_pipeline/preparation.py",
+      "path": "compose-asset-mockups/scripts/presentation_pipeline/preparation.py",
+      "sha256": "1cfa4b14e358edd51870319c3c0fb7632d635ee0a2efdef5aeb43e445e6d5ac1"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/LICENSE.sprite-gen",
+      "path": "spritesheet-expert/LICENSE.sprite-gen",
+      "sha256": "4dd13869245e356246a5b770723247bbb80a8f07a181d1d3d873a1734297cdb9"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/NOTICE.sprite-gen",
+      "path": "spritesheet-expert/NOTICE.sprite-gen",
+      "sha256": "8c07febac2605cc6e1e5ee0cc3a8e88a2128f6c5bf7793c27c0697c5915bdbf2"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/SKILL.md",
+      "path": "spritesheet-expert/WORKFLOW.md",
+      "sha256": "9ef160c07877f20c33101ea9d396e809c416d5f259a074ea8cf1126b3f696a29"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/assets/motion-reference-templates/README.md",
+      "path": "spritesheet-expert/assets/motion-reference-templates/README.md",
+      "sha256": "252fd7f59b9f4500669c66384ed317d0aaf87ab008b59d3278d2c7fb0add7eaa"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/assets/motion-reference-templates/humanoid-walk-back-v1.txt",
+      "path": "spritesheet-expert/assets/motion-reference-templates/humanoid-walk-back-v1.txt",
+      "sha256": "8560f2907d5fcb4e1c5e4c47ef7822b7599a3a1eab6627d2faab3c1dfc714dc3"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/assets/motion-reference-templates/humanoid-walk-front-v1.txt",
+      "path": "spritesheet-expert/assets/motion-reference-templates/humanoid-walk-front-v1.txt",
+      "sha256": "8be977c1428fc4c77586f39b9dec611a194b096d68e5fa06b5810c5acb348213"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/assets/motion-reference-templates/humanoid-walk-side-right-v1.txt",
+      "path": "spritesheet-expert/assets/motion-reference-templates/humanoid-walk-side-right-v1.txt",
+      "sha256": "b7f4bd75fc7cb301bc9c4ae89ad9167c012a8ac2369989ebe5aeab1041d1bcf1"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/assets/motion-reference-templates/humanoid-walk-three-quarter-back-right-v1.txt",
+      "path": "spritesheet-expert/assets/motion-reference-templates/humanoid-walk-three-quarter-back-right-v1.txt",
+      "sha256": "93f61a903f7c28987a63647d57b9567aaa1bc6d77878b32fa12f07440a102c91"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/assets/motion-reference-templates/humanoid-walk-three-quarter-front-right-v1.txt",
+      "path": "spritesheet-expert/assets/motion-reference-templates/humanoid-walk-three-quarter-front-right-v1.txt",
+      "sha256": "01376b8bdc91171ca047553ed72a6b5494ef9f1ac704298a205fa160e3505639"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/assets/motion-reference-templates/manifest.json",
+      "path": "spritesheet-expert/assets/motion-reference-templates/manifest.json",
+      "sha256": "c0f372c3281a72b6292cddd13b69593d0b626cd8bd1a2361a2d75e5cdb065a00"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/assets/pixel-conversion-viewer.html",
+      "path": "spritesheet-expert/assets/pixel-conversion-viewer.html",
+      "sha256": "7e0e78855d2f675bfb10ef2df0d68d73a3b39fe7593da848ebb69497e886a8f9"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/assets/workflow-workbenches/README.md",
+      "path": "spritesheet-expert/assets/workflow-workbenches/README.md",
+      "sha256": "79917061e5b31e58f7e9e28aad0a13b57800b5c2d207948f025afa190ec74ea0"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/assets/workflow-workbenches/catalog.json",
+      "path": "spritesheet-expert/assets/workflow-workbenches/catalog.json",
+      "sha256": "2da7bed7446441f4b8e543479b93f9b56b0f21342bca0813fecc599dd6ff9509"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/assets/workflow-workbenches/combat-strike/contract.json",
+      "path": "spritesheet-expert/assets/workflow-workbenches/combat-strike/contract.json",
+      "sha256": "7d4385e3fd3eca75cfc094fab93843b74b0cbd05f82282be5d18281b04700e55"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/assets/workflow-workbenches/idle-breath/contract.json",
+      "path": "spritesheet-expert/assets/workflow-workbenches/idle-breath/contract.json",
+      "sha256": "a70623b5a727c7e5d6f3373d0338eb5d836d640809557a6a991f4df83fd9fa77"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/assets/workflow-workbenches/responsive-jump/contract.json",
+      "path": "spritesheet-expert/assets/workflow-workbenches/responsive-jump/contract.json",
+      "sha256": "c6545715f79ad80d613e8947183e43042f2377bdd50cfe70df40ec5a5e7fe73b"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/assets/workflow-workbenches/sideview-run/contract.json",
+      "path": "spritesheet-expert/assets/workflow-workbenches/sideview-run/contract.json",
+      "sha256": "5ae9c2dcd138e8e9fb3b06e1f888b27209f45bce313b189a3eb1d4cb9c4e6270"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/assets/workflow-workbenches/sideview-walk/contract.json",
+      "path": "spritesheet-expert/assets/workflow-workbenches/sideview-walk/contract.json",
+      "sha256": "c839f7df47d14e776a59668195939dfb3a635b0d1ce410cf6bc9ac3405a931bf"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/assets/workflow-workbenches/static-sprite-set/contract.json",
+      "path": "spritesheet-expert/assets/workflow-workbenches/static-sprite-set/contract.json",
+      "sha256": "6981dcf260ded01f99676aaa706e2e747909b304c65c061d8a3b431fe032d036"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/assets/workflow-workbenches/vfx-sequence/contract.json",
+      "path": "spritesheet-expert/assets/workflow-workbenches/vfx-sequence/contract.json",
+      "sha256": "9ea82b15ced75bbdb9b96e56a94108e1f79e1d0099786d81ae2d7a4ab0f4bced"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/assets/workflow-workbenches/walk-view-transfer/contract.json",
+      "path": "spritesheet-expert/assets/workflow-workbenches/walk-view-transfer/contract.json",
+      "sha256": "aa73677c21e3afab72eff74f7b6c5329985dfafd9b887c59f44ee579f211ba29"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/model-runtime/.python-version",
+      "path": "spritesheet-expert/model-runtime/.python-version",
+      "sha256": "7b55f8e67b5623c4bef3fa691288da9437d79d3aba156de48d481db32ac7d16d"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/model-runtime/README.md",
+      "path": "spritesheet-expert/model-runtime/README.md",
+      "sha256": "5d33c8cb765689b0715035c3a12fc915359709919d07fbfad99722f39456412e"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/model-runtime/pyproject.toml",
+      "path": "spritesheet-expert/model-runtime/pyproject.toml",
+      "sha256": "f9a2de125b058b562ce3894ad01b5182529a7adf5ee0b6a53f1b7fc0f9837f53"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/model-runtime/uv.lock",
+      "path": "spritesheet-expert/model-runtime/uv.lock",
+      "sha256": "0a7bb2783548976a5b2b79df31a9ef62904bce58ec55ae466feb7aa4e674e04d"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/agent-first-studio.md",
+      "path": "spritesheet-expert/references/agent-first-studio.md",
+      "sha256": "54391ba26dc0aa23f73e25dd613c8f9017e1de27c84ffef98b4e68081edd5c16"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/atlas-reference.md",
+      "path": "spritesheet-expert/references/atlas-reference.md",
+      "sha256": "9dbcce1adad4fa5555857841370ae4a2f042c78e58c3609e8fb34e20c6026039"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/creature-animation.md",
+      "path": "spritesheet-expert/references/creature-animation.md",
+      "sha256": "bd7af45d3a19156759979def6caf72a5f059d71cfdf82635b1df6c9ad73dc5f5"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/deterministic-item-atlas.md",
+      "path": "spritesheet-expert/references/deterministic-item-atlas.md",
+      "sha256": "fa4b4b9caab753d93c20c757826e8d0cdf1c8b8afeee2f6d96408ee27a6ee12a"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/grok-video-animation.md",
+      "path": "spritesheet-expert/references/grok-video-animation.md",
+      "sha256": "89b03f4d96c4e3c2f4e4192252d898b60863eebdbd37515bda5f87088e75363b"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/isometric-tilesets.md",
+      "path": "spritesheet-expert/references/isometric-tilesets.md",
+      "sha256": "f65950a3a7ee5811e00333531a9450f94c2f5812365cd7729346d3e6dccc1625"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/local-model-item-workflow.md",
+      "path": "spritesheet-expert/references/local-model-item-workflow.md",
+      "sha256": "9d2ed5dd966809482e49236b881c794f7583416172a00381121efb9b487bd822"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/lucida-adaptive-workflow.md",
+      "path": "spritesheet-expert/references/lucida-adaptive-workflow.md",
+      "sha256": "7c04e7f133ba2637b7542edd713493beceaa73c8cacdfd0f97c217a966723b09"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/pixel-animation-workflows.md",
+      "path": "spritesheet-expert/references/pixel-animation-workflows.md",
+      "sha256": "9e13d6bb6e07bb04c6d8d45696a124ca817bc801ab01f8979ec120d1f8ac6151"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/pixel-art-conversion.md",
+      "path": "spritesheet-expert/references/pixel-art-conversion.md",
+      "sha256": "cfd377f8ff09f23571f0b45a1d48d0baebb2950672a3181ad0d57ec3e685a366"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/pixel-art-direction.md",
+      "path": "spritesheet-expert/references/pixel-art-direction.md",
+      "sha256": "889fac6fab044dad7bfd664f074c5e22f33f18b99f29525fedc1e1c8995d4297"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/presets.json",
+      "path": "spritesheet-expert/references/presets.json",
+      "sha256": "1562d09234c98a49d31f9c7d05c64f14aa81900a19f09bf319c39ba0b996ca3a"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/production-workflow.md",
+      "path": "spritesheet-expert/references/production-workflow.md",
+      "sha256": "b7f8c5211255e2a74f8e40c6f399e8ab22c39d257e938a271027d96d0d3c8e61"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/professional-sprite-animation.md",
+      "path": "spritesheet-expert/references/professional-sprite-animation.md",
+      "sha256": "2d2e2ebc5a7d4e667936bb242a9fbdbcec2dc74f2a0147e163ecbe64cf6a0449"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/qa-and-outputs.md",
+      "path": "spritesheet-expert/references/qa-and-outputs.md",
+      "sha256": "01bc6e236d4dcdfdc0f209bf118f9dfe878dec1f4c299c3bed1d974c20d7ca5d"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/schemas/deterministic-item-sheet-v1.schema.json",
+      "path": "spritesheet-expert/references/schemas/deterministic-item-sheet-v1.schema.json",
+      "sha256": "38503ac77af993c1185198cdd4d6d78e5f909a83d43d88065039b3a5d87a2efa"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/schemas/grok-video-animation-job-v1.schema.json",
+      "path": "spritesheet-expert/references/schemas/grok-video-animation-job-v1.schema.json",
+      "sha256": "ea0d82df0b3bc7c4e465b0917d721fbb47a52ef3606b492cdd64eba9f1e60158"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/schemas/item-classification-v1.schema.json",
+      "path": "spritesheet-expert/references/schemas/item-classification-v1.schema.json",
+      "sha256": "04546b66d6b9dca4b5ea36fa4ca9c9a1051c292aaf016cc5117016fedbb842bc"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/schemas/item-review-v1.schema.json",
+      "path": "spritesheet-expert/references/schemas/item-review-v1.schema.json",
+      "sha256": "a4bad86aa2792482185d52579f51e817cd245ba370ca50e7f08726c3c38e699d"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/schemas/item-segmentation-v1.schema.json",
+      "path": "spritesheet-expert/references/schemas/item-segmentation-v1.schema.json",
+      "sha256": "0eadf5ff2513b0254a53fc68d7400f9adaff0d33f9288eb84e12e0ad8554fe60"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/schemas/qa-report-v2.schema.json",
+      "path": "spritesheet-expert/references/schemas/qa-report-v2.schema.json",
+      "sha256": "744ccd0c05e2fe09ce33dd043a96f43f26a902a2bb944ea33486c0e3cad439fe"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/schemas/run-validation-report-v1.schema.json",
+      "path": "spritesheet-expert/references/schemas/run-validation-report-v1.schema.json",
+      "sha256": "c52fc5bef6b12f7da1954a425d054bdb70baeb0a5e6cabfbd1c86a60cbd77b81"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/schemas/screenshot-evidence-v1.schema.json",
+      "path": "spritesheet-expert/references/schemas/screenshot-evidence-v1.schema.json",
+      "sha256": "ac9d27e88c2ff8582a397dbf2929b17ebcf6e81728ffc8f1ea5c65cc4d5ce656"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/schemas/source-intake-v1.schema.json",
+      "path": "spritesheet-expert/references/schemas/source-intake-v1.schema.json",
+      "sha256": "6b75e5a78e35a098a1dabed9b8051398ee022b79a6dce875e5a0d3ffd2b7efd1"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/schemas/source-provenance-v2.schema.json",
+      "path": "spritesheet-expert/references/schemas/source-provenance-v2.schema.json",
+      "sha256": "150ff5d978073f3aa2d8fb120361c865cf93f647ccb18497ff06b5288677b709"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/schemas/sprite-manifest-v2.schema.json",
+      "path": "spritesheet-expert/references/schemas/sprite-manifest-v2.schema.json",
+      "sha256": "7f5e3e1a95f932e1a9be7eb16f5aa6fd681eb70527eb1e9f85f2a52cd1428bf7"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/schemas/sprite-request-v2.schema.json",
+      "path": "spritesheet-expert/references/schemas/sprite-request-v2.schema.json",
+      "sha256": "341d51936d5344319506efb85266f4f1092ae7f099bb2b291d7a584d25db1f15"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/schemas/studio-session-v1.schema.json",
+      "path": "spritesheet-expert/references/schemas/studio-session-v1.schema.json",
+      "sha256": "d716aec1314f8522109be961e7da100b334793b297003b0116ce5816353b4efe"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/schemas/studio-workflow-v1.schema.json",
+      "path": "spritesheet-expert/references/schemas/studio-workflow-v1.schema.json",
+      "sha256": "0ffe510e7c1b0a2f938a9728af34a93a2da921f843e1d240569ca435601459cd"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/schemas/video-source-v1.schema.json",
+      "path": "spritesheet-expert/references/schemas/video-source-v1.schema.json",
+      "sha256": "a09629dee5313c37b2827da1895af10f0ea04923f6847cff33fded46171de0a4"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/schemas/visual-review-v1.schema.json",
+      "path": "spritesheet-expert/references/schemas/visual-review-v1.schema.json",
+      "sha256": "5f5a4aae690b8fe135d2d01b07a02d4b84c37efe79edf58bc8386fc0e891cc37"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/taxonomies/game-assets-v1.json",
+      "path": "spritesheet-expert/references/taxonomies/game-assets-v1.json",
+      "sha256": "2a27964a5a7dcc15dafbeccca7024c96d812640a4d2b6c80b1b39b8dadee0d51"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/taxonomies/generic-props-v1.json",
+      "path": "spritesheet-expert/references/taxonomies/generic-props-v1.json",
+      "sha256": "8b7770221e51fdd3b786b3e23eebdfeffc5dfb95cb98785c5cf56cedceb942d4"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/video-animation-workflow.md",
+      "path": "spritesheet-expert/references/video-animation-workflow.md",
+      "sha256": "09e1fd5cd7b1e4a827104682684121cf819bb4319079466c73e03deac6d8cf70"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/workflow-lanes.json",
+      "path": "spritesheet-expert/references/workflow-lanes.json",
+      "sha256": "36296302feca7728e47f2d930d47c5100d913860e70f4dc42004826f20e5f776"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/references/workflows.md",
+      "path": "spritesheet-expert/references/workflows.md",
+      "sha256": "85e4f915d9f5769864060dca8f475f9c7bc9cfbdb6d7277e65601509255f6eb6"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/apply_item_classification.py",
+      "path": "spritesheet-expert/scripts/apply_item_classification.py",
+      "sha256": "c8748ac6ef1d850f9ba02ae522b507b98684bbfa5452314c1e5ffb82994806e7"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/apply_item_review.py",
+      "path": "spritesheet-expert/scripts/apply_item_review.py",
+      "sha256": "2eb3abc195896f51bb89fb719df9bceb42232ab2ee67c9da526fb0c33bb7f0dd"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/apply_item_segmentation.py",
+      "path": "spritesheet-expert/scripts/apply_item_segmentation.py",
+      "sha256": "88874823c1ccd5aa77a7e1caa0b020a28bf0915e9327e9946841f8f24790e59a"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/build_deterministic_item_atlas.py",
+      "path": "spritesheet-expert/scripts/build_deterministic_item_atlas.py",
+      "sha256": "7d92cb3a1f97e5e16d55f44fb51a29c5d92949c60f700197f9e6706c50a073af"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/build_item_playground.py",
+      "path": "spritesheet-expert/scripts/build_item_playground.py",
+      "sha256": "14a403cbc261f3656f9c71871e8fce68afb5b6b04701c0da2bc777cec52a4104"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/build_motion_sequence_review.py",
+      "path": "spritesheet-expert/scripts/build_motion_sequence_review.py",
+      "sha256": "cde127fb928f89abc67cbe777c38f666e4e01eced851013715ec0a430754f592"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/build_preview_workbench.py",
+      "path": "spritesheet-expert/scripts/build_preview_workbench.py",
+      "sha256": "3f2eb7457037de38d6c4a59619c23d1d864a170df18cf80474bb5408fbe91751"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/build_video_frame_selector.py",
+      "path": "spritesheet-expert/scripts/build_video_frame_selector.py",
+      "sha256": "c362438e30c998fdf0d0dbee2b965a73c573fee61d5e8aa18f50b09364b8ee12"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/check_animation_batch_completion.py",
+      "path": "spritesheet-expert/scripts/check_animation_batch_completion.py",
+      "sha256": "bd0518e23600a9e97f857d2a058f805eb22b9067400cf2f8d11b9d0584cc1503"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/check_animation_contracts.py",
+      "path": "spritesheet-expert/scripts/check_animation_contracts.py",
+      "sha256": "b40b3a4ac4312893a2ae7326f6dd4a235e5a2bfac9462ff91e4268573e838ec9"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/check_asset_slots.py",
+      "path": "spritesheet-expert/scripts/check_asset_slots.py",
+      "sha256": "7ecc6cd9253467a74f0655cf9489e57194897d997540efece856aa7740b95420"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/check_chroma_key_safety.py",
+      "path": "spritesheet-expert/scripts/check_chroma_key_safety.py",
+      "sha256": "468146e5d548e7a9f57ad20d38ce7bf203f47386e7806b6bef61428cba3d5ead"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/check_colored_limb_motion.py",
+      "path": "spritesheet-expert/scripts/check_colored_limb_motion.py",
+      "sha256": "e85f6ea0bba7eab66c95ebeac5baefa2d9605414c10aba80006ea8e8a03e18d0"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/check_frame_alignment.py",
+      "path": "spritesheet-expert/scripts/check_frame_alignment.py",
+      "sha256": "eb77ed86db436a383ff3be573c7f62ea315401d713bae3fa70f528315973cdea"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/check_generation_provenance.py",
+      "path": "spritesheet-expert/scripts/check_generation_provenance.py",
+      "sha256": "760670b6149fe30cb8e1e2ad348a924276ecdca7e7cb72667acac180c54f2750"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/check_identity_consistency.py",
+      "path": "spritesheet-expert/scripts/check_identity_consistency.py",
+      "sha256": "b9ba68b4fe8205aa45b2a3278bc1b27d9f1cf046eb42ab4a4620ba12b9da4b7e"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/check_isometric_tiles.py",
+      "path": "spritesheet-expert/scripts/check_isometric_tiles.py",
+      "sha256": "808c9e6c9d73dcb8d112fee5ea9e1318fd65d62783ac41eb5f905907ee2b58e3"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/check_item_model_runtime.py",
+      "path": "spritesheet-expert/scripts/check_item_model_runtime.py",
+      "sha256": "ca474abf481ec8b2d07ce476b88b3922f3eb0643c461d22d3a79526db02f19f9"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/check_motion_references.py",
+      "path": "spritesheet-expert/scripts/check_motion_references.py",
+      "sha256": "b2230efd867e345ff6586a1dce5ecfecb373a2da904546d44654761617436322"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/check_motion_template_library.py",
+      "path": "spritesheet-expert/scripts/check_motion_template_library.py",
+      "sha256": "10c9aed500741b39234fd25e50fa843f15cefcfb1cae1ce34b1f976f095fdadb"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/check_motion_variation.py",
+      "path": "spritesheet-expert/scripts/check_motion_variation.py",
+      "sha256": "c03f88cdd1814cfdc7190fa6e325afd80335ea4800c0e04ba86aee17b768676b"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/check_python_env.py",
+      "path": "spritesheet-expert/scripts/check_python_env.py",
+      "sha256": "d3fb6b67595491e445e44ad59ef769406e232d7703b74b9985468a085f1f3340"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/check_visible_magenta.py",
+      "path": "spritesheet-expert/scripts/check_visible_magenta.py",
+      "sha256": "203d1fee2a19dfaac56020ae2eea2802078385f79a4d577a16128f0494b6f53b"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/check_workflow.py",
+      "path": "spritesheet-expert/scripts/check_workflow.py",
+      "sha256": "d94713af36d36806bec946e9d1e7468748a2931c8c834c61d766856e1d4154e6"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/check_workflow_workbenches.py",
+      "path": "spritesheet-expert/scripts/check_workflow_workbenches.py",
+      "sha256": "b4d1906c3907a676cecb7c0890f8b6337677433288ccefc23b64fe33ceb0cf15"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/compose_selected_cycle.py",
+      "path": "spritesheet-expert/scripts/compose_selected_cycle.py",
+      "sha256": "e9dba9de6d8da51800fc861b8bddbc657a2ef85324b5d23a2c61db4ad3b2b754"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/compose_sprite_atlas.py",
+      "path": "spritesheet-expert/scripts/compose_sprite_atlas.py",
+      "sha256": "2b26977bf755c2dd4b5ec6d561ac4b5ad3a9561ef3dfbcd47dc9dd926d361df3"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/compose_sprite_gif.py",
+      "path": "spritesheet-expert/scripts/compose_sprite_gif.py",
+      "sha256": "040e31ac609c02c18ed7ad92b54d7e2c425ca07096b601bd184ccf763cd9e3f4"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/convert_pixel_art.py",
+      "path": "spritesheet-expert/scripts/convert_pixel_art.py",
+      "sha256": "9158ee67f81dce907b10232a51f991c35795c7f8b048e23cc89b7380bf3c9238"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/curation.py",
+      "path": "spritesheet-expert/scripts/curation.py",
+      "sha256": "f82fa7f09a5a5390a5d4f2636412fa2206b5158546f366d4b08c993fa818e932"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/curator/curator.css",
+      "path": "spritesheet-expert/scripts/curator/curator.css",
+      "sha256": "1b817cd7b09204a765ae2fd577965b600d4ca64560d1900984d5cb50f30e7ad4"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/curator/curator.js",
+      "path": "spritesheet-expert/scripts/curator/curator.js",
+      "sha256": "4031ffba0db353ffc27111d2f23ecf59dbbb7e3d1102da326d9c4cc8d68b8e62"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/curator/index.html",
+      "path": "spritesheet-expert/scripts/curator/index.html",
+      "sha256": "8b310c3e0779f30b6b35fffe7d38e6fc111f3d5bede0e1aa5326cf46ccdfc95c"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/evaluate_item_atlas.py",
+      "path": "spritesheet-expert/scripts/evaluate_item_atlas.py",
+      "sha256": "81716201b6269e27e150caf4f01ffb256653e15a0107d9b1d9cf31021c85f498"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/export_curated_pngs.py",
+      "path": "spritesheet-expert/scripts/export_curated_pngs.py",
+      "sha256": "3e973785085f7cce077b866274f7d75ac68b8f6bc1f24e23c26db837cb8d6534"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/export_item_atlas.py",
+      "path": "spritesheet-expert/scripts/export_item_atlas.py",
+      "sha256": "df4e0440684f8a813104589032d54c3c393a342a58811b427fc74d76106c60d2"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/extract_sprite_row_frames.py",
+      "path": "spritesheet-expert/scripts/extract_sprite_row_frames.py",
+      "sha256": "ea2823a345ad44a5247d20ae0d13ee1b15cca3f93837e9a999a1cd53fb4e69d0"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/gif_utils.py",
+      "path": "spritesheet-expert/scripts/gif_utils.py",
+      "sha256": "35d41061bfb50005e6874f288b7ef2e20335ceb7f8d599d7249a7c19299a565f"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/ingest_grok_video_animation.py",
+      "path": "spritesheet-expert/scripts/ingest_grok_video_animation.py",
+      "sha256": "728cc0dbcebc83a078316c1f1917837a4c1a63f4f31ad3a0488c51cbafb01c72"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/ingest_source.py",
+      "path": "spritesheet-expert/scripts/ingest_source.py",
+      "sha256": "a0a308af1cd55b9ce693b090c1ec2015d0964bc189583ec5ae1a384ae1ca18a8"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/ingest_video_animation.py",
+      "path": "spritesheet-expert/scripts/ingest_video_animation.py",
+      "sha256": "8e84f3f802b3210254fe4ce3b1344db9e73f9aaeaa1211d90618d8daa6f40d29"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/manage_studio_workspace.py",
+      "path": "spritesheet-expert/scripts/manage_studio_workspace.py",
+      "sha256": "da7778f01fe037d7b7e2291793e506f92d4096f5e2da2b1f9eb87cb6600bb9ad"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/migrate_run_contract.py",
+      "path": "spritesheet-expert/scripts/migrate_run_contract.py",
+      "sha256": "d65cf59e4fc06e2fa8f02505e25913d52cb6884955488beb8ed8d39455377a9e"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/motion-reference-review/index.html",
+      "path": "spritesheet-expert/scripts/motion-reference-review/index.html",
+      "sha256": "8566229214c0eafe5afea34bef42b3547dadcdc53a60eccf0143c7678178806d"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/prepare_grok_video_animation.py",
+      "path": "spritesheet-expert/scripts/prepare_grok_video_animation.py",
+      "sha256": "f2e9b2e0b7815ac03c650e1e9426c785ec1734a5c8e69cb7ecd0489f327f1d82"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/prepare_item_classification.py",
+      "path": "spritesheet-expert/scripts/prepare_item_classification.py",
+      "sha256": "e86b4ac03530a2b89c25451765a7c04d149a8030c431b93568447035d4d46fc8"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/prepare_item_models.py",
+      "path": "spritesheet-expert/scripts/prepare_item_models.py",
+      "sha256": "8290ec31eec52a6801dae5aa76b6f5e9a7a2b7ce365d5e4ccdb69b0b0b2db4d2"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/prepare_item_segmentation.py",
+      "path": "spritesheet-expert/scripts/prepare_item_segmentation.py",
+      "sha256": "363bf89be9837d30c637f40f11d939a1fe8e944b67fb588fbeb425c4570d896e"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/prepare_motion_template_library.py",
+      "path": "spritesheet-expert/scripts/prepare_motion_template_library.py",
+      "sha256": "5c2930c44621dda9b2acd22fced107981b4e319aa4d6119c46f29172a8d426ba"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/prepare_sprite_run.py",
+      "path": "spritesheet-expert/scripts/prepare_sprite_run.py",
+      "sha256": "94259a22f915d99d2e1ba425c13a4eee707d405a06fb231741bcedbe6ce75a9b"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/preset_to_request.py",
+      "path": "spritesheet-expert/scripts/preset_to_request.py",
+      "sha256": "3cdee45ea5873582e2924cde6b69c9998bf0f6e63203a0156a7ac2f9312733c7"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/preview_animation.py",
+      "path": "spritesheet-expert/scripts/preview_animation.py",
+      "sha256": "09ed13573ced663d5ad0cfb85b35a8e0b1867b89bff40a9419a0f7cb2e2de505"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/promote_identity_anchor.py",
+      "path": "spritesheet-expert/scripts/promote_identity_anchor.py",
+      "sha256": "1716d4692f80a44bfe90ffbf764518cf5e7e0070058b3a3642ca4a98be26fe7b"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/record_identity_proxy_review.py",
+      "path": "spritesheet-expert/scripts/record_identity_proxy_review.py",
+      "sha256": "304ebca926e5edf529ad84a3b41ce4d5d0593e414df9af87b09cdc3306fe5aac"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/record_visual_review.py",
+      "path": "spritesheet-expert/scripts/record_visual_review.py",
+      "sha256": "91df74c16ff53f22ccfead35bc9e38b815a32b8cfdd00db9cf75b55f32139361"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/register_sprite_frames.py",
+      "path": "spritesheet-expert/scripts/register_sprite_frames.py",
+      "sha256": "a06f0137d5f2e1536629b32f423edfcdc7c9c724d30b6bc5fbf5afc28683c0ee"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/rekey_chroma_background.py",
+      "path": "spritesheet-expert/scripts/rekey_chroma_background.py",
+      "sha256": "e2f71a30d2e377f3f2a72d2af12c0ed55e862ed567fd0d15bb6de80c69864e24"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/render_runtime_preview.py",
+      "path": "spritesheet-expert/scripts/render_runtime_preview.py",
+      "sha256": "98a6696c615b9afe024b05c2664d67dc8b79d516d0ef303f22d85cf5e940b9e9"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/repair_repeat_edges.py",
+      "path": "spritesheet-expert/scripts/repair_repeat_edges.py",
+      "sha256": "d7d6d42c5eddc7233a3edc69f6837f8fb23821be56e7874154826bf42df982c5"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/requirements-background.txt",
+      "path": "spritesheet-expert/scripts/requirements-background.txt",
+      "sha256": "d9df8debe052318fda0958f062678d19e8e955c650c10d125c1a4557e5e5aba4"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/requirements-core.txt",
+      "path": "spritesheet-expert/scripts/requirements-core.txt",
+      "sha256": "80cd8daa4cb2ead1403f12d7f9beff72046e3d404b50c35df4c03027ab16eaa1"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/requirements-video.txt",
+      "path": "spritesheet-expert/scripts/requirements-video.txt",
+      "sha256": "0ba4322636924d18b08903cf82a1eccfb219dcd991cbd8be9baa6bdc0d71843c"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/run_item_atlas_workflow.py",
+      "path": "spritesheet-expert/scripts/run_item_atlas_workflow.py",
+      "sha256": "628d9216e547115d49141b126b8850cd43d6e07c6ed3b81c5f7d1584c1977be3"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/run_item_model_worker.py",
+      "path": "spritesheet-expert/scripts/run_item_model_worker.py",
+      "sha256": "b7c47f261ba96e31f522d42d4e198ef130713c37ec88a45bd7f0fe4ec47e0f98"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/runio.py",
+      "path": "spritesheet-expert/scripts/runio.py",
+      "sha256": "0870f964e9badee76d0d77c32d72d6886fdcec7e2f45d78418fb059f383ee5a7"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/segmentation.py",
+      "path": "spritesheet-expert/scripts/segmentation.py",
+      "sha256": "039cbf36f2b6ba3856070109b704661aa87cf14571086b9ee5dcc7388525e638"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/serve_curation.py",
+      "path": "spritesheet-expert/scripts/serve_curation.py",
+      "sha256": "623f311feeef421bb02d9a35115afc0a1d85949a02d43d83d2845a03de5a4412"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/serve_item_studio.py",
+      "path": "spritesheet-expert/scripts/serve_item_studio.py",
+      "sha256": "0e79aaa546567408fe5831ab0badfda473bda5d6378dcf537b456a174f9734ed"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/setup_item_model_runtime.py",
+      "path": "spritesheet-expert/scripts/setup_item_model_runtime.py",
+      "sha256": "da9ff00aa3deebc2142f5a3930dedc228954f5908d8457a7f08241cac6a0b425"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/smoke_pipeline.py",
+      "path": "spritesheet-expert/scripts/smoke_pipeline.py",
+      "sha256": "3aa55ae3a4cc1ed5f23f033443e9a919c0b09198345d369b22e1e5cafe855c40"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/smoke_presets_from_reference.py",
+      "path": "spritesheet-expert/scripts/smoke_presets_from_reference.py",
+      "sha256": "5bd30f14e5977402cde9875b428af7df9aa02925a75f3a57dbaa7f1e42dda229"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/__init__.py",
+      "path": "spritesheet-expert/scripts/spritecore/__init__.py",
+      "sha256": "85aaf5fb87792c318306cb406e55cf5099a5dd1f171559d34f02a55ad23028a9"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/contracts.py",
+      "path": "spritesheet-expert/scripts/spritecore/contracts.py",
+      "sha256": "2a5c412cc044a48d2213c9c5b77637caf4c53a765dfc50212874d6e76a673e8b"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/image_ops.py",
+      "path": "spritesheet-expert/scripts/spritecore/image_ops.py",
+      "sha256": "6c8b6b2ffa2f20061570d3ce82b40565256a1db9bc03ec6dbd47197770efb4e6"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/item_delivery.py",
+      "path": "spritesheet-expert/scripts/spritecore/item_delivery.py",
+      "sha256": "7100390064fd5a1896a323e12a11698816933fc036846e04bb0a7f7a7178c3b8"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/item_ownership.py",
+      "path": "spritesheet-expert/scripts/spritecore/item_ownership.py",
+      "sha256": "8e98f375867184cbe652513e9450fe292cecfd9b3fdde1d8433076f434e2bbb6"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/item_playground.py",
+      "path": "spritesheet-expert/scripts/spritecore/item_playground.py",
+      "sha256": "a4678fbca48386dbbe71230370b5dcc9a1e9e2d54d123d2049cf8c9e0b6a584b"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/item_review.py",
+      "path": "spritesheet-expert/scripts/spritecore/item_review.py",
+      "sha256": "9fa93164d69c8ffe93675031a948132d18b95d92f6ddbad5149dd7da43c6018b"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/item_segmentation.py",
+      "path": "spritesheet-expert/scripts/spritecore/item_segmentation.py",
+      "sha256": "060cd10e1aa1b4da5c8ac0628c7aa553a2f687ec4d46210183d9c158e7657e43"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/item_sheet.py",
+      "path": "spritesheet-expert/scripts/spritecore/item_sheet.py",
+      "sha256": "c61fa59f32ebe8bc0393cf42a3abce5acec6be1e3f4a269e4c14ace04f9dcdff"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/locks.py",
+      "path": "spritesheet-expert/scripts/spritecore/locks.py",
+      "sha256": "3a374498fe4b070fc5b20ea62d3403c739e543762b37a201ae0982b670ec3e98"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/model_checkpoints.py",
+      "path": "spritesheet-expert/scripts/spritecore/model_checkpoints.py",
+      "sha256": "7b8a6fb3a93ff222bc110d73756f38fa1d067639dc7333c9d485aefc50b2baad"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/models.py",
+      "path": "spritesheet-expert/scripts/spritecore/models.py",
+      "sha256": "681108a095b04c17e9e416844cf13a673cb2ff483560fcac380536ecaa018b38"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/orchestrator.py",
+      "path": "spritesheet-expert/scripts/spritecore/orchestrator.py",
+      "sha256": "331cdadc4e6441856183b6f4577b5bc0b904f577239f881d823f691f6c641555"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/paths.py",
+      "path": "spritesheet-expert/scripts/spritecore/paths.py",
+      "sha256": "1fa54c19874ac186aee3cf505c5f91bae8b4095d9b9554ab21e78a532215a031"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/policy.py",
+      "path": "spritesheet-expert/scripts/spritecore/policy.py",
+      "sha256": "a03f2dd1c31a44934b0a63f55d6b27bb0c68a83615c171a812b9cb2edbacf006"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/preview_workbench.py",
+      "path": "spritesheet-expert/scripts/spritecore/preview_workbench.py",
+      "sha256": "aeb51c07942affe0e0050a5d483db2d07c7409fad94ee8c1c9f44c463d7b60b9"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/provenance.py",
+      "path": "spritesheet-expert/scripts/spritecore/provenance.py",
+      "sha256": "07d03185960e1f03cecc00b6c73e60038f9a021365d5903a4b03dc66af70e2c2"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/publication.py",
+      "path": "spritesheet-expert/scripts/spritecore/publication.py",
+      "sha256": "588bddc120f0bf83b7f43bca4f392a3894e2d257e0706501eed35955ee8386c7"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/reporting.py",
+      "path": "spritesheet-expert/scripts/spritecore/reporting.py",
+      "sha256": "45d4c0fedcbc796447735b41892327402c2031b6908ae0136c557fc6d163e6cc"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/results.py",
+      "path": "spritesheet-expert/scripts/spritecore/results.py",
+      "sha256": "667ac481baa89f96bc00c4a7dc66dff6c9f5376d074494100bafb9d7f0670318"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/runtime_preview.py",
+      "path": "spritesheet-expert/scripts/spritecore/runtime_preview.py",
+      "sha256": "c1c4d77a00e7362902f3539b0499f9412a1d4506e3c3f98cad59840b829ee28d"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/source_intake.py",
+      "path": "spritesheet-expert/scripts/spritecore/source_intake.py",
+      "sha256": "6aa4b16c25aef79889d2088ad02d1b93866b8cc0f82eef57f4cd849005851b00"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/tool_theme.py",
+      "path": "spritesheet-expert/scripts/spritecore/tool_theme.py",
+      "sha256": "92c12ce5aa2a65dd09a63e3269b02bd0591ba3262476d191f19f88b25644653b"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/video_animation.py",
+      "path": "spritesheet-expert/scripts/spritecore/video_animation.py",
+      "sha256": "989af1687d93e04bf6824d76ccb3d1fb938396b14b5cda808e96748bb8798dee"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/visual_review.py",
+      "path": "spritesheet-expert/scripts/spritecore/visual_review.py",
+      "sha256": "ebb20e9ba4db539da33856f2f24c499b92828327d6a52d7833a3748e73b807bf"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/workflow_lanes.py",
+      "path": "spritesheet-expert/scripts/spritecore/workflow_lanes.py",
+      "sha256": "477a16b43810ebae5a2f9e663efc909e2f0a2fc7a5d0a6260923966b37607847"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/spritecore/workspace.py",
+      "path": "spritesheet-expert/scripts/spritecore/workspace.py",
+      "sha256": "10a9f14dfc94417d118ec0f483c9f4caf5842ccfe3245cba740e85933341523f"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/sync_imagegen_repair_provenance.py",
+      "path": "spritesheet-expert/scripts/sync_imagegen_repair_provenance.py",
+      "sha256": "30d04c52be869bee2440e86a03275179128d52f3d4ab0dd7b544d25d1d3ffd55"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/sync_tool_theme.py",
+      "path": "spritesheet-expert/scripts/sync_tool_theme.py",
+      "sha256": "4ad356de8b183c816b37352f58ec6f828713016e4717bcbb45b3f30e7cc16206"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/unpack_atlas_run.py",
+      "path": "spritesheet-expert/scripts/unpack_atlas_run.py",
+      "sha256": "5f559ad3f57107f983230b805f3238760b6654470917b0f0e2e0a7e99e4cabc8"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/validate_item_delivery.py",
+      "path": "spritesheet-expert/scripts/validate_item_delivery.py",
+      "sha256": "3cca141c2f31468c2f902a47a192aa84057961472926cc6d0230454f9bbc4cd1"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/validate_preset.py",
+      "path": "spritesheet-expert/scripts/validate_preset.py",
+      "sha256": "7cc0da3bc2909712c073a10e98e2358991b67b69785fb93cd9c36f9808271d9f"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/scripts/validate_run.py",
+      "path": "spritesheet-expert/scripts/validate_run.py",
+      "sha256": "e181e469d26c90b5b77a0ce03f8bec172bc253bd5ed0728079e2f8b0538ac49a"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/studio/DELIVERY-LAB.md",
+      "path": "spritesheet-expert/studio/DELIVERY-LAB.md",
+      "sha256": "a97b9d3ae45ec1cc1b96645da0db7237bee69a6f2d02c2e1404a02b24c82933b"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/studio/README.md",
+      "path": "spritesheet-expert/studio/README.md",
+      "sha256": "962e81709bca0a185fe2fecbc40227ac68ef8042e9dd9aec7efe1d4c2bb30fe1"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/studio/app.js",
+      "path": "spritesheet-expert/studio/app.js",
+      "sha256": "829813b98b034bc4fd6184a2c84f07ea9ad84b612e33b0b439fbcae60b69c991"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/studio/artifacts.js",
+      "path": "spritesheet-expert/studio/artifacts.js",
+      "sha256": "11bec105c4db326118b28fc109b0285c2adf9fa333ac6176b5230375007c6fee"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/studio/commands.js",
+      "path": "spritesheet-expert/studio/commands.js",
+      "sha256": "6f078e0edea7e62bc478cc8ac371f7d3c53fe5271db651f085619830fd9e4cb8"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/studio/delivery-lab.html",
+      "path": "spritesheet-expert/studio/delivery-lab.html",
+      "sha256": "b4cbb2b3e0857bbcb33374ebe5b64b6bae95ad89217fd78f72aba2dd740b9663"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/studio/delivery-lab.js",
+      "path": "spritesheet-expert/studio/delivery-lab.js",
+      "sha256": "913c08cbe945792fc28bf0d830b9c5238e1465a54e073043be07b767f56f081c"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/studio/index.html",
+      "path": "spritesheet-expert/studio/index.html",
+      "sha256": "fa82bfbef1e373e0399b3597423bb5ed773f2bed2e63f14f8d7de54dd10d2249"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/studio/local-workflow.js",
+      "path": "spritesheet-expert/studio/local-workflow.js",
+      "sha256": "c42b4d10bf6eb61e6bd8e25fd13de51ca1f9a1c94abf98cb4240f02f1414fb36"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/studio/matte.js",
+      "path": "spritesheet-expert/studio/matte.js",
+      "sha256": "066c152027251f77219cbf6d9b16da51c34a17b998935aa80ee664278a514c2d"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/studio/studio-client.js",
+      "path": "spritesheet-expert/studio/studio-client.js",
+      "sha256": "5ede586bf43ab1c9dd05b82bfca9f6265d7e6fdb308b09e6f6c9086226e23ff7"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/studio/styles.css",
+      "path": "spritesheet-expert/studio/styles.css",
+      "sha256": "a2faabfbc08094f54f98f9da4fb79fa1789be2445ea5c2b820c2d121b7f41aad"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/studio/tool-theme.css",
+      "path": "spritesheet-expert/studio/tool-theme.css",
+      "sha256": "c31eb6229a068ec0f0960c56ada306ba34e45c1cb70a61589247610acefc5e4c"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/studio/tool-theme.js",
+      "path": "spritesheet-expert/studio/tool-theme.js",
+      "sha256": "2397e23d2ada0123f3a9f8d2c3d4257fbcfa20db90cd7e73aec84ff32bca8b1b"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/studio/workflows.json",
+      "path": "spritesheet-expert/studio/workflows.json",
+      "sha256": "ec5b047926077aa012f4016b894731731f343692d2e4a11efd79a2cb2d0659fd"
+    },
+    {
+      "source": "SKILLS/spritesheet-expert/studio/workspace.js",
+      "path": "spritesheet-expert/studio/workspace.js",
+      "sha256": "458881af609aa6b30d923779481781f5aab5134bf9fd3b8f155b42cbd6ee5d13"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "workflow": "walk-view-transfer",
+  "asset_kind": "sprite",
+  "output_kind": "view-template-set",
+  "views": ["front", "back", "three-quarter-front-right", "three-quarter-back-right", "side-right"],
+  "frame_count": 6,
+  "generation_order": ["side-right", "front", "back", "three-quarter-front-right", "three-quarter-back-right"],
+  "required_templates": ["approved-sideview-walk", "neutral-turnaround-anchor"],
+  "candidate_policy": "one-view-workbench-at-a-time; no whole multi-view sheet",
+  "review_artifacts": ["per-view-contact-sheet", "rotation-review", "per-view-playback", "projection-report.json"],
+  "hard_gates": ["view-lock", "volume-lock", "handedness", "support-leg-readability", "camera-lock", "identity-lock"],
+  "promotion": "each view passes independently and the rotation review preserves volume and asymmetry"
+}

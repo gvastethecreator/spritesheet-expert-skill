@@ -17,7 +17,7 @@ Source state: any supported frame count. Adaptive selector: specialized four-fra
 
 Selector required for every video-derived state. Automatic rank suggests; it does not approve.
 
-Selector writes paginated `timeline-page-*.png` per decoded frame; re-selection keeps exhaustive evidence without a project-specific helper.
+Selector writes paginated `timeline-page-*.png` per decoded frame. `timeline-pages.json` lists the current pages; regeneration preserves older pages rather than deleting files by prefix.
 
 Process one creature state at a time. Batch manifest tracks work; it does not approve.
 
@@ -51,18 +51,18 @@ Generate source video for frame selection, not cinema. Prompt must include:
 
 Keep `provider_action` short, positive, anatomy-specific. Name what moves and what splits phase A from B, or anticipation from contact. Global locks against morphing, mirror substitution, squash/stretch, approach, scaling, and camera movement live in the structured prompt builder.
 
-One video per state, one provider call per job. Do not spend a generation on four low-rate output frames. Generate a native-rate action, scan complete timeline, compare several candidate sets, extract four semantic poses after review.
+One video per state, one provider call per job. Do not spend a generation on four low-rate output frames. Generate a native-rate action, scan complete timeline, compare several candidate sets, extract the declared number of semantic poses after review.
 
 Before a quota-sealed batch, inspect every approved anchor. Base the prompt contract on visible anatomy, not inherited enemy label. Record exact support count, motion-driver count, wing or tentacle groups, mouth and weapon placement, and identity-critical face geometry. For uncanny or human-faced creatures, freeze that exact face during locomotion and name whether the mouth participates in attack. Use the state's count and video quota from the accepted project profile. A locomotion-plus-attack profile may require two videos per identity; that is not a universal limit. Audit every approved dry-run, execute it once, then freeze that job after successful media return.
 
-If a one-video provider job creates multiple videos in one completed invocation, keep first discovered video, write discarded overflow paths and recovery reason into invocation provenance, continue without another provider call. Do not silently accept overflow or retry it. Stop for diagnosis on any failure other than this verified overproduction case.
+If a one-video job returns extra media, preserve the original invocation and outputs and stop for diagnosis. Do not rewrite a failed invocation as completed or discard overflow to make its count pass. Any recovery must preserve the actual provider result and satisfy the selected adapter's contract before ingestion; it does not authorize another provider call.
 
 Bounded repair ladder on failure:
 
 1. Search existing timeline for a safer pose set.
 2. Tighten only the failed state's action with explicit joints, support/contact, centerline, and fixed-anatomy rules.
-3. Regenerate only that state.
-4. After two failures from the same motion driver, use another existing anatomy-safe driver instead of repeating the same failure.
+3. Retry only that state with a concrete repair and valid authorization.
+4. If the approved motion driver remains infeasible, propose a design change for approval. Do not silently replace the attack or locomotion contract.
 
 If quota-sealed, step 3 is disabled. Exhaust complete existing timeline, including early clean cycles and alternate chronological candidates. If exactly one semantic pose remains unusable, repair only that pose with `$imagegen` from approved anchor and adjacent accepted poses. Do not regenerate the whole video or fabricate the frame procedurally. Record repaired frame as mixed provenance, then rerun background removal, adaptive crop, registration, contact, onion, matte, white-background, and runtime checks.
 
@@ -72,9 +72,9 @@ After repaired sheet replaces `raw/<state>.png`, sync its exact bytes with prove
 python scripts/sync_imagegen_repair_provenance.py --run-dir /abs/run
 ```
 
-Reads `qa/quota-sealed-repair-plan.json`. Accepts only completed repair states. Sets those accepted sources to `imagegen`, updates hashes and sizes, leaves other video states unchanged. Mixed source types → `mixed`. Rerun provenance gate after this command.
+Reads `qa/quota-sealed-repair-plan.json` under the run lock. Each completed repair must name a unique state and its matching `raw/<state>.png` result. It updates those source hashes, sizes and declared provider; other states, notes, license and verification status stay unchanged. Input changes abort the write. This sync does not verify generation or grant rights; rerun the provenance gate afterward. Mixed source types remain `mixed`.
 
-Archive each rejected state; preserve accepted sibling-state sources, selected frames, matte panels, and provenance.
+Keep rejected attempts and accepted sibling-state sources, selected frames, matte panels, and provenance. Move or overwrite files only with authority for that operation.
 
 ## Batch Completion And Quota Accounting
 
@@ -97,7 +97,7 @@ Do not count every recursive `video-source.json`. Prefer canonical `provider/gro
 }
 ```
 
-Batch manifest also pins approved identity source hash, reviewed state sources, validation fingerprint, packaged candidate hash. Declare reusable policy at top level:
+Batch manifest also pins approved identity source hash, reviewed state sources, validation fingerprint, packaged candidate hash. This illustrative two-identity policy must be replaced with the accepted project counts:
 
 ```json
 {
@@ -105,7 +105,7 @@ Batch manifest also pins approved identity source hash, reviewed state sources, 
     "quota_sealed": true,
     "identity_fields": ["biome", "enemy"],
     "states_per_identity": ["idle-step", "attack"],
-    "expected_identities": 110,
+    "expected_identities": 2,
     "max_provider_videos_per_identity": 2
   }
 }
@@ -119,9 +119,9 @@ python scripts/check_animation_batch_completion.py \
   --batch-manifest /abs/project/path/to/batch-manifest.json
 ```
 
-Writes `batch-completion-report.json` beside the manifest by default. Checks unique identities, exact identity-source bytes, reviewed states, requested and extracted frame counts, source provenance, quota video bytes, selector/editor and timeline hashes, completed Imagegen repair plans, final workbench evidence, pre-package validation, source atlas, packaged candidate. Reports archived provider records without counting them as active work. Any changed byte, stale selector, missing evidence, unplanned repair, duplicate identity, missing state, or quota mismatch fails the batch.
+Writes `batch-completion-report.json` beside the manifest by default; replaces only an existing batch report. Checks unique identities, identity-source bytes, reviewed states, extracted frame counts and file presence, source provenance, quota videos, selector/timeline hashes, completed Imagegen repairs, workbench input hashes, complete pre-package validation, source atlas and packaged candidate. Archived provider records do not increase quota; discovery skips directory links. A failure blocks the batch. Stored hashes cover their declared files, not every run file, and do not replace fresh run validation or visual approval.
 
-Oversized hands, long forearms, tendrils, other long levers: inspect non-driver anatomy first — providers often keep torso while stretching distal parts late in the shot. Prefer a short clean early window. If hand- or body-mass attacks fail twice, switch to a compact existing driver: jaw, head, lower shroud, or tail.
+For hands, forearms, tendrils and other long appendages, inspect both the moving part and the stationary anatomy throughout the shot. Use an early clean window only when it contains the full accepted action. Changes to the motion driver follow the approval rule above.
 
 ## Import An Existing Video
 
@@ -167,7 +167,9 @@ Analyzer writes up to eight ranked cycles. Open:
 qa/<state>-video-frame-selector/index.html
 ```
 
-Editor: complete video, one thumbnail per decoded frame, candidate presets, semantic slots, loop preview, declared creature type/motion source, five review checks. Foreground at decoded source boundary → `BORDE`. Locomotion subject height outside `0.78x..1.22x` of the anchor → `ESCALA`. Either blocks export for an active selected slot. Safe, scale-stable cycles rank above clipped or zoomed poses even when the invalid pose has more motion.
+Editor: complete video, one thumbnail per decoded frame, candidate presets, semantic slots, a pausable pose preview, declared subject/motion source, and five review checks. Exact idle slots show the preserved PNG when supplied. The preview starts paused for reduced motion; its 125 ms per slot is a review aid, not runtime timing. Imported video uses a relative URL; Grok runner video keeps its local file URL and may need a local media player.
+
+Detected foreground at the source boundary is marked `EDGE`. When locomotion scale analysis applies, subject height outside `0.78x..1.22x` of the anchor is marked `SCALE`. Either flag blocks export for an affected active slot. Adaptive scores are heuristic rankings; uniform candidates are unscored. Penalties influence ranking but do not guarantee that every unflagged candidate ranks above every flagged one. Missing alerts do not establish visual quality.
 
 Review every decoded frame, not only the top-ranked candidate. Compare several candidate sets. Open final active frames at full decoded resolution when thumbnails hide face, limb, weapon, crop, or perspective errors.
 
@@ -212,7 +214,7 @@ python scripts/ingest_video_animation.py \
   --force
 ```
 
-Provenance gate requires `selector.evidence.json`. Also checks report hash, video hash, selected indices, candidate count, editor HTML hash.
+Provenance gate requires `selector.evidence.json`. It checks the source-report hash, selector video record, selected indices, candidate count, and editor HTML hash, and rechecks the current request, video and supplied first-frame bytes. Grok video provenance also requires its video-source report. These checks establish source freshness; the final visual review remains required.
 
 Re-ingestion records `reviewed_indices` and `reviewed_selection` metrics for the exact chosen frames. For locomotion, fails before background removal when an active pose changes subject height outside `0.78x..1.22x` of the exact first frame. Treat this as a fast camera/scale/morph rejection gate, then correct the selection or regenerate only that state.
 
@@ -222,7 +224,7 @@ Run `extract_sprite_row_frames.py` after frame selection.
 
 Video-derived grids use independent-frame removal; Lucida processes each selected frame separately.
 
-Start Lucida at `384` input pixels for a clean, high-contrast neutral sheet. Review the matte before another run. Increase to `512`, then `1024`, only when smaller input loses fur, translucent edges, thin appendages, or glow. Process one Lucida extractor at a time. Do not reduce the request default or batch-approve the faster matte without visual review.
+Use the selected Lucida resolution. Compare another supported size only for a concrete edge-quality or measured resource issue; retain the existing output for comparison. Process one extractor at a time. A smaller input is not proof of a faster or acceptable matte; review fur, translucent edges, thin appendages and glow before accepting it.
 
 Extractor adds a neutral context border before inference, then removes small disconnected matte noise. Calculates one alpha box per frame and adds transparent crop padding around that box.
 

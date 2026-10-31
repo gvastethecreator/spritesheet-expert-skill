@@ -809,3 +809,33 @@ def test_ingest_respects_the_single_writer_run_lock(tmp_path: Path) -> None:
     assert "locked" in " ".join(report["errors"])
     assert not (run_dir / "raw" / "idle.png").exists()
     assert not (run_dir / "source-provenance.json").exists()
+
+
+def test_ingest_reports_partial_mutation_after_a_late_write_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    import ingest_source
+
+    run_dir = tmp_path / "run"
+    create_run_marker(run_dir, run_id="partial-intake")
+    request = _write_request(run_dir)
+    candidate = run_dir / "handoff/outbox/job-idle.png"
+    candidate_hash, mime = _write_candidate(candidate)
+    intake_path = run_dir / "intake.json"
+    intake_path.write_text(json.dumps(_intake(
+        run_dir, request, candidate_hash=candidate_hash, mime=mime,
+    )), encoding="utf-8")
+
+    def fail_write(*_args: object) -> None:
+        raise OSError("simulated provenance write failure")
+
+    monkeypatch.setattr(ingest_source, "atomic_write_text", fail_write)
+    monkeypatch.setattr(sys, "argv", [str(INGEST), "--run-dir", str(run_dir), "--intake", str(intake_path)])
+    assert ingest_source.main() == 3
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "operational-error"
+    assert report["mutated"] is True
+    assert (run_dir / "raw/idle.png").is_file()
+    assert not (run_dir / "source-provenance.json").exists()
+    assert not (run_dir / "qa/source-intake-report.json").exists()
+    assert sha256(candidate.read_bytes()).hexdigest() == candidate_hash

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.openai.local/compose-asset-mockups/presentation-brief.schema.json",
+  "title": "Asset presentation brief",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "title", "purpose", "audience", "approved_copy"],
+  "properties": {
+    "id": {"$ref": "#/$defs/id"},
+    "title": {"type": "string", "minLength": 1},
+    "purpose": {"type": "string", "minLength": 1},
+    "audience": {"type": "string", "minLength": 1},
+    "approved_copy": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/approvedCopy"}
+    },
+    "notes": {"type": "string"}
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+    "approvedCopy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "text", "approved", "approved_by", "approved_at"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "text": {"type": "string", "minLength": 1},
+        "approved": {"const": true},
+        "approved_by": {"type": "string", "minLength": 1},
+        "approved_at": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}

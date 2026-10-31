@@ -10,6 +10,11 @@ import extract_sprite_row_frames as backgrounds
 
 def _args() -> Namespace:
     return Namespace(
+        background_removal="request",
+        background_model=None,
+        background_device=None,
+        alpha_matting=None,
+        post_rembg_chroma_cleanup=None,
         key_threshold=30.0,
         fringe_key_threshold=90.0,
         fringe_delta=18.0,
@@ -57,6 +62,13 @@ def test_auto_neutral_sources_never_enter_the_legacy_chroma_branch() -> None:
 
     assert method != "chroma"
 
+    unknown = backgrounds.normalize_background_removal({}, _args())
+    assert unknown["source_family"] == "unknown"
+    _cutout, unknown_method = backgrounds.remove_background(
+        _flat_source((0, 255, 0)), (0, 255, 0), unknown, _args(), {}
+    )
+    assert unknown_method == "matte"
+
 
 def test_auto_legacy_chroma_sources_keep_import_compatibility() -> None:
     config = {
@@ -76,6 +88,8 @@ def test_auto_legacy_chroma_sources_keep_import_compatibility() -> None:
 
     assert method == "chroma"
     assert cutout.getpixel((0, 0))[3] == 0
+    explicit = backgrounds.normalize_background_removal({"background_removal": {"method": "chroma"}}, _args())
+    assert explicit["source_family"] == "legacy-chroma"
 
 
 def test_matte_review_compares_checker_black_gray_white_and_alpha(
@@ -194,6 +208,25 @@ def test_native_alpha_honors_the_declared_hard_alpha_policy() -> None:
     assert method == "alpha"
     assert list(cutout.getchannel("A").tobytes()) == [0, 0, 0, 0, 0, 0, 0, 255]
 
+    video_cell = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+    video_cell.paste((220, 80, 40, 255), (8, 6, 23, 28))
+    for requested, expected in (("alpha", "alpha"), ("none", "none"), ("auto", "alpha")):
+        sprites, processed, method, report, errors = backgrounds.extract_video_frame_sprites(
+            video_cell,
+            frame_count=1,
+            columns=1,
+            rows=1,
+            background_rgb=(17, 17, 17),
+            chroma_key=(255, 0, 255),
+            background_removal={"method": requested, "source_family": "transparent", "alpha_mode": "soft"},
+            args=_args(),
+            sessions={},
+            position_locked_canvas=True,
+        )
+        assert method == expected and report["ok"] is True and errors == []
+        assert sprites is not None and sprites[0].tobytes() == video_cell.tobytes()
+        assert processed.tobytes() == video_cell.tobytes()
+
 
 def test_lucida_conservative_cleanup_removes_only_neutral_edge_leak(monkeypatch) -> None:
     source = Image.new("RGBA", (8, 8), (0, 0, 0, 255))
@@ -251,6 +284,18 @@ def test_enclosed_hole_recovery_restores_dark_subject_interior() -> None:
     assert restored.getpixel((4, 4)) == (0, 0, 0, 255)
     assert restored.getpixel((0, 0))[3] == 0
 
+    source.putpixel((4, 4), (240, 50, 80, 0))
+    source.putpixel((3, 4), (0, 0, 0, 128))
+    restored_alpha, pixels = backgrounds.restore_enclosed_source_holes(source, cutout, max_hole_ratio=0.2)
+    assert pixels == 8
+    assert restored_alpha.getpixel((4, 4))[3] == 0
+    assert restored_alpha.getpixel((3, 4))[3] == 128
+    single_hole = Image.new("RGBA", source.size, (100, 120, 140, 255))
+    single_hole.putpixel((4, 4), (0, 0, 0, 0))
+    source.putpixel((4, 4), (0, 0, 0, 255))
+    zero_ratio, zero_pixels = backgrounds.restore_enclosed_source_holes(source, single_hole, max_hole_ratio=0)
+    assert zero_pixels == 0 and zero_ratio.getpixel((4, 4))[3] == 0
+
 
 def test_enclosed_hole_recovery_keeps_border_connected_gap_transparent() -> None:
     source = Image.new("RGBA", (9, 9), (0, 0, 0, 255))
@@ -304,6 +349,16 @@ def test_lucida_can_restore_a_declared_large_enclosed_subject_cavity(
 
     assert method == "lucida"
     assert restored.getpixel((10, 10)) == (0, 0, 0, 255)
+
+    source.putpixel((10, 10), (0, 0, 0, 128))
+    hard_restored, _method = backgrounds.remove_background(
+        source, (255, 0, 255),
+        {"method": "lucida", "alpha_mode": "hard", "hard_alpha_threshold": 200,
+         "source_recovery_enabled": False, "enclosed_hole_max_ratio": 0.3},
+        _args(), {},
+    )
+    assert hard_restored.getpixel((10, 10))[3] == 0
+    assert set(hard_restored.getchannel("A").tobytes()) <= {0, 255}
 
 
 def test_canonical_reference_state_prefers_non_attack_state() -> None:

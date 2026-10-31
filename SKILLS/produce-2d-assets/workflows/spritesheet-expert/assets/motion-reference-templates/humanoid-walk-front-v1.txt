@@ -1,0 +1,47 @@
+Use case: scientific-educational
+Asset type: motion-reference image for a game spritesheet generator
+Primary request: Create a biomechanically correct 8-pose humanoid walk cycle in strict orthographic front view walking toward the viewer.
+
+Subject:
+- One neutral, genderless, featureless 2D illustrated mannequin repeated in every slot.
+- Minimal flat graphic anatomy: oval head, simple tapered torso and pelvis, capsule upper/lower limbs, small circular joints, simple wedge feet.
+- Stable adult proportions and joint placement; identical body volume, line weight, and camera distance in all poses.
+
+Anatomical color key (the colors must remain attached to the same anatomical side in every frame, even when limbs overlap):
+- head: flat warm light gray.
+- torso_pelvis: flat neutral charcoal gray.
+- anatomical_left_arm: flat coral red.
+- anatomical_right_arm: flat clear blue.
+- anatomical_left_leg: flat amber orange.
+- anatomical_right_leg: flat leaf green.
+- joints: small flat near-black circles.
+
+Motion and phase contract:
+- Frame 1: contact — LEFT/ORANGE leg reaches forward with heel contacting; RIGHT/GREEN leg extends behind on toes; RIGHT/BLUE arm swings forward and LEFT/RED arm swings back; front foot contacts ground, back foot pushes off.
+- Frame 2: down — LEFT/ORANGE leg is the bent planted support under the pelvis; RIGHT/GREEN toes leave the ground behind; arms retain the same cross-lateral direction; weight drops over planted foot.
+- Frame 3: passing — LEFT/ORANGE leg is nearly vertical and planted; RIGHT/GREEN bent foot passes low beneath the pelvis; both arms pass close to neutral; swing leg passes under body.
+- Frame 4: up — LEFT/ORANGE leg extends behind on toes; RIGHT/GREEN knee swings only slightly forward with the foot low; LEFT/RED arm is forward and RIGHT/BLUE arm is back; body lifts before the opposite contact.
+- Frame 5: opposite_contact — RIGHT/GREEN leg reaches forward with heel contacting; LEFT/ORANGE leg extends behind on toes; LEFT/RED arm swings forward and RIGHT/BLUE arm swings back; opposite foot contacts ground.
+- Frame 6: opposite_down — RIGHT/GREEN leg is the bent planted support under the pelvis; LEFT/ORANGE toes leave the ground behind; arms retain the same cross-lateral direction; weight drops over the opposite planted foot.
+- Frame 7: opposite_passing — RIGHT/GREEN leg is nearly vertical and planted; LEFT/ORANGE bent foot passes low beneath the pelvis; both arms pass close to neutral; first leg passes under body.
+- Frame 8: opposite_up — RIGHT/GREEN leg extends behind on toes; LEFT/ORANGE knee swings only slightly forward with the foot low; RIGHT/BLUE arm is forward and LEFT/RED arm is back; body lifts back toward frame 1.
+- Opposite arm and leg move together cross-laterally.
+- Show planted support, heel/toe roll, knee bend, pelvis rotation, shoulder counter-rotation, and a subtle head/pelvis vertical arc.
+- The two contact poses must use opposite support legs. Passing poses must visibly bring the swing foot beneath the pelvis.
+- Frame 8 must flow cleanly back into frame 1 without a positional pop.
+- This is an ordinary relaxed walk, not running or marching: at least one foot touches the ground in every frame, feet stay low, knees never lift high, stride is moderate, and torso remains upright.
+
+Composition:
+- Exactly 8 full-body poses in a strict 2 by 4 grid, row-major order.
+- One mannequin per invisible equal-sized slot, centered with generous padding and a shared ground baseline.
+- Keep the exact declared view in all frames. No camera orbit, perspective drift, projection change, cropping, or overlap between slots.
+- Crisp minimalist 2D instructional illustration on a uniform off-white background.
+- Flat fills plus one consistent thin dark outline. No internal texture or decorative rendering.
+
+Constraints:
+- This is a motion/anatomy reference, not character art. No clothing, hair, face, gender traits, muscles, skin texture, accessories, weapons, scenery, shadows, text, labels, numbers, arrows, borders, visible grid, watermark, or decorative effects.
+- No 3D render, photorealism, gradients, volumetric shading, cast shadows, glossy plastic, bevels, depth-of-field, or floor plane.
+- Do not stylize as a wooden artist mannequin, skeleton, stick figure, robot, toy, superhero, anime character, or realistic nude person.
+- Do not change limb colors between frames and do not merge both legs or both arms into one silhouette.
+- Reject duplicate poses, high-knee poses, same-side arm/leg swing, swapped limb colors, floating feet, or a planted foot that changes side unexpectedly.
+Output only the reference image.

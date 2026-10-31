@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from PIL import Image
+import pytest
 
 from check_asset_slots import self_repeat_metrics
 from repair_repeat_edges import (
@@ -23,6 +24,8 @@ def test_repeat_edge_repair_matches_edges_and_preserves_center() -> None:
     assert metrics["horizontal_edge_error"] == 0.0
     assert metrics["vertical_edge_error"] == 0.0
     assert repaired.crop((6, 6, 26, 26)).tobytes() == center_before
+    with pytest.raises(ValueError, match="one third"):
+        harmonize_repeat_edges(source, blend_width=6, edge_strip=20)
 
 
 def test_phase_crop_finds_matching_periodic_boundaries_before_narrow_blend() -> None:
@@ -46,6 +49,16 @@ def test_phase_crop_finds_matching_periodic_boundaries_before_narrow_blend() -> 
     assert report["y"]["boundary_error"] == 0
     assert final["horizontal_edge_error"] < 0.02
     assert final["vertical_edge_error"] < 0.02
+    for ratio in (0.0, 0.001):
+        untrimmed, report = periodic_phase_crop(source, output_size=(64, 64), max_trim_ratio=ratio)
+        assert report["x"]["span"] == source.width
+        assert report["y"]["span"] == source.height
+        assert report["x"]["trim_ratio"] == report["y"]["trim_ratio"] == 0
+        assert untrimmed.tobytes() == source.resize((64, 64), Image.Resampling.LANCZOS).tobytes()
+    _, small_trim = periodic_phase_crop(source, output_size=(64, 64), max_trim_ratio=0.01)
+    for axis, length in (("x", source.width), ("y", source.height)):
+        assert 0 <= small_trim[axis]["start"] <= int(length * 0.01)
+        assert 0 <= length - small_trim[axis]["end"] <= int(length * 0.01)
 
 
 def test_provider_retry_merge_keeps_concrete_per_source_metadata() -> None:
@@ -117,6 +130,8 @@ def test_provider_retry_merge_keeps_concrete_per_source_metadata() -> None:
     assert all(
         item.get("source_type") != "mixed" for item in merged["accepted_sources"]
     )
+    with pytest.raises(ValueError, match="does not match the selected provider"):
+        merge_provider_provenance(provenance, request, [{**addition, "art_engine": "grok-imagine"}], provider="imagegen")
 
 
 def test_provider_retry_merge_deduplicates_provenance_note_and_source() -> None:

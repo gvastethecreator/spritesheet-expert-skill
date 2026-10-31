@@ -15,11 +15,14 @@ import hashlib
 import json
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image
 
+from compose_sprite_gif import contact_sheet
+from compose_sprite_atlas import resize_policy_for_request
 from curation import apply_transform, load_curation, state_plan
 from gif_utils import delay_ticks_to_duration_ms, save_clean_gif
-from spritecore.image_ops import ResizePolicy, resize_policy_from_sampling_policy
+from spritecore.image_ops import ResizePolicy
+from spritecore.paths import PathSafetyError, resolve_run_path
 
 
 def sha256(path: Path) -> str:
@@ -28,23 +31,6 @@ def sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def checker(size: tuple[int, int], square: int = 16) -> Image.Image:
-    width, height = size
-    image = Image.new("RGBA", size, (210, 210, 210, 255))
-    pixels = image.load()
-    for y in range(height):
-        for x in range(width):
-            if ((x // square) + (y // square)) % 2 == 0:
-                pixels[x, y] = (235, 235, 235, 255)
-    return image
-
-
-def flatten(frame: Image.Image) -> Image.Image:
-    base = checker(frame.size)
-    base.alpha_composite(frame)
-    return base.convert("RGB")
 
 
 def parse_frames(value: str) -> list[int]:
@@ -64,7 +50,10 @@ def load_frame(
     cell_size: tuple[int, int] | None = None,
     resize_policy: ResizePolicy | None = None,
 ) -> tuple[Path, Image.Image]:
-    path = run_dir / "frames" / state / f"frame-{user_frame - 1}.png"
+    try:
+        path = resolve_run_path(run_dir, f"frames/{state}/frame-{user_frame - 1}.png")
+    except PathSafetyError as exc:
+        raise SystemExit(str(exc)) from exc
     if not path.is_file():
         raise SystemExit(f"missing selected frame {user_frame}: {path}")
     image = Image.open(path).convert("RGBA")
@@ -73,22 +62,6 @@ def load_frame(
             image, transform, cell_size, policy=resize_policy
         )
     return path, image
-
-
-def contact_sheet(frames: list[tuple[int, Image.Image]], gap: int = 4, label_height: int = 24) -> Image.Image:
-    cell_width = max(frame.width for _number, frame in frames)
-    cell_height = max(frame.height for _number, frame in frames)
-    width = len(frames) * cell_width + (len(frames) + 1) * gap
-    height = cell_height + label_height + gap * 2
-    sheet = Image.new("RGB", (width, height), (255, 255, 255))
-    draw = ImageDraw.Draw(sheet)
-    x = gap
-    for number, frame in frames:
-        draw.rectangle((x, gap, x + cell_width - 1, gap + label_height - 1), fill=(24, 24, 24))
-        draw.text((x + 6, gap + 5), f"frame {number}", fill=(255, 255, 255))
-        sheet.paste(flatten(frame), (x, gap + label_height))
-        x += cell_width + gap
-    return sheet
 
 
 def main() -> int:
@@ -104,10 +77,18 @@ def main() -> int:
 
     run_dir = args.run_dir.expanduser().resolve()
     qa_dir = run_dir / "qa"
+    if "/" in args.name or "\\" in args.name:
+        raise SystemExit("selected cycle name must be a basename under qa")
+    try:
+        gif_path = resolve_run_path(qa_dir, f"{args.name}.gif")
+        contact_path = resolve_run_path(qa_dir, f"{args.name}-contact.png")
+        manifest_path = resolve_run_path(qa_dir, f"{args.name}.json")
+    except PathSafetyError as exc:
+        raise SystemExit(str(exc)) from exc
     qa_dir.mkdir(parents=True, exist_ok=True)
 
     request = json.loads((run_dir / "sprite-request.json").read_text(encoding="utf-8"))
-    resize_policy = resize_policy_from_sampling_policy(request.get("sampling_policy"))
+    resize_policy = resize_policy_for_request(request)
     cell = request["cell"]
     cell_size = (
         int(cell.get("width", cell.get("size", 0))),
@@ -122,6 +103,8 @@ def main() -> int:
         user_frames = args.frames
     else:
         user_frames = [index + 1 for index in ordered]
+    if not user_frames:
+        raise SystemExit("curation has no selected frames for this cycle")
 
     selected = [
         load_frame(
@@ -138,7 +121,6 @@ def main() -> int:
     frames = [(number, image) for number, (_path, image) in zip(user_frames, selected)]
 
     duration_ms = delay_ticks_to_duration_ms(args.delay_ticks) if args.delay_ticks else max(1, args.duration_ms)
-    gif_path = qa_dir / f"{args.name}.gif"
     save_clean_gif(
         [frame for _number, frame in frames],
         gif_path,
@@ -146,8 +128,7 @@ def main() -> int:
         loop=0,
     )
 
-    contact_path = qa_dir / f"{args.name}-contact.png"
-    contact_sheet(frames).save(contact_path)
+    contact_sheet([(number, path, frame) for number, (path, frame) in zip(user_frames, selected)]).save(contact_path)
 
     manifest = {
         "version": 1,
@@ -177,7 +158,6 @@ def main() -> int:
             for user_frame, path in zip(user_frames, frame_paths)
         ],
     }
-    manifest_path = qa_dir / f"{args.name}.json"
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     print(

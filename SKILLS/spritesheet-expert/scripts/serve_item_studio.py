@@ -130,7 +130,7 @@ class Studio:
                 "--grid-quantum", str(quantum), "--padding", str(padding)]
             for key, value in limits.items():
                 command.extend(["--" + key.replace("_", "-"), str(value)])
-            with (self.workspace / "logs" / f"{run_id}.log").open("w", encoding="utf-8") as log:
+            with (self.workspace / "logs" / f"{run_id}.log").open("a", encoding="utf-8") as log:
                 self.processes[run_id] = subprocess.Popen(command, stdout=log, stderr=log,
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
             return {"status": "started", "id": run_id}

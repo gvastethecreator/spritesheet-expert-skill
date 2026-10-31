@@ -1,8 +1,8 @@
 """Read-only validation for hash-bound source row intake.
 
 This module deliberately performs no writes.  It validates the complete intake
-contract and returns an immutable execution plan; the public CLI owns locking
-and atomic mutation only after this boundary succeeds.
+contract and returns an execution plan; the public CLI owns locking
+and per-file atomic writes after this boundary succeeds.
 """
 
 from __future__ import annotations
@@ -388,6 +388,13 @@ def validate_source_intake(
         report_path = run_root / ".invalid-source-intake-report"
     if candidate_path == output_path:
         issues.append("candidate.path must be a staging input, not the raw output path")
+    for name, target in (
+        ("raw output", output_path),
+        ("source provenance", provenance_path),
+        ("source intake report", report_path),
+    ):
+        if target.exists() and not target.is_file():
+            issues.append(f"{name} destination is not a file: {target}")
     if output_path.exists() and not force:
         issues.append(
             f"raw output already exists for {state!r}; pass --force to reingest"

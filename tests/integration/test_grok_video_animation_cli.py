@@ -82,7 +82,7 @@ def _request() -> dict[str, object]:
 
 
 def _prepare_job(
-    repo_root: Path, *, neutral_subject: bool = False
+    repo_root: Path, *, neutral_subject: bool = False, duration_seconds: int | None = None
 ) -> tuple[Path, Path, dict[str, object]]:
     run_dir = repo_root / "run"
     run_dir.mkdir(parents=True)
@@ -104,6 +104,7 @@ def _prepare_job(
             "walk",
             "--first-frame",
             "first-frame.png",
+            *(["--duration-seconds", str(duration_seconds)] if duration_seconds is not None else []),
         ],
         cwd=REPO_ROOT,
         capture_output=True,
@@ -116,15 +117,21 @@ def _prepare_job(
     return run_dir, first_frame, json.loads(job_path.read_text(encoding="utf-8"))
 
 
+@pytest.mark.parametrize("duration_seconds", [None, 1, 8, 15])
 def test_prepare_grok_video_job_is_dry_run_first_and_hashes_the_exact_frame(
-    tmp_path: Path,
+    tmp_path: Path, duration_seconds: int | None,
 ) -> None:
-    run_dir, first_frame, job = _prepare_job(tmp_path)
+    run_dir, first_frame, job = _prepare_job(tmp_path, duration_seconds=duration_seconds)
 
     prompt_path = run_dir / str(job["prompt"]["path"])
     prompt = prompt_path.read_text(encoding="utf-8").lower()
     assert job["provider"] == "grok-imagine"
     assert job["operation"] == "video-from-image"
+    expected_duration = 6 if duration_seconds is None else duration_seconds
+    assert job["duration_seconds"] == expected_duration
+    assert f"for {expected_duration} seconds" in prompt
+    assert "reference_to_video exactly once" in prompt
+    assert "exact supplied image as first_frame" in prompt
     assert job["requested_frames"] == 4
     assert job["sampling_mode"] == "cyclic-half-open"
     assert job["first_frame"]["sha256"] == sha256(first_frame.read_bytes()).hexdigest()
@@ -133,6 +140,8 @@ def test_prepare_grok_video_job_is_dry_run_first_and_hashes_the_exact_frame(
     ).hexdigest()
     assert job["dry_run"]["args"][-1] == "--dry-run"
     assert "--ack-run" not in job["dry_run"]["args"]
+    assert set(job["dry_run"]) == {"args", "real_run_ack_flag"}
+    assert job["provider_output"]["result_path"].startswith("run/provider/grok-imagine/walk/runner/")
     assert "locked camera" in prompt
     assert "flat neutral gray" in prompt
     assert "one continuous" in prompt
@@ -281,6 +290,33 @@ def test_ingest_accepts_only_completed_provider_media_and_writes_a_deterministic
     assert provenance["art_engine"] == "grok-imagine"
     assert provenance["state_coverage"] == ["walk"]
     assert provenance["accepted_sources"][0]["sha256"] == sha256(raw_path.read_bytes()).hexdigest()
+
+    # A changing decoder source must fail before replacing accepted outputs.
+    report_path = run_dir / response["report_path"]
+    protected = {path: path.read_bytes() for path in (
+        raw_path, report_path, run_dir / "source-provenance.json"
+    )}
+    fake_decoder = fake_modules / "imageio_ffmpeg.py"
+    fake_decoder.write_text(fake_decoder.read_text(encoding="utf-8").replace(
+        '    assert pix_fmt == "rgb24"',
+        '    assert pix_fmt == "rgb24"\n'
+        '    import json\n'
+        '    from pathlib import Path\n'
+        '    source = Path(_path)\n'
+        '    source.write_bytes(source.read_bytes() + b"changed")\n'
+        f'    invocation = Path({str(invocation_path)!r})\n'
+        '    payload = json.loads(invocation.read_text(encoding="utf-8"))\n'
+        '    payload["status"] = "failed"\n'
+        '    invocation.write_text(json.dumps(payload), encoding="utf-8")',
+    ), encoding="utf-8")
+    changed = subprocess.run(
+        [sys.executable, str(INGEST), "--run-dir", str(run_dir), "--state", "walk",
+         "--invocation", str(invocation_path), "--force"],
+        cwd=REPO_ROOT, env=env, capture_output=True, text=True, check=False,
+    )
+    assert changed.returncode == 3, changed.stdout + changed.stderr
+    assert "sources changed before commit" in changed.stdout
+    assert all(path.read_bytes() == content for path, content in protected.items())
 
 
 def test_ingest_decodes_a_real_mp4_with_the_optional_imageio_ffmpeg_runtime(

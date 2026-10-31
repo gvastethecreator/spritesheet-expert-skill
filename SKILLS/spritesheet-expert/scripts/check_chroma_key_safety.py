@@ -21,7 +21,7 @@ KEYS = {
 
 
 def parse_color(value: str) -> tuple[int, int, int]:
-    raw = value.strip()
+    raw = value.strip().lower()
     if raw in KEYS:
         return KEYS[raw]
     if raw.startswith("#") and len(raw) == 7:

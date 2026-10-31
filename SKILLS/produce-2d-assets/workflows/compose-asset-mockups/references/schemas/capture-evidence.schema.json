@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.openai.local/compose-asset-mockups/capture-evidence.schema.json",
+  "title": "Runtime capture evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_path",
+    "sha256",
+    "media_type",
+    "width",
+    "height",
+    "captured_at",
+    "tool",
+    "viewport"
+  ],
+  "properties": {
+    "artifact_path": {"$ref": "#/$defs/path"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "media_type": {"enum": ["image/png", "image/jpeg", "image/webp"]},
+    "width": {"type": "integer", "minimum": 1},
+    "height": {"type": "integer", "minimum": 1},
+    "captured_at": {"type": "string", "format": "date-time"},
+    "tool": {"type": "string", "minLength": 1},
+    "viewport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1}
+      }
+    }
+  },
+  "$defs": {
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![A-Za-z]:[\\\\/]|[\\\\/]).+"
+    }
+  }
+}

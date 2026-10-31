@@ -15,7 +15,7 @@ Other asset modes keep `auto`:
 3. otherwise use `rembg` with `birefnet-general`;
 4. use BEN2 only when selected explicitly for a hard/final comparison.
 
-The matte flood-fill touches only edge-connected palette regions, so neutral clothing, outlines, highlights, inner holes, and props are not erased globally. Ambiguous, dirty, anti-aliased, photographic, or breathing video backgrounds should reach BiRefNet. Model-backed removal is still evidence to review, not an excuse to accept a busy source: if it clips hair, fur, spikes, limbs, outlines, clothing, props, tile edges, or interiors, regenerate a cleaner neutral source or compare a different model.
+The matte flood-fill targets edge-connected palette regions. Subject pixels connected to that region can still be removed; inspect clothing, outlines, highlights, inner holes and props. Ambiguous, dirty, anti-aliased, photographic, or breathing video backgrounds should reach BiRefNet. Model-backed removal is still evidence to review, not an excuse to accept a busy source: if it clips hair, fur, spikes, limbs, outlines, clothing, props, tile edges, or interiors, regenerate a cleaner neutral source or compare a different model.
 
 Chroma is legacy-import only. A legacy request must declare `background_removal.source_family: legacy-chroma` or select `background_removal.method: chroma` explicitly in the import/unpack path. New preparation rejects chroma generation and never auto-selects chroma for neutral sources. Legacy chroma still uses a border-connected soft matte/despill; keep `check_chroma_key_safety.py`, `rekey_chroma_background.py`, and `check_visible_magenta.py` only for those old sources.
 
@@ -23,13 +23,13 @@ Do not run chroma cleanup after `rembg` on neutral sources. `post_rembg_chroma_c
 
 Local model stack:
 
-- `lucida` + `egeorcun/lucida` at the pinned revision: preferred for new character and creature grids, illustration, line art, glow, and soft effects. Pixel art: hard alpha threshold `64`. Illustrated art keeps soft alpha.
-- `rembg` + `birefnet-general`: quality default.
-- `rembg` + `birefnet-general-lite`: explicit speed option for iteration.
+- `lucida` + `egeorcun/lucida` at the pinned revision: the configured default for new character and creature grids; review it on the actual source. Pixel art: hard alpha threshold `64`. Illustrated art keeps soft alpha.
+- `rembg` + `birefnet-general`: default model in the separate `auto` fallback lane.
+- `rembg` + `birefnet-general-lite`: optional alternative; measure time and review edges before choosing it.
 - `rembg` + `birefnet-dis` or `birefnet-hrsod`: hard silhouettes, high-resolution objects, or irregular source sheets where general-lite leaves background.
 - `rembg` + `isnet-anime`: anime/cel character rows when BiRefNet clips linework.
-- `ben2` + `PramaLLC/BEN2`: optional higher-quality local matting for hair, fur, spikes, painterly edges, 4K-ish inputs, dirty generated backgrounds, and imported irregular sheets. Heavier than rembg; needs PyTorch.
-- `bria-rmbg` / BRIA RMBG 2.0: strong quality candidate, but publicly available weights are non-commercial and production/commercial use needs a BRIA agreement/API. Do not make it a silent default.
+- `ben2` + [`PramaLLC/BEN2`](https://huggingface.co/PramaLLC/BEN2): optional model-backed comparison when another matte fails; needs PyTorch. Model-card quality claims are not validation on the current asset.
+- `bria-rmbg` / [BRIA RMBG 2.0](https://huggingface.co/briaai/RMBG-2.0): public weights are offered for non-commercial use. Check the current license and obtain suitable terms before commercial use; do not make it a silent default.
 
 Install only when needed:
 
@@ -42,19 +42,19 @@ Lucida/BEN2 weights are a separate preparation step. Use the runtime Python and
 offline checkpoint instructions in `../model-runtime/README.md`. The rembg lane
 remains separate and is not covered by the locked Lucida/BEN2 runtime.
 
-Then enable removal explicitly for a source that needs it:
+Choose one of these model alternatives for a new run whose source needs removal:
 
 ```bash
-python scripts/preset_to_request.py custom-atlas --background-removal lucida --grid-segmentation adaptive --out /abs/run/request.json --states-file /abs/run/states.json
-python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id hero --request /abs/run/request.json --generation-background '#000000' --force
+python scripts/preset_to_request.py custom-atlas --background-removal lucida --grid-segmentation adaptive --out /abs/request.json --states-file /abs/states.json
+python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id hero --request /abs/request.json --generation-background '#000000'
 python scripts/extract_sprite_row_frames.py --run-dir /abs/run
 
-python scripts/preset_to_request.py custom-atlas --background-removal rembg --background-model birefnet-general --out /abs/run/request.json --states-file /abs/run/states.json
-python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id hero --request /abs/run/request.json --force
+python scripts/preset_to_request.py custom-atlas --background-removal rembg --background-model birefnet-general --out /abs/request.json --states-file /abs/states.json
+python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id hero --request /abs/request.json
 python scripts/extract_sprite_row_frames.py --run-dir /abs/run
 
-python scripts/preset_to_request.py custom-atlas --background-removal ben2 --background-model PramaLLC/BEN2 --out /abs/run/request.json --states-file /abs/run/states.json
-python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id hero --request /abs/run/request.json --force
+python scripts/preset_to_request.py custom-atlas --background-removal ben2 --background-model PramaLLC/BEN2 --out /abs/request.json --states-file /abs/states.json
+python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id hero --request /abs/request.json
 python scripts/extract_sprite_row_frames.py --run-dir /abs/run --background-device auto
 ```
 
@@ -68,7 +68,7 @@ For imported whole sheets, `unpack_atlas_run.py` defaults to background-removal 
 
 ## Generation Provenance
 
-Generated production art must be backed by `$imagegen` or an explicitly selected `$grok-imagine` invocation. Procedural/PIL drawing is fixture-only.
+Generated production art needs the actual request, returned media and receipt for its declared Imagegen or selected Grok route. Client skill adapters are optional; source intake does not prove that inference ran. Procedural/PIL drawing is fixture-only.
 
 Record accepted source art before extraction:
 
@@ -137,7 +137,7 @@ Keep atlas constraints stable: one row per state or asset group, native transpar
 
 Sprites use `asset_kind: sprite` and component extraction. Tiles, textures, icons, props, VFX, and full-cell assets use `asset_kind` plus `extraction_mode: slots` so full-cell art does not depend on connected-component detection.
 
-Raw generation shape is not final delivery shape. Animated body rows default to compact raw grids in `states.<state>.raw_layout` because long `1xN` imagegen strips drift, touch, and crop more often. The final runtime atlas remains `manifest.json.frame_layout` rows after deterministic composition. Use legacy raw strips only for explicit compatibility or low-risk fixture work.
+Raw generation shape is not final delivery shape. Animated body rows default to compact raw grids in `states.<state>.raw_layout` to give each pose a bounded source region; this layout does not guarantee identity, spacing or complete anatomy. The final runtime atlas remains `manifest.json.frame_layout` rows after deterministic composition. Use legacy raw strips only for explicit compatibility or low-risk fixture work.
 
 ## Pixel-Art Direction Profiles And Workflows
 
@@ -162,14 +162,14 @@ Request shape:
 `auto` infers profiles per row. Explicit profiles when a custom row needs stronger direction:
 
 ```bash
-python scripts/preset_to_request.py custom-atlas --art-profile pixel-combat --out /abs/run/request.json --states-file /abs/run/states.json
-python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id hero --request /abs/run/request.json --force
+python scripts/preset_to_request.py custom-atlas --art-profile pixel-combat --out /abs/request.json --states-file /abs/states.json
+python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id hero --request /abs/request.json
 ```
 
 Preparation writes `references/art-direction.json` (active profiles, animation workflows, and source article groups per row). Review before generation. Disable only for conflicting non-pixel styles:
 
 ```bash
-python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id hero --request /abs/run/request.json --art-direction none --force
+python scripts/prepare_sprite_run.py --out-dir /abs/run --character-id hero --request /abs/request.json --art-direction none
 ```
 
 When auto inference is wrong for a custom row, add explicit workflows in the request:
@@ -186,53 +186,39 @@ When auto inference is wrong for a custom row, add explicit workflows in the req
 - `scripts/prepare_sprite_run.py`: write `sprite-request.json`, compact-grid/strip raw layout metadata, geometry-only `references/layout-guides/*.png`, `references/art-direction.json`, locomotion Image Gen prompts/contracts, `prompts/*.txt`, `raw/`, `frames/`.
 - `scripts/prepare_motion_template_library.py`: regenerate the five canonical view prompts from the template catalog; it does not draw or approve bitmap art.
 - `scripts/check_motion_references.py`: fail closed before locomotion row generation unless every required neutral mannequin is a valid 512px-or-larger image with adjacent `art_engine=imagegen` provenance.
-- `scripts/promote_identity_anchor.py`: turn the first accepted generated idle/neutral frame into `references/identity-anchor.png`.
+- `scripts/promote_identity_anchor.py`: turn the first accepted generated idle/neutral frame into `references/identity-anchor.png`. Custom outputs stay inside the run and cannot replace raw frames, run inputs or unrelated JSON sidecars.
 - `scripts/extract_sprite_row_frames.py`: Lucida/chroma/rembg/BEN2 removal; extract compact raw grids (fixed or adaptive bounds); normalize pose scale/baseline; write transparent cell frames.
 - `scripts/register_sprite_frames.py`: align extracted/imported frames to a stable runtime pivot before atlas composition; use after unpacking whole-sheet candidates whose sprites drift inside cells.
 - `scripts/compose_sprite_atlas.py`: bake atlas and runtime `manifest.json.frame_layout`.
-- `scripts/preview_animation.py`: contact sheets and GIF previews under `qa/`.
+- `scripts/preview_animation.py`: contact sheets and GIF previews under `qa/`. Its summary separates requested timing from decoded GIF delays and encoded frame counts, including coalesced frames.
 - `scripts/build_preview_workbench.py`: self-contained, hash-bound interactive review under `qa/preview-workbench/`.
-- `scripts/prepare_grok_video_animation.py`: bind one exact first frame to a dry-run-first `$grok-imagine video-from-image` job.
+- `scripts/prepare_grok_video_animation.py`: bind one exact first frame to a dry-run-first Grok Imagine `video-from-image` job.
 - `scripts/ingest_grok_video_animation.py`: validate completed Grok media, decode/sample video deterministically, preserve frame 1, write the normal raw grid and provider provenance.
 - `scripts/ingest_video_animation.py`: ingest an existing animation video, rank candidate sequences, copy source media, write imported provenance.
 - `scripts/build_video_frame_selector.py`: required minimal editor from all decoded frames; write hash-bound selector evidence.
 - `scripts/check_frame_alignment.py`: real-frame onion-skin QA for baseline/root alignment, jump takeoff/landing closure, fall/knockdown settlement, bboxes, and alpha centers.
-- `scripts/check_identity_consistency.py`: head/upper-body/area proxy QA so identity scale drift cannot pass as animation.
+- `scripts/check_identity_consistency.py`: recorded head/body/area ratio checks; require complete evidence and visual review for identity and scale.
 - `scripts/serve_curation.py`: local curation webview; selection + move/scale/rotate/shear saved in `curation.json`.
 - `scripts/unpack_atlas_run.py`: rebuild curator-ready run from existing atlas, manifest, grid, projection-grid repair, authored boxes, or loose PNG folder; visual auto-detect/projection can matte first and writes segmentation QA.
-- `scripts/export_curated_pngs.py`: export curated still PNGs from imported/candidate sets.
-- `scripts/compose_selected_cycle.py`: record human-picked frame order for partial locomotion wins.
-- `scripts/compose_sprite_gif.py`: export clean transparent GIFs.
+- `scripts/export_curated_pngs.py`: export PNG copies after checking input/output paths and missing frames. The curator exports only the current selection; older exports are kept. Use the returned file list or a fresh destination.
+- `scripts/compose_selected_cycle.py`: record human-picked frame order under `qa/`; an explicit empty selection stays empty and cannot produce a cycle.
+- `scripts/compose_sprite_gif.py`: export transparent GIFs with distinct output paths. GIF uses binary alpha; it does not retain partial transparency.
 - `scripts/check_generation_provenance.py`: require verified imagegen, Grok, mixed, or explicit imported-source provenance before production QA; allow procedural art only as fixtures.
 - `scripts/check_visible_magenta.py`: screenshot guard for visible chroma leakage.
 - `scripts/check_chroma_key_safety.py`: palette-distance guard for unsafe key colors before/after generation.
-- `scripts/rekey_chroma_background.py`: replace or normalize a border-connected generated key background before extraction.
+- `scripts/rekey_chroma_background.py`: replace or normalize a border-connected key background on declared legacy sources before extraction. Write a separate output to retain the original.
 - `scripts/check_animation_contracts.py`: generic animation workflow QA for locomotion, combat, jumps, reactions, VFX, water, wind, pickups, idles, and tiny sprites.
-- `scripts/check_motion_variation.py`: heuristic locomotion QA for frozen legs/body-part positions.
-- `scripts/check_asset_slots.py`: still/tileset/texture slot QA: labels, catalog metadata, pivots, clipping, per-item `repeat_mode`, numeric self-repeat edge coverage/error, labeled per-item 3x3 previews, role-aware adjacency assembly. Overlay mode is an explicit isolation-review obligation.
+- `scripts/check_motion_variation.py`: heuristic locomotion QA using the shared mask/contact metrics and registered workflows, including request-wide and art-direction metadata. Invalid inputs and incomplete frame sets cannot pass with `--warn-only`; visual leg-phase review remains required.
+- `scripts/check_colored_limb_motion.py`: optional color-coded mannequin QA for limb trajectories and torso-aligned silhouette changes, with a fixed six-frame sideview-walk profile. RGBA inputs use a white review matte. Color/shape metrics do not establish biomechanical motion.
+- `scripts/check_asset_slots.py`: still/tileset/texture slot QA: declared frame counts and cell sizes, labels, catalog metadata, finite pivots, clipping, per-item `repeat_mode`, numeric self-repeat edge coverage/error, labeled per-item 3x3 previews, role-aware adjacency assembly. Repeat thresholds must be finite within `0..1`. Overlay mode is an explicit isolation-review obligation.
 - `scripts/check_isometric_tiles.py`: isometric tileset QA for 2:1 footprint, runtime cell, pivots, edge/corner roles, map composition, depth-sort previews, calibrated runtime metadata, and candidate catalog fixes.
-- `scripts/smoke_pipeline.py`: tiny local smoke check.
-- `scripts/smoke_presets_from_reference.py`: run every preset through deterministic pipeline using a reference sheet.
+- `scripts/smoke_pipeline.py`: synthetic integration smoke; its rembg branch uses a stub and does not prove model quality.
+- `scripts/smoke_presets_from_reference.py`: smoke selected presets with derived reference fixtures. Requires a separate output directory and an exact positive source grid. It removes white from the reference and uses model-free fixture rows; its summary is not production or artistic approval.
 - `references/professional-sprite-animation.md`: production standard for atlas contracts, animation principles, body mechanics, fighting rows, asset modes, background removal, and visual QA.
 
 ## Presets
 
-Read `references/presets.json` first. Current presets:
-
-- `codex-pet`
-- `platformer-character`
-- `topdown-character`
-- `isometric-character`
-- `combat-character`
-- `fighting-game-character`
-- `rpg-monster`
-- `ui-avatar`
-- `tileset-topdown`
-- `tileset-platformer`
-- `texture-pack`
-- `asset-pack`
-- `custom-asset-atlas`
-- `custom-atlas`
+Read `references/presets.json` for the current preset names and values.
 
 Preset defaults are contracts. Override only when user explicitly asks, then report compatibility changes.
 
@@ -246,30 +232,7 @@ Preset defaults are contracts. Override only when user explicitly asks, then rep
 
 ## Professional Production Standard
 
-Use `references/professional-sprite-animation.md` as the quality bar when generating, repairing, curating, or reviewing atlas work.
-
-Animated character rows:
-
-- key-pose clarity: setup/anticipation, action/contact/extreme, recovery/settle when the state needs it;
-- silhouette and line of action: pose readable at runtime size without labels, motion marks, or detached effects;
-- anatomy/body mechanics: grounded weight, center of mass, plausible joints, arcs, overlap/follow-through, no accidental stiffness;
-- identity and volume: face, head, upper body, hands, feet, outline weight, costume scale, and asymmetric details remain locked to the accepted anchor;
-- pivot/origin behavior: feet/baseline for grounded side-view sprites, airborne arc for jumps/falls, grid for tiles, emitter/contact point for VFX.
-
-Fighting-game or combat rows need readable gameplay phases:
-
-- idle/block: guard, balance, breathing/weight shift, stable combat stance;
-- walk/run: alternating contacts, passing poses, shoulder/hip counter-motion, loop seam;
-- crouch/jump/fall/land: height and placement changes without whole-character rescale;
-- punch/kick/special: startup, active/contact, recovery, with the active frame as the strongest silhouette;
-- hitstun/knockdown/death: force direction, balance loss, overshoot/drag, and recovery/fall staging.
-
-Non-sprite asset modes:
-
-- tilesets: exact grid fit, edge compatibility, readable collision surfaces, consistent projection, no scene/collage output;
-- textures: seamless/tileable intent, flat material samples, consistent texel density, no perspective hero objects;
-- props/icons: centered isolation, readable silhouette, scale hierarchy, coherent set language;
-- VFX: buildup/peak/decay frames, stable emitter anchor, alpha-friendly opacity, no source-background residue.
+Use [the sprite animation standard](professional-sprite-animation.md) for body mechanics, combat phases, asset-mode criteria and visual QA. Keep the current request and runtime contract authoritative.
 
 ## Frame Budget
 
@@ -284,7 +247,7 @@ Use low-frame animation only when:
 For preset sprites, use:
 
 ```bash
-python scripts/preset_to_request.py platformer-character --frame-budget micro --out /abs/run/request.json
+python scripts/preset_to_request.py platformer-character --frame-budget micro --out /abs/request.json
 ```
 
 Budget heuristics:

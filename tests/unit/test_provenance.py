@@ -101,6 +101,29 @@ def test_not_imagegen_cannot_pass_by_containing_the_word_imagegen(tmp_path: Path
     assert any("art_engine" in error for error in result.errors)
 
 
+def test_malformed_video_evidence_returns_a_failure_without_crashing(tmp_path: Path) -> None:
+    run_dir, _ = _write_run(tmp_path / "run")
+    provenance_path = run_dir / "source-provenance.json"
+    provenance = json.loads(provenance_path.read_text())
+    entry = provenance["accepted_sources"][0]
+    entry["upstream_report"] = "upstream.json"
+    provenance_path.write_text(json.dumps(provenance), encoding="utf-8")
+    report = {
+        "kind": "sprite-video-source",
+        "state": "idle",
+        "sampled_video_indices": [0],
+        "output": {"path": entry["path"], "sha256": entry["sha256"]},
+    }
+    selector_path = run_dir / "qa/idle-video-frame-selector/selector.evidence.json"
+    selector_path.parent.mkdir(parents=True)
+    selector_path.write_text("[]", encoding="utf-8")
+    for malformed in ([], {**report, "kind": []}, report, {**report, "sampled_video_indices": None}):
+        (run_dir / "upstream.json").write_text(json.dumps(malformed), encoding="utf-8")
+        result = validate_provenance(run_dir)
+        assert result.exit_code == 1, malformed
+        assert result.errors, malformed
+
+
 def test_provenance_rejects_nonexistent_accepted_source(tmp_path: Path) -> None:
     run_dir, source = _write_run(tmp_path / "run")
     source.unlink()
@@ -109,6 +132,29 @@ def test_provenance_rejects_nonexistent_accepted_source(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert any("does not exist" in error for error in result.errors)
+
+
+def test_grok_video_requires_its_video_source_report(tmp_path: Path) -> None:
+    run_dir, _ = _write_run(
+        tmp_path / "run", source_type="grok-imagine-video", art_engine="grok-imagine"
+    )
+    result = validate_provenance(run_dir)
+    assert result.exit_code == 1
+    assert any("requires a Grok video source report" in error for error in result.errors)
+
+    provenance_path = run_dir / "source-provenance.json"
+    provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    provenance["accepted_sources"][0]["upstream_report"] = "upstream.json"
+    provenance_path.write_text(json.dumps(provenance), encoding="utf-8")
+    (run_dir / "upstream.json").write_text(json.dumps({"kind": "sprite-source-intake"}), encoding="utf-8")
+    result = validate_provenance(run_dir)
+    assert result.exit_code == 1
+    assert any("requires a Grok video source report" in error for error in result.errors)
+
+    (run_dir / "upstream.json").write_text("{}", encoding="utf-8")
+    result = validate_provenance(run_dir)
+    assert result.exit_code == 1
+    assert any("requires a Grok video source report" in error for error in result.errors)
 
 
 def test_provenance_rejects_partial_state_coverage(tmp_path: Path) -> None:

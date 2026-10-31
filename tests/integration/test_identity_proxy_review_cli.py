@@ -6,6 +6,7 @@ import subprocess
 import sys
 
 from PIL import Image
+import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -32,13 +33,17 @@ def run_script(name: str, *args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+@pytest.mark.parametrize("background_method", ["birefnet", "none"])
 def test_hash_bound_identity_proxy_review_accepts_only_current_visual_evidence(
-    tmp_path: Path,
+    tmp_path: Path, background_method: str,
 ) -> None:
     run_dir = tmp_path / "run"
     write_json(
         run_dir / "sprite-request.json",
-        {"states": {"idle-step": {"frames": 1, "fps": 8, "loop": True}}},
+        {
+            "states": {"idle-step": {"frames": 1, "fps": 8, "loop": True}},
+            "background_removal": {"method": background_method},
+        },
     )
     write_json(
         run_dir / "frames" / "frames-manifest.json",
@@ -61,7 +66,7 @@ def test_hash_bound_identity_proxy_review_accepts_only_current_visual_evidence(
     )
     for relative in (
         "sprite-sheet-alpha.png",
-        "qa/background-matte-review.png",
+        *([] if background_method == "none" else ["qa/background-matte-review.png"]),
         "qa/idle-step-contact.png",
         "qa/idle-step-onion.png",
     ):

@@ -114,7 +114,8 @@ def validate_contract(
     schema = json.loads((_SCHEMA_ROOT / _SCHEMA_FILES[kind]).read_text(encoding="utf-8"))
     validator = Draft202012Validator(schema)
     issues = [_format_schema_error(error) for error in sorted(validator.iter_errors(document), key=lambda error: list(error.absolute_path))]
-    issues.extend(_semantic_issues(document, kind))
+    if not issues:
+        issues.extend(_semantic_issues(document, kind))
     if issues:
         raise ContractValidationError(kind, issues)
     return ContractDocument(kind=kind, version=version, data=document, source=source)

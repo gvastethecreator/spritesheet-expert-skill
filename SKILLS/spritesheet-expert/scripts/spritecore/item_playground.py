@@ -71,8 +71,7 @@ def _relative_href(output_path: Path, target: Path) -> str:
     return str(PurePosixPath(relative))
 
 
-def _source_record(run_dir: Path, path: Path, role: str) -> dict[str, Any]:
-    content = path.read_bytes()
+def _source_record(run_dir: Path, path: Path, role: str, content: bytes) -> dict[str, Any]:
     return {
         "role": role,
         "path": path.relative_to(run_dir).as_posix(),
@@ -110,6 +109,7 @@ def _manifest_pages(manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
             {
                 "id": page.get("id") or primary.get("id") or ("atlas" if index == 0 else f"page-{index}"),
                 "path": page["path"],
+                "sha256": page.get("sha256"),
                 "width": page.get("width"),
                 "height": page.get("height"),
             }
@@ -139,7 +139,8 @@ def prepare_playground(
         raise ItemPlaygroundError(str(exc)) from exc
     if not manifest_path.is_file():
         raise ItemPlaygroundError(f"manifest does not exist: {manifest_name}")
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest_content = manifest_path.read_bytes()
+    manifest = json.loads(manifest_content)
     if (
         not isinstance(manifest, dict)
         or manifest.get("schemaVersion") != "deterministic-item-sheet-v1"
@@ -159,6 +160,7 @@ def prepare_playground(
             )
 
     manifest_root = manifest_path.parent
+    sources = [_source_record(run_root, manifest_path, "manifest", manifest_content)]
     pages: list[dict[str, Any]] = []
     page_images: dict[str, Image.Image] = {}
     for page in _manifest_pages(manifest):
@@ -168,11 +170,14 @@ def prepare_playground(
             raise ItemPlaygroundError(f"atlas page escapes the run: {page['path']}") from exc
         if not page_path.is_file():
             raise ItemPlaygroundError(f"atlas page does not exist: {page['path']}")
+        page_content = page_path.read_bytes()
+        if _digest(page_content) != page["sha256"]:
+            raise ItemPlaygroundError(f"atlas page SHA-256 mismatch: {page['path']}")
         try:
-            with Image.open(page_path) as opened:
-                opened.verify()
-            with Image.open(page_path) as opened:
+            with Image.open(BytesIO(page_content)) as opened:
+                opened.load()
                 actual = opened.size
+                page_image = opened.copy()
         except (OSError, ValueError) as exc:
             raise ItemPlaygroundError(f"atlas page is not a decodable image: {page['path']}") from exc
         expected = (page["width"], page["height"])
@@ -180,9 +185,9 @@ def prepare_playground(
             raise ItemPlaygroundError(
                 f"atlas page {page['path']} dimensions {actual} do not match manifest {expected}"
             )
-        pages.append({**page, "dataUri": _data_uri(page_path.read_bytes())})
-        with Image.open(page_path) as opened:
-            page_images[page["id"]] = opened.copy()
+        pages.append({**page, "dataUri": _data_uri(page_content)})
+        page_images[page["id"]] = page_image
+        sources.append(_source_record(run_root, page_path, "atlas-page", page_content))
     page_by_id = {page["id"]: page for page in pages}
     primary_id = pages[0]["id"]
 
@@ -251,7 +256,7 @@ def prepare_playground(
     payload = {
         "runId": manifest.get("runId"),
         "manifestFilename": manifest_path.relative_to(run_root).as_posix(),
-        "manifestSha256": _digest(manifest_path.read_bytes()),
+        "manifestSha256": _digest(manifest_content),
         "sourceProvenance": (manifest.get("source") or {}).get("provenance"),
         "sourceSha256": (manifest.get("source") or {}).get("sha256"),
         "pages": pages,
@@ -269,10 +274,6 @@ def prepare_playground(
     }
     html_bytes = _render_html(payload).encode("utf-8")
 
-    sources = [_source_record(run_root, manifest_path, "manifest")]
-    sources.extend(
-        _source_record(run_root, resolve_run_path(manifest_root, page["path"]), "atlas-page") for page in _manifest_pages(manifest)
-    )
     fingerprint_payload = json.dumps(
         {"sources": sources},
         sort_keys=True,
@@ -581,7 +582,7 @@ _HTML_TEMPLATE = """<!doctype html>
     const summary = counts();
     const pending = summary.pending > 0;
     const run = '<run-dir>';
-    return 'python SKILLS/spritesheet-expert/scripts/apply_item_review.py'
+    return 'python "<skill-root>/scripts/apply_item_review.py"'
       + ' --manifest ' + run + '/' + data.manifestFilename
       + ' --review ' + run + '/item-review.json'
       + ' --output-dir ' + run + '/reviewed'

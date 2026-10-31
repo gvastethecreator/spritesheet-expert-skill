@@ -178,14 +178,26 @@ def rewrite_leaf_report(
         reference["status"] = expected_status
 
 
-def test_asset_pack_aggregate_rejects_cross_family_style_drift() -> None:
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("lighting", "lower-right-key"), ("pixels_per_unit", True)],
+)
+def test_asset_pack_aggregate_rejects_cross_family_style_drift(
+    field: str, value: str | bool,
+) -> None:
     from assetpack import aggregate_asset_pack
 
     contract, artifacts = valid_asset_pack_artifacts()
+    if field == "pixels_per_unit":
+        contract["style_bible"]["scale"]["pixels_per_unit"] = 1
+        for asset in contract["inventory"]["assets"]:
+            leaf = json.loads(artifacts[asset["validation_report"]["path"]])
+            leaf["evidence"]["style_tokens"]["pixels_per_unit"] = 1
+            rewrite_leaf_report(contract, artifacts, asset["id"], {"evidence": leaf["evidence"]})
     hero = next(asset for asset in contract["inventory"]["assets"] if asset["id"] == "hero")
     reference = hero["validation_report"]
     leaf = json.loads(artifacts[reference["path"]])
-    leaf["evidence"]["style_tokens"]["lighting"] = "lower-right-key"
+    leaf["evidence"]["style_tokens"][field] = value
     content = json.dumps(
         leaf, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     ).encode()
@@ -195,7 +207,7 @@ def test_asset_pack_aggregate_rejects_cross_family_style_drift() -> None:
     report, exit_code = aggregate_asset_pack(contract, artifacts)
 
     assert exit_code == 1
-    assert any("hero" in blocker and "lighting" in blocker for blocker in report["blockers"])
+    assert any("hero" in blocker and field in blocker for blocker in report["blockers"])
 
 
 def test_asset_pack_aggregate_rejects_non_representative_production_media() -> None:
@@ -488,14 +500,32 @@ def test_asset_pack_aggregate_rejects_a_stale_leaf_fingerprint() -> None:
     assert any("hero" in blocker and "stale" in blocker for blocker in report["blockers"])
 
 
-def test_asset_pack_aggregate_rejects_a_malformed_leaf_result() -> None:
+@pytest.mark.parametrize(
+    ("invalid_field", "expected_blocker"),
+    [
+        ("missing-errors", "malformed"),
+        ("status", "malformed"),
+        ("source-types", "source_types"),
+        ("reported-errors", "reported errors"),
+    ],
+)
+def test_asset_pack_aggregate_rejects_a_malformed_leaf_result(
+    invalid_field: str, expected_blocker: str,
+) -> None:
     from assetpack import aggregate_asset_pack
 
     contract, artifacts = valid_asset_pack_artifacts()
     asset = contract["inventory"]["assets"][1]
     reference = asset["validation_report"]
     leaf = json.loads(artifacts[reference["path"]])
-    del leaf["errors"]
+    if invalid_field == "missing-errors":
+        del leaf["errors"]
+    elif invalid_field == "status":
+        leaf["status"] = []
+    elif invalid_field == "source-types":
+        leaf["evidence"]["production_media"]["source_types"] = [{}]
+    else:
+        leaf["errors"] = ["known leaf failure"]
     content = json.dumps(leaf, sort_keys=True, separators=(",", ":")).encode()
     artifacts[reference["path"]] = content
     reference["sha256"] = sha256(content).hexdigest()
@@ -504,7 +534,8 @@ def test_asset_pack_aggregate_rejects_a_malformed_leaf_result() -> None:
 
     assert exit_code == 1
     assert report["status"] == "fail"
-    assert any("hero" in blocker and "malformed" in blocker for blocker in report["blockers"])
+    assert any("hero" in blocker and expected_blocker in blocker for blocker in report["blockers"])
+    assert next(item for item in report["leaf_reports"] if item["asset_id"] == "hero")["verified"] is False
 
 
 def test_asset_pack_aggregate_propagates_incomplete_leaf_as_blocked() -> None:
@@ -682,21 +713,41 @@ def test_validate_asset_pack_cli_propagates_presentation_failure_or_block(
     assert any("presentation" in blocker for blocker in report["blockers"])
 
 
+@pytest.mark.parametrize(
+    ("report_path", "expected_blocker", "invalid_contract"),
+    [
+        ("validation/CON.json", "reserved Windows", False),
+        ("asset-pack.json", "replace an input", False),
+        ("validation/hero.json", "replace an input", False),
+        ("deliverables/sprites/hero.png", "replace an input", False),
+        ("references/forest-mood.png", "replace an input", False),
+        ("validation/hero.json", "replace an input", True),
+    ],
+)
 def test_validate_asset_pack_cli_rejects_unsafe_report_output_path(
-    tmp_path: Path,
+    tmp_path: Path, report_path: str, expected_blocker: str, invalid_contract: bool,
 ) -> None:
     pack_path, _contract, _artifacts = materialize_asset_pack(tmp_path)
+    if invalid_contract:
+        _contract["pack_id"] = None
+        pack_path.write_text(json.dumps(_contract), encoding="utf-8")
+    if report_path in _contract["style_bible"]["references"]:
+        reference = tmp_path / report_path
+        reference.parent.mkdir(parents=True, exist_ok=True)
+        reference.write_bytes(b"original style reference")
+    before = {path: path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
 
     completed = run_asset_pack_cli(
         pack_path,
         tmp_path,
-        report_path="validation/CON.json",
+        report_path=report_path,
     )
 
     assert completed.returncode == 3
     report = json.loads(completed.stdout)
     assert report["status"] == "operational-error"
-    assert any("reserved Windows" in blocker for blocker in report["blockers"])
+    assert any(expected_blocker in blocker for blocker in report["blockers"])
+    assert all(path.read_bytes() == content for path, content in before.items())
 
 
 def test_validate_asset_pack_cli_rejects_artifact_symlink_escape(
@@ -856,6 +907,10 @@ def test_asset_pack_accepts_declared_variant_axes() -> None:
 
     assert validate_asset_pack(contract) is contract
 
+    contract["variant_matrix"]["axes"]["time"] = [1]
+    contract["variant_matrix"]["variants"][0]["axes"]["time"] = 1.0
+    assert validate_asset_pack(contract) is contract
+
 
 def test_asset_pack_rejects_undeclared_variant_axes() -> None:
     from assetpack import AssetPackContractError, validate_asset_pack
@@ -870,15 +925,20 @@ def test_asset_pack_rejects_undeclared_variant_axes() -> None:
         validate_asset_pack(contract)
 
 
-def test_asset_pack_rejects_disallowed_variant_axis_values() -> None:
+@pytest.mark.parametrize(
+    ("declared", "value"),
+    [(["night", "day"], "sunset"), ([1], True), ([True], 1)],
+)
+def test_asset_pack_rejects_disallowed_variant_axis_values(declared: list, value) -> None:
     from assetpack import AssetPackContractError, validate_asset_pack
 
     contract = valid_asset_pack()
-    contract["variant_matrix"]["variants"][0]["axes"] = {"time": "sunset"}
+    contract["variant_matrix"]["axes"]["time"] = declared
+    contract["variant_matrix"]["variants"][0]["axes"] = {"time": value}
 
     with pytest.raises(
         AssetPackContractError,
-        match="variant 'forest-bg-night' uses disallowed value 'sunset' for axis 'time'",
+        match=f"variant 'forest-bg-night' uses disallowed value {value!r} for axis 'time'",
     ):
         validate_asset_pack(contract)
 

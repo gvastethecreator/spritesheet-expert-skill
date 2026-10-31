@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "sprite-workflow-lanes-v1",
+  "lanes": {
+    "static-items": {
+      "title": "Irregular static item atlas",
+      "request": "item-atlas-workflow-v1",
+      "manifest": "deterministic-item-sheet-v1",
+      "guide": "references/local-model-item-workflow.md",
+      "finalGate": "validate_item_delivery.py",
+      "entrypoint": "run_item_atlas_workflow.py",
+      "capabilities": ["core", "item-models"],
+      "invariants": ["exact-rgba", "exclusive-ownership", "native-scale", "scoped-review", "bounded-pages"]
+    },
+    "true-grid": {
+      "title": "Exact grid or non-temporal asset set",
+      "request": "sprite-gen-request",
+      "manifest": "frame_layout",
+      "guide": "references/workflows.md",
+      "finalGate": "validate_run.py",
+      "entrypoint": "prepare_sprite_run.py",
+      "capabilities": ["core"],
+      "invariants": ["declared-slots", "native-alpha-first", "inventory", "projection", "identity-when-applicable"]
+    },
+    "animation": {
+      "title": "Temporal sprite rows or video",
+      "request": "sprite-gen-request",
+      "manifest": "frame_layout",
+      "guide": "references/video-animation-workflow.md",
+      "finalGate": "validate_run.py",
+      "entrypoint": "prepare_sprite_run.py",
+      "capabilities": ["core", "video", "motion-references"],
+      "invariants": ["chronology", "timing", "identity", "contacts", "explicit-registration", "playback-review"]
+    },
+    "tileset": {
+      "title": "Tileset or repeat texture",
+      "request": "sprite-gen-request",
+      "manifest": "frame_layout",
+      "guide": "references/isometric-tilesets.md",
+      "finalGate": "validate_run.py",
+      "entrypoint": "prepare_sprite_run.py",
+      "capabilities": ["core"],
+      "invariants": ["adjacency-or-repeat", "projection", "pivot", "map-proof"]
+    }
+  },
+  "alphaPolicy": {
+    "isolatedStills": "verified-provider-alpha-first",
+    "neutralFallback": "model-removal-after-alpha-rejection",
+    "legacyChroma": "declared-imports-only",
+    "textures": "follow-repeat-contract-not-isolation-policy"
+  }
+}

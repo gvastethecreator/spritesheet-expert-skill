@@ -5,64 +5,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 from pathlib import Path
 
 from PIL import Image
-
-
-KEYS = {
-    "green": (0, 255, 0),
-    "cyan": (0, 255, 255),
-    "blue": (0, 77, 255),
-    "magenta": (255, 0, 255),
-}
-
-
-def parse_color(value: str) -> tuple[int, int, int]:
-    raw = value.strip().lower()
-    if raw in KEYS:
-        return KEYS[raw]
-    if raw.startswith("#") and len(raw) == 7:
-        return tuple(int(raw[index : index + 2], 16) for index in (1, 3, 5))
-    raise SystemExit(f"invalid color {value!r}; use key name or #RRGGBB")
-
-
-def color_distance(left: tuple[int, int, int], right: tuple[int, int, int]) -> float:
-    return math.sqrt(sum((left[index] - right[index]) ** 2 for index in range(3)))
-
-
-def flood_background(image: Image.Image, key: tuple[int, int, int], threshold: float) -> bytearray:
-    pixels = image.load()
-    width, height = image.size
-    mask = bytearray(width * height)
-    stack: list[int] = []
-
-    def maybe_add(x: int, y: int) -> None:
-        index = y * width + x
-        if mask[index]:
-            return
-        red, green, blue, alpha = pixels[x, y]
-        if alpha <= 16 or color_distance((red, green, blue), key) <= threshold:
-            mask[index] = 1
-            stack.append(index)
-
-    for x in range(width):
-        maybe_add(x, 0)
-        maybe_add(x, height - 1)
-    for y in range(1, max(1, height - 1)):
-        maybe_add(0, y)
-        maybe_add(width - 1, y)
-
-    while stack:
-        current = stack.pop()
-        x = current % width
-        y = current // width
-        for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
-            if nx < 0 or ny < 0 or nx >= width or ny >= height:
-                continue
-            maybe_add(nx, ny)
-    return mask
+from check_chroma_key_safety import flood_background, parse_color
 
 
 def main() -> int:

@@ -5,20 +5,27 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+from io import BytesIO
 import json
 import math
 from pathlib import Path
 import re
 
 from PIL import Image, __version__ as pillow_version
-from runio import atomic_save_image, atomic_write_text
+from runio import atomic_save_image, atomic_write_bytes, atomic_write_text
+from spritecore.paths import resolve_run_path
 from spritecore.tool_theme import THEME_SCRIPT, TOOL_CSS
 
 MAX_PIXELS = 4_194_304
 
 
 def read(path):
-    return json.loads(Path(path).read_text(encoding='utf-8-sig'))
+    def invalid_constant(value):
+        raise ValueError(f'Nonfinite JSON number: {value}')
+    value = json.loads(Path(path).read_text(encoding='utf-8-sig'), parse_constant=invalid_constant)
+    if not isinstance(value, dict):
+        raise ValueError(f'{Path(path).name} must be a JSON object')
+    return value
 
 
 def sha(data):
@@ -26,7 +33,7 @@ def sha(data):
 
 
 def dump(path, value):
-    atomic_write_text(path, json.dumps(value, indent=2, ensure_ascii=False) + '\n')
+    atomic_write_text(path, json.dumps(value, indent=2, ensure_ascii=False, allow_nan=False) + '\n')
 
 
 def size(value, label):
@@ -90,7 +97,9 @@ def accent_preserving_palette(colors, budget):
     return sorted(set(median_cut(colors, budget - len(reserved))) | set(reserved))
 
 
-def compile_conversion(request, source):
+def compile_conversion(request, source, *, source_bytes=None):
+    if not isinstance(request, dict):
+        raise ValueError('Conversion request must be a JSON object')
     allowed = {'operation', 'source', 'grid', 'cell', 'palette_size', 'semantics', 'state', 'fps', 'loop', 'pivot',
                'action', 'animation_workflows'}
     if set(request) - allowed:
@@ -124,7 +133,9 @@ def compile_conversion(request, source):
     if workflows is not None and (not isinstance(workflows, list) or not all(isinstance(w, str) and w for w in workflows)):
         raise ValueError('animation_workflows must be a list of workflow ids')
     row_meta = {key: value for key, value in (('action', action), ('animation_workflows', workflows)) if value is not None}
-    with Image.open(source) as opened:
+    if source_bytes is None:
+        source_bytes = Path(source).read_bytes()
+    with Image.open(BytesIO(source_bytes)) as opened:
         if opened.width * opened.height > MAX_PIXELS or getattr(opened, 'n_frames', 1) != 1:
             raise ValueError('Use one still sheet of at most 4194304 pixels; extract animated containers first')
         if opened.width % columns or opened.height % rows:
@@ -162,7 +173,7 @@ def compile_conversion(request, source):
                         'changed_rgb_cells': sum(a[:3] != b[:3] for a, b in zip(baseline.get_flattened_data(), pixels) if a[3])})
     scale = width / sw
     manifest = {'schema_version': 1, 'kind': 'pixel-art-conversion', 'status': 'review-required',
-                'source_sha256': sha(Path(source).read_bytes()), 'source_file': 'source-input' + (Path(source).suffix.lower() or '.img'), 'pillow_version': pillow_version,
+                'source_sha256': sha(source_bytes), 'source_file': 'source-input' + (Path(source).suffix.lower() or '.img'), 'pillow_version': pillow_version,
                 'frame_semantics': semantics, 'cell': {'width': width, 'height': height},
                 'game_input': 'converted.png', 'frame_layout': {'cellWidth': width, 'cellHeight': height,
                 'rows': {state: [{'x': i % columns * width, 'y': i // columns * height, 'w': width, 'h': height} for i in range(count)]}},
@@ -195,23 +206,25 @@ def viewer(baseline, converted, manifest):
 
 
 def validate(output):
-    output = Path(output)
-    request = read(output / 'request.json')
+    output = Path(output).expanduser().resolve()
+    request = read(resolve_run_path(output, 'request.json'))
     name = request.get('source', '')
-    if not name.startswith('source-input.') or Path(name).name != name:
+    if not isinstance(name, str) or not name.startswith('source-input.') or Path(name).name != name:
         raise ValueError('Invalid source snapshot path')
-    baseline, frames, manifest = compile_conversion(request, output / name)
-    if read(output / 'conversion.json') != manifest:
+    baseline, frames, manifest = compile_conversion(request, resolve_run_path(output, name))
+    if name != manifest['source_file']:
+        raise ValueError('Source snapshot filename does not match conversion metadata')
+    if read(resolve_run_path(output, 'conversion.json')) != manifest:
         raise ValueError('Conversion metadata does not match source and settings')
     expected = [('baseline.png', sheet(baseline, request['grid'])), ('converted.png', sheet(frames, request['grid']))]
     expected += [(f'frames/{i:04d}.png', image) for i, image in enumerate(frames)]
-    if sorted(p.name for p in (output / 'frames').iterdir()) != [f'{i:04d}.png' for i in range(len(frames))]:
+    if sorted(p.name for p in resolve_run_path(output, 'frames').iterdir()) != [f'{i:04d}.png' for i in range(len(frames))]:
         raise ValueError('Frame inventory differs from the declared grid')
     for name, image in expected:
-        with Image.open(output / name) as actual:
+        with Image.open(resolve_run_path(output, name)) as actual:
             if actual.size != image.size or actual.convert('RGBA').tobytes() != image.tobytes():
                 raise ValueError('Pixel mismatch: ' + name)
-    if (output / 'index.html').read_text(encoding='utf-8') != viewer(baseline, frames, manifest):
+    if resolve_run_path(output, 'index.html').read_text(encoding='utf-8') != viewer(baseline, frames, manifest):
         raise ValueError('Preview does not match conversion')
     return {'valid': True, 'frames': len(frames), 'status': 'review-required'}
 
@@ -219,12 +232,15 @@ def validate(output):
 def convert(request_path, output):
     request_path, output = Path(request_path), Path(output)
     request = read(request_path)
+    if not isinstance(request.get('source'), str) or not request['source'].strip():
+        raise ValueError('source must be a non-empty local path string')
     source = (request_path.parent / request['source']).resolve()
-    baseline, frames, manifest = compile_conversion(request, source)
+    source_bytes = source.read_bytes()
+    baseline, frames, manifest = compile_conversion(request, source, source_bytes=source_bytes)
     # Exclusive creation keeps prior sources, outputs and approvals intact.
     output.mkdir(parents=True, exist_ok=False)
     source_name = manifest['source_file']
-    (output / source_name).write_bytes(source.read_bytes())
+    atomic_write_bytes(output / source_name, source_bytes)
     request = {**request, 'source': source_name}
     dump(output / 'request.json', request)
     dump(output / 'conversion.json', manifest)

@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spritesheet-expert.local/schemas/grok-video-animation-job-v1.schema.json",
+  "title": "Spritesheet Expert Grok video animation job v1",
+  "type": "object",
+  "required": [
+    "version",
+    "kind",
+    "provider",
+    "operation",
+    "repo_root",
+    "state",
+    "duration_seconds",
+    "requested_frames",
+    "sprite_request",
+    "first_frame",
+    "prompt",
+    "provider_output",
+    "dry_run"
+  ],
+  "properties": {
+    "version": { "const": 1 },
+    "kind": { "const": "sprite-grok-video-animation-job" },
+    "provider": { "const": "grok-imagine" },
+    "operation": { "const": "video-from-image" },
+    "repo_root": { "type": "string", "minLength": 1 },
+    "state": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "maxLength": 64
+    },
+    "duration_seconds": { "type": "integer", "minimum": 1, "maximum": 15 },
+    "requested_frames": { "type": "integer", "minimum": 2, "maximum": 64 },
+    "loop": { "type": "boolean" },
+    "sampling_mode": {
+      "enum": ["cyclic-half-open", "bookended-inclusive"]
+    },
+    "generation_background": {
+      "type": "object",
+      "required": ["family", "name", "hex"],
+      "properties": {
+        "family": { "const": "neutral" },
+        "name": { "enum": ["gray", "black", "white"] },
+        "hex": { "enum": ["#808080", "#000000", "#FFFFFF"] }
+      },
+      "additionalProperties": true
+    },
+    "prompt_contract": {
+      "type": "object",
+      "required": [
+        "anatomy",
+        "locomotion",
+        "camera",
+        "workflow",
+        "allowed_motion",
+        "motion_plane",
+        "motion_window_seconds",
+        "edge_margin_ratio",
+        "phase_semantics",
+        "pose_transition_policy",
+        "root_policy"
+      ],
+      "properties": {
+        "anatomy": { "type": "string", "minLength": 1 },
+        "locomotion": { "type": "string", "minLength": 1 },
+        "camera": { "type": "string", "minLength": 1 },
+        "workflow": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "allowed_motion": { "type": "string" },
+        "provider_action": { "type": "string", "minLength": 1, "maxLength": 800 },
+        "provider_action_source": {
+          "enum": ["request-video-prompt", "request-state-action", "cli-override"]
+        },
+        "motion_plane": { "enum": ["image-plane", "depth-allowed"] },
+        "motion_window_seconds": { "type": "number", "minimum": 0.5, "maximum": 4.0 },
+        "edge_margin_ratio": { "type": "number", "minimum": 0.08, "maximum": 0.30 },
+        "phase_semantics": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "pose_transition_policy": { "const": "articulated-pose-only" },
+        "root_policy": { "const": "stationary-image-plane-anchor" }
+      },
+      "additionalProperties": false
+    },
+    "sprite_request": { "$ref": "#/$defs/file" },
+    "first_frame": { "$ref": "#/$defs/file" },
+    "prompt": { "$ref": "#/$defs/file" },
+    "provider_output": {
+      "type": "object",
+      "required": ["result_path", "invocation_path", "expected_videos"],
+      "properties": {
+        "result_path": { "type": "string", "minLength": 1 },
+        "invocation_path": { "type": "string", "minLength": 1 },
+        "expected_videos": { "const": 1 }
+      },
+      "additionalProperties": false
+    },
+    "dry_run": {
+      "type": "object",
+      "description": "Runner inputs as flags. Any runner may run the job if it writes the invocation layout in grok-video-animation.md.",
+      "required": ["args", "real_run_ack_flag"],
+      "properties": {
+        "skill": { "type": "string", "minLength": 1, "description": "Optional runner label kept by older jobs; ingestion ignores it." },
+        "wrapper": { "type": "string", "minLength": 1, "description": "Optional runner label kept by older jobs; ingestion ignores it." },
+        "args": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "string" }
+        },
+        "real_run_ack_flag": { "const": "--ack-run" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "required": ["path", "sha256", "size_bytes"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "size_bytes": { "type": "integer", "minimum": 1 },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

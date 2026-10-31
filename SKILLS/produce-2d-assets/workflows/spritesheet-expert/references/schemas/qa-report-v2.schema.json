@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spritesheet-expert.local/schemas/qa-report-v2.schema.json",
+  "title": "Spritesheet Expert QA report v2",
+  "type": "object",
+  "required": ["version", "kind", "report_type", "ok", "errors", "warnings", "metrics"],
+  "properties": {
+    "version": { "const": 2 },
+    "kind": { "const": "sprite-qa-report" },
+    "report_type": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "ok": { "type": "boolean" },
+    "errors": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "metrics": { "type": "object" },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "ok": { "const": true } },
+        "required": ["ok"]
+      },
+      "then": {
+        "properties": { "errors": { "maxItems": 0 } }
+      },
+      "else": {
+        "properties": { "errors": { "minItems": 1 } }
+      }
+    }
+  ],
+  "additionalProperties": true
+}

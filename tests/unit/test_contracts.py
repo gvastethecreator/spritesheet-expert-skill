@@ -166,6 +166,10 @@ def test_preparer_keeps_per_state_vfx_metadata() -> None:
     states = prepare_sprite_run.normalize_states(request["states"])
 
     assert states["idle"]["vfx"] == request["states"]["idle"]["vfx"]
+    for field, value in (("frames", 1.5), ("frames", True), ("fps", 6.8), ("fps", True), ("loop", "false")):
+        invalid = {**request["states"]["idle"], field: value}
+        with pytest.raises(SystemExit, match=field):
+            prepare_sprite_run.normalize_states({"idle": invalid})
 
 
 def test_vfx_phase_sequence_must_align_with_frame_count() -> None:
@@ -433,6 +437,11 @@ def test_contract_document_data_is_deeply_immutable_and_to_dict_is_detached() ->
     with pytest.raises(TypeError):
         contract.data["states"]["idle"]["durations_ms"][0] = 99
 
+    durations = contract.data["states"]["idle"]["durations_ms"]
+    assert durations == [100, 100, 100, 100]
+    assert not (durations != [100, 100, 100, 100])
+    assert durations != [100, 100, 100, 200]
+
     detached = contract.to_dict()
     detached["states"]["idle"]["fps"] = 99
     assert contract.data["states"]["idle"]["fps"] == 6
@@ -532,6 +541,18 @@ def test_provenance_rejects_art_engine_that_identifies_another_source_type() -> 
 
     with pytest.raises(ContractValidationError, match="not valid under any"):
         validate_contract(provenance, expected_kind=ContractKind.PROVENANCE)
+
+    provenance["art_engine"] = "imagegen"
+    for field, value, message in (
+        ("path", [], "path"),
+        ("states", None, "states"),
+        ("state_coverage", [{}], "state_coverage"),
+    ):
+        malformed = deepcopy(provenance)
+        target = malformed if field == "state_coverage" else malformed["accepted_sources"][0]
+        target[field] = value
+        with pytest.raises(ContractValidationError, match=message):
+            validate_contract(malformed, expected_kind=ContractKind.PROVENANCE)
 
 
 def test_load_manifest_migrates_legacy_runtime_layout_from_path(tmp_path) -> None:

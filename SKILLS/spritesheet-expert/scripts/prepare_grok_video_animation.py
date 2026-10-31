@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare a dry-run-first $grok-imagine job from one accepted first frame."""
+"""Prepare a dry-run-first Grok Imagine video runner job from one accepted first frame."""
 
 from __future__ import annotations
 
@@ -23,10 +23,15 @@ def main() -> int:
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--state", required=True)
     parser.add_argument("--first-frame", required=True)
-    parser.add_argument("--duration-seconds", type=int, choices=(6, 10), default=6)
+    parser.add_argument("--duration-seconds", type=int, choices=range(1, 16), default=6)
     parser.add_argument(
         "--provider-action",
         help="state-local generation instruction; does not mutate sprite-request.json",
+    )
+    parser.add_argument(
+        "--runner-output-root",
+        help="directory inside --repo-root for a runner that writes only under its own root; "
+        "default: provider/grok-imagine/<state>/runner/ in the run",
     )
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
@@ -38,6 +43,7 @@ def main() -> int:
             first_frame_name=args.first_frame,
             duration_seconds=args.duration_seconds,
             provider_action_override=args.provider_action,
+            runner_output_root=args.runner_output_root,
             force=args.force,
         )
         with acquire_run_lock(prepared.run_dir, "prepare-grok-video-animation"):
@@ -66,7 +72,7 @@ def main() -> int:
                 "job_path": prepared.job_path.relative_to(prepared.run_dir).as_posix(),
                 "prompt_path": prepared.prompt_path.relative_to(prepared.run_dir).as_posix(),
                 "dry_run": prepared.job["dry_run"],
-                "next": "review the prompt, then run $grok-imagine dry-run; add --ack-run only with current-task consent",
+                "next": "review the prompt, then run the selected runner with dry_run.args; add --ack-run only with current-task consent",
             },
             ensure_ascii=False,
         )

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from hashlib import sha256
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -141,6 +142,8 @@ def test_workbench_is_self_contained_hash_bound_and_covers_every_state(
     assert 'canvas[data-sampling="nearest"]' in html
     assert 'canvas[data-sampling="linear"]' in html
     assert "https://" not in html and "http://" not in html
+    data = json.loads(re.search(r'<script\b[^>]*\bid="preview-data"[^>]*>(.*?)</script>', html, re.S).group(1))
+    assert data["states"]["blink"]["durationsMs"] == [120, 380]
 
 
 def test_workbench_refuses_stale_atlas_dimensions_before_writing(tmp_path: Path) -> None:
@@ -185,3 +188,41 @@ def test_workbench_starts_large_provider_frames_at_a_fitted_zoom(tmp_path: Path)
     assert "function fitInitialZoom()" in html
     assert "stage.dataset.initialZoom = zoomSelect.value" in html
     assert "scrollbar-color:var(--line) var(--scroll-track)" in html
+
+
+def test_workbench_protects_sources_and_does_not_show_false_passes(tmp_path: Path) -> None:
+    from spritecore.locks import acquire_run_lock
+    from spritecore.preview_workbench import prepare_workbench
+
+    run_dir = tmp_path / "run"
+    _, manifest_path = _write_run(run_dir)
+    for fields, expected_status in (
+        ({"status": "pass", "complete": False}, "warn"),
+        ({"status": "pass", "errors": ["drift"]}, "fail"),
+        ({"status": "blocked", "ok": True}, "fail"),
+    ):
+        (run_dir / "qa/frame-alignment-report.json").write_text(json.dumps(fields), encoding="utf-8")
+        *_, report = prepare_workbench(run_dir=run_dir)
+        assert next(item["status"] for item in report["evidence_links"] if item["label"] == "Alignment report") == expected_status
+
+    custom = run_dir / "qa/preview-workbench/source-manifest.json"
+    custom.parent.mkdir(parents=True)
+    original = manifest_path.read_bytes()
+    custom.write_bytes(original)
+    collision = _run(
+        run_dir, "--manifest", "qa/preview-workbench/source-manifest.json",
+        "--report", "qa/preview-workbench/source-manifest.json", "--force",
+    )
+    assert collision.returncode == 3
+    assert "cannot overwrite sources" in " ".join(json.loads(collision.stdout)["errors"])
+    assert custom.read_bytes() == original
+
+    with acquire_run_lock(run_dir, "workbench-test-holder"):
+        locked = _run(run_dir)
+    assert locked.returncode == 3
+    assert "locked" in " ".join(json.loads(locked.stdout)["errors"])
+
+    nested = _run(run_dir, "--out", "qa/preview-workbench/pages/index.html", "--report", "qa/preview-workbench/evidence/report.json")
+    assert nested.returncode == 0, nested.stdout + nested.stderr
+    assert (run_dir / "qa/preview-workbench/pages/index.html").is_file()
+    assert (run_dir / "qa/preview-workbench/evidence/report.json").is_file()
