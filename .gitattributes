@@ -1,0 +1,2 @@
+# Bundled workflow copies must keep the exact LF bytes recorded in workflows/manifest.json on every platform.
+SKILLS/produce-2d-assets/workflows/** text=auto eol=lf
