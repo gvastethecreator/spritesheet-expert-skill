@@ -94,6 +94,17 @@ section + section { border-top:1px solid var(--line); }
 .tile .label { font:600 12px var(--mono); letter-spacing:.06em; text-transform:uppercase; }
 .label code { text-transform:none; letter-spacing:0; }
 
+/* examples */
+.stage { background:var(--stage); border-radius:12px; padding:12px; display:grid; place-items:center; }
+.stage img { border-radius:6px; }
+.show > img { margin-inline:auto; border-radius:10px; }
+.strip { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:center; }
+.strip img { height:96px; width:auto; }
+.pair { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; }
+.pair figure { margin:0; display:grid; gap:6px; }
+.pair figcaption { color:var(--muted); font:12px var(--mono); }
+.note { color:var(--muted); font-size:14px; margin:28px 0 0; max-width:70ch; }
+
 /* rules */
 .flow { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px; }
 .flow div { padding:16px; border-radius:14px; background:var(--paper); border:1px solid var(--line); font-size:14px; color:var(--muted); }
@@ -125,7 +136,7 @@ footer .wrap { display:flex; flex-wrap:wrap; gap:12px 24px; justify-content:spac
   <div class="wrap">
     <a class="mark" href="#top" aria-label="Spritesheet Expert home"><i aria-hidden="true"><b></b><b></b><b></b><b></b></i>Spritesheet Expert</a>
     <nav aria-label="Sections">
-      <a href="#skills">Skills</a><a href="#lanes">Sprite lanes</a><a href="#rules">Rules</a><a class="keep" href="#install">Install</a>
+      <a href="#skills">Skills</a><a href="#lanes">Sprite lanes</a><a href="#examples">Examples</a><a href="#rules">Rules</a><a class="keep" href="#install">Install</a>
       <a class="keep" href="https://github.com/gvastethecreator/spritesheet-expert-skill">GitHub</a>
     </nav>
     <button class="theme" id="theme" type="button" aria-label="Switch color theme">◐</button>
@@ -199,6 +210,62 @@ footer .wrap { display:flex; flex-wrap:wrap; gap:12px 24px; justify-content:spac
           <p>Adjacent tiles and repeat textures, including isometric sets. Proof covers repeat and adjacency, projection, pivots and the map.</p>
         </div>
       </div>
+    </div>
+  </section>
+
+  <section id="examples" aria-labelledby="examples-title">
+    <div class="wrap">
+      <div class="head">
+        <p class="eyebrow">Examples</p>
+        <h2 id="examples-title">What a built sheet looks like.</h2>
+        <p class="lede">Each demo pairs the sheet the image model drew with what the sprite lane built from it.</p>
+      </div>
+      <div class="card show" style="margin-bottom:18px">
+        <img src="assets/v2/matchup.webp" alt="Two soft 3D vinyl-toy fighters: the red one throws a jab, the blue one answers with an overhead hammer fist." loading="lazy">
+      </div>
+      <div class="grid2">
+        <div class="card tile">
+          <p class="label"><code>animation</code></p>
+          <h3>Animation rows</h3>
+          <div class="stage"><img src="assets/v2/anim-source.webp" alt="Generated sheet with an idle row of four frames and a punch row of six frames." loading="lazy"></div>
+          <div class="pair">
+            <figure><img src="assets/v2/anim-red-punch.webp" alt="Red fighter punch animation" loading="lazy"><figcaption>punch · 6 fr</figcaption></figure>
+            <figure><img src="assets/v2/anim-blue-smash.webp" alt="Blue fighter overhead smash animation" loading="lazy"><figcaption>smash · 6 fr</figcaption></figure>
+          </div>
+        </div>
+        <div class="card tile">
+          <p class="label"><code>true-grid</code></p>
+          <h3>Named cells</h3>
+          <p>Poses, icons and UI states, each placed in its own cell.</p>
+          <div class="stage strip">
+            <img src="assets/v2/gesture-wave.webp" alt="Gesture: wave" loading="lazy">
+            <img src="assets/v2/gesture-point.webp" alt="Gesture: point" loading="lazy">
+            <img src="assets/v2/gesture-thumbs-up.webp" alt="Gesture: thumbs up" loading="lazy">
+            <img src="assets/v2/gesture-cheer.webp" alt="Gesture: cheer" loading="lazy">
+            <img src="assets/v2/ui-icons-heart.webp" alt="Heart icon" loading="lazy">
+            <img src="assets/v2/ui-icons-coin.webp" alt="Coin icon" loading="lazy">
+            <img src="assets/v2/ui-icons-gem.webp" alt="Gem icon" loading="lazy">
+            <img src="assets/v2/ui-button-normal.webp" alt="Button, normal state" loading="lazy">
+          </div>
+        </div>
+        <div class="card tile">
+          <p class="label"><code>static-items</code></p>
+          <h3>Loose items, packed</h3>
+          <div class="pair">
+            <figure><div class="stage"><img src="assets/v2/atlas-source.webp" alt="Ten loose gym props on one sheet." loading="lazy"></div><figcaption>generated</figcaption></figure>
+            <figure><div class="stage"><img src="assets/v2/atlas-packed.png" alt="The ten props packed tightly into one atlas." loading="lazy"></div><figcaption>packed atlas</figcaption></figure>
+          </div>
+        </div>
+        <div class="card tile">
+          <p class="label">checks</p>
+          <h3>Frames to redraw get named</h3>
+          <div class="pair">
+            <figure><div class="stage"><img src="assets/v2/healthy-before-strip.webp" alt="Punch row before repair: frame 2 missing, frame 3 too small, frame 4 darker, frame 6 cut off at the edge." loading="lazy"></div><figcaption>before · 1 fail, 4 warnings</figcaption></figure>
+            <figure><div class="stage"><img src="assets/v2/healthy-after-strip.webp" alt="Punch row after repair: six matching frames." loading="lazy"></div><figcaption>after · all checks pass</figcaption></figure>
+          </div>
+        </div>
+      </div>
+      <p class="note">These demos were built with the earlier <code>sprite.py</code> CLI, which is retired. They show the results each lane aims for; they are not output of the current scripts.</p>
     </div>
   </section>
 

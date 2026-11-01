@@ -10,6 +10,7 @@
   <a href="https://gvastethecreator.github.io/spritesheet-expert-skill/">Project site</a> ·
   <a href="#install">Install</a> ·
   <a href="#skills">Skills</a> ·
+  <a href="#examples">Examples</a> ·
   <a href="#use">Use</a> ·
   <a href="#rules">Rules</a> ·
   <a href="SKILLS/README.md">Skill catalog</a>
@@ -70,6 +71,56 @@ with a dry run. No skill holds provider keys.
 
 Use the narrowest skill that owns the asset. `produce-2d-assets` bundles the
 five family workflows, so it works without the other skills installed.
+
+## Examples
+
+These demos were built with the earlier `sprite.py` CLI, which is retired. They
+show the results each sprite lane aims for; they are not output of the current
+scripts.
+
+<p align="center">
+  <img alt="Two soft 3D vinyl-toy fighters trade a jab and an overhead hammer fist." src="docs/assets/v2/matchup.webp" width="760" />
+</p>
+
+### Animation rows (`animation`)
+
+One generated sheet, cut into frames on one baseline at one body size.
+
+| Generated sheet | Built rows |
+| --- | --- |
+| <img src="docs/assets/v2/anim-source.webp" alt="Generated idle and punch rows of the red fighter" width="420" /> | <img src="docs/assets/v2/anim-red-punch.webp" alt="Punch animation" width="180" /> <img src="docs/assets/v2/anim-blue-smash.webp" alt="Overhead smash animation" width="180" /> |
+
+### Named cells (`true-grid`)
+
+Poses, icons and UI states, each placed in its own cell.
+
+<p>
+  <img src="docs/assets/v2/gesture-wave.webp" alt="Gesture: wave" width="96" />
+  <img src="docs/assets/v2/gesture-point.webp" alt="Gesture: point" width="96" />
+  <img src="docs/assets/v2/gesture-thumbs-up.webp" alt="Gesture: thumbs up" width="96" />
+  <img src="docs/assets/v2/gesture-cheer.webp" alt="Gesture: cheer" width="96" />
+  <img src="docs/assets/v2/ui-icons-heart.webp" alt="Heart icon" width="72" />
+  <img src="docs/assets/v2/ui-icons-coin.webp" alt="Coin icon" width="72" />
+  <img src="docs/assets/v2/ui-icons-gem.webp" alt="Gem icon" width="72" />
+  <img src="docs/assets/v2/ui-button-normal.webp" alt="Button, normal state" width="120" />
+</p>
+
+### Loose items (`static-items`)
+
+Items with no grid are found by shape and packed into one atlas.
+
+| Generated: loose items | Built: separated and packed |
+| --- | --- |
+| <img src="docs/assets/v2/atlas-source.webp" alt="Ten loose gym props on one sheet" width="420" /> | <img src="docs/assets/v2/atlas-packed.png" alt="The ten props packed into one atlas" width="300" /> |
+
+### Checks name the frames to redraw
+
+Four faults were injected into a real generated sheet. The repairs are real
+generations.
+
+| Before repair | After repair |
+| --- | --- |
+| <img src="docs/assets/v2/healthy-before-strip.webp" alt="Punch row with a missing frame, a small frame, a dark frame and a cut-off frame" width="420" /> | <img src="docs/assets/v2/healthy-after-strip.webp" alt="Punch row after repair: six matching frames" width="420" /> |
 
 ## Use
 
