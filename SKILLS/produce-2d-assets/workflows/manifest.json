@@ -16,7 +16,7 @@
     {
       "source": "SKILLS/build-game-backgrounds/SKILL.md",
       "path": "build-game-backgrounds/WORKFLOW.md",
-      "sha256": "ad1780656f4f7ca9a2ccd1edd1b6c712342572ae0035d051bd2eec91b4800bb1"
+      "sha256": "1d88c45f6a1acf6e83500998a3ef6a2780535c896fd1a579f32648487e903dc4"
     },
     {
       "source": "SKILLS/build-game-backgrounds/references/schemas/background-pack-v1.schema.json",
@@ -51,7 +51,7 @@
     {
       "source": "SKILLS/build-game-ui-kits/SKILL.md",
       "path": "build-game-ui-kits/WORKFLOW.md",
-      "sha256": "a360a3b5ba4df7f589cee77a902b182ce275f5cfde9fb5df07ea54f8ee8cc7d0"
+      "sha256": "23924c437d9fa716cb001e30b0d9a0cf5112d1d3d16cde32911f65bead92f42b"
     },
     {
       "source": "SKILLS/build-game-ui-kits/references/schemas/ui-kit-v1.schema.json",
@@ -86,7 +86,7 @@
     {
       "source": "SKILLS/build-static-game-assets/SKILL.md",
       "path": "build-static-game-assets/WORKFLOW.md",
-      "sha256": "35f763438892b82523740ba861e0b0c181d97053175677b9ec33fd6710315c71"
+      "sha256": "20e701286adc7f953979efd82dd65efd73a76af231f0db7d259df16316c3364c"
     },
     {
       "source": "SKILLS/build-static-game-assets/references/schemas/static-asset-pack-v1.schema.json",
@@ -121,7 +121,7 @@
     {
       "source": "SKILLS/compose-asset-mockups/SKILL.md",
       "path": "compose-asset-mockups/WORKFLOW.md",
-      "sha256": "baa74058a9cb67ac657aa263a19147660098b724a771778e028b6e3f91cc296c"
+      "sha256": "d7c4446c41040da06d36f623f710ac7f4ff78874586a77241eaa735aa4bc95af"
     },
     {
       "source": "SKILLS/compose-asset-mockups/references/schemas/brand-kit.schema.json",
@@ -221,7 +221,7 @@
     {
       "source": "SKILLS/spritesheet-expert/SKILL.md",
       "path": "spritesheet-expert/WORKFLOW.md",
-      "sha256": "9ef160c07877f20c33101ea9d396e809c416d5f259a074ea8cf1126b3f696a29"
+      "sha256": "669b63f77f60cf8d5dc733f43c3891fc15faaaed6b4803e29706c4577d2c4e61"
     },
     {
       "source": "SKILLS/spritesheet-expert/assets/motion-reference-templates/README.md",

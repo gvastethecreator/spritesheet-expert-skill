@@ -41,6 +41,27 @@ python "<skill-dir>/scripts/prepare_presentation.py" --presentation "<root>/pres
    - Contact board proves layout only. Runtime-captured claims require hash-backed capture evidence; reconstructed and illustrative outputs keep truth labels visible in the contract.
    - Update presentation manifest and any runtime capture evidence. Revalidate before handing the artifacts and current report to a cross-family delivery, when requested.
 
+## Steam Store Targets
+
+For `output_profile: store` aimed at Steam, set `canvas` to the exact size. Steamworks rejects other dimensions. Verified 2026-11-17 against `partner.steamgames.com/doc/store/assets/standard`, `/libraryassets` and `/rules`. Recheck before a real submission.
+
+| Asset | Size (px) | Content |
+| --- | --- | --- |
+| Header capsule | 920×430 | Art, game name and official subtitle only |
+| Small capsule | 462×174 | Logo nearly fills it; must read at the auto-generated 120×45 |
+| Main capsule | 1232×706 | As header |
+| Vertical capsule | 748×896 | As header |
+| Screenshot | 1920×1080 minimum, 16:9; at least 5 | Gameplay only: no awards, marketing copy or written descriptions |
+| Page background (optional) | 1438×810 | Ambient; must not compete with page content |
+| Library capsule | 600×900 | Must include the logo; subtitle allowed; no other text |
+| Library header | 920×430 | Title only |
+| Library hero | 3840×1240; key content inside the centered 860×380 safe area | No text at all |
+| Library logo | 1280 wide and/or 720 tall, transparent PNG | Logotype and optional logomark only |
+
+- Base capsules forbid review scores, award names or logos, discount copy ("On Sale"), calls to action ("Wishlist now"), and promotion of other products, sequels included. Update or event text belongs only in Artwork Overrides: 14 days at most, localized.
+- Steam screenshots must show real gameplay. A `reconstructed` or `concept` composition is not a valid Steam screenshot. Use `truth_type: runtime-captured` with capture evidence, or keep it out of the screenshot slots.
+- Capsules are key art: `truth_type: concept`, or `reconstructed` when arranged from game assets, with `proof_role: illustrative`. The logo must stay legible at the smallest derived size, so inspect a downscaled copy before accepting it.
+
 ## Completion Contract
 
 Done: preparation exit 0; all imports hash-verified; every output belongs to a declared composition; licenses and provenance complete; truth labels honest; mockups inspected.

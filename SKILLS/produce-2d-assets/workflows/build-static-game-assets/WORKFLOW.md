@@ -22,6 +22,19 @@ Create a portable non-animated raster pack with explicit roles, sizes, pivots, c
    Use the existing Python runtime and [requirements](requirements-runtime.txt). Installing missing packages needs the task's authority. Done when current schema, paths, hashes, declared license references, dimensions, lineage and transparency checks pass or the actual failure is recorded.
 5. Inspect the contact sheet and assets at intended render size. Check silhouette, relative scale, alpha edges, crop, palette/style and readability. Inspect pivot behavior in its actual coordinate/engine context when that claim is required; the contact sheet does not draw or exercise every pivot. Done when requested visual/use claims have appropriate proof and remaining gaps are explicit.
 
+## Rules that fail a pack
+
+Plan sizes and margins against these before generating; the validator rejects each one.
+
+- Each source is exactly `target.width` × `target.height`. Resize or pad to the target before hashing. A generator's default square output rarely matches.
+- `transparency: required` needs at least one pixel with alpha below 255. `opaque` forbids any alpha below 255. `either` checks neither.
+- Isolated roles (`prop`, `item`, `pickup`, `icon`, `cursor`, `badge`) fail when visible pixels touch any image edge. Keep a transparent margin of at least 1 px; 2–4 px leaves room for outlines and filtering. `portrait` and `key-art` may bleed.
+- Occupancy is the share of pixels with alpha above 0. Every asset needs at least 1%, and isolated roles may not exceed 95%.
+- License status must match provenance: `imagegen` and `grok-imagine-image` need `generated`, `fixture` needs `fixture`, and `imported` needs `user-owned` or `licensed`.
+- A variant's `parent_sha256` must equal its parent's current source hash. Regenerating a parent makes every child stale. Cycles fail.
+- `pivot` is normalized (`x`, `y` in 0–1). Use bottom-center (0.5, 1.0) for grounded props and center (0.5, 0.5) for icons and pickups, unless the engine says otherwise. The contact sheet does not draw pivots.
+- Paths are relative POSIX paths inside the pack root, and `grok-imagine-image` sources need a `provider_record` inside it.
+
 ## Validator and proof scope
 
 The CLI writes `qa/static-pack-report.json` and `qa/static-pack-contact.png`. File replacements are atomic individually, not together. Path-preflight errors emit stdout JSON without a report write. Other contract failures can write a failure report while preserving old proof images; old images do not establish a successful current result. Operational failure can leave mixed generations, so verify report/proof hashes before accepting delivery.

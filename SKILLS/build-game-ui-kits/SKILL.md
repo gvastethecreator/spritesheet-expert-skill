@@ -22,6 +22,16 @@ Create a portable raster family with explicit components, tokens, densities, sta
    Use the existing runtime and [requirements](requirements-runtime.txt); installation needs the task's authority. Done when schema, source hashes, states/densities and geometry checks pass or failures are recorded.
 5. Inspect state and stretch evidence, plus the source variants at their intended render sizes. The state board proves state/density comparison only at thumbnail scale. Check identity, legibility, alignment, focus cues, alpha edges and required density/state parity. A thumbnail comparison cannot establish one-to-one readability or an interactive control's behavior. Done when each requested visual/state/stretch claim has relevant proof, with gaps kept visible.
 
+## Rules that fail a kit
+
+Plan sizes and states against these before generating; the validator rejects each one.
+
+- `densities` are unique integers 1–4. Every state of every component has exactly one variant per declared density, and each variant is exactly `base_size × density` pixels (base 48×16 at density 3 is 144×48). Make the largest density first and derive smaller ones with a filter that matches the style: nearest-neighbour at integer ratios for pixel art, Lanczos for painted art. Then inspect each one, because derived variants still need real provenance.
+- State keys: `default`, `hover`, `pressed`, `disabled`, `selected`, `focused`, `active`. Every `required_states` entry must exist in `states`. Component `type` is `button`, `panel`, `bar`, `icon`, `cursor`, `badge`, `frame` or `toggle`.
+- `nine_slice` margins are density-1 pixels, each at least 1, with `left + right < width` and `top + bottom < height`. `content_safe` must sit inside the center cell (`x ≥ left`, `y ≥ top`, `x + width ≤ base width − right`, `y + height ≤ base height − bottom`). Keep every non-stretchable detail (bevels, rivets, corner ornaments) in the corners. Make edges uniform along their stretch axis, because the stretch board scales edge and center cells with nearest-neighbour to 2× base size; it does not tile them.
+- Token contrast is the WCAG 2 ratio of `tokens.foreground` against `tokens.background` (`#RRGGBB`). Set `minimum_contrast` to at least 4.5 for body text, or 3 for large text and non-text UI. The check reads only the two tokens, never the rendered art.
+- Paths are relative POSIX paths inside the kit root: no `\`, `:`, leading `/`, `..`, trailing dot or space, or Windows reserved names. `grok-imagine-image` variants require `provider_record` (`path`, `sha256`) inside the kit root; `verification_status` is always `verified`.
+
 ## Validator and proof scope
 
 The CLI writes `qa/ui-kit-report.json`, `qa/ui-state-board.png` and `qa/ui-nine-slice.png`. Each replacement is atomic individually. Path-preflight errors emit stdout JSON without writing a report; other contract failures may replace the diagnostic report while retaining old proof images. This is not a transaction, and operational failures can leave a mixed set. Verify the final hashes and current result.

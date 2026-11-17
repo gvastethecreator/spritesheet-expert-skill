@@ -41,6 +41,12 @@ Deterministic code owns every visible pixel: assigned once, pending, or explicit
 discarded. Preserve original RGBA, scale and orientation. Never silently delete
 small fragments or trust a model's confidence as proof.
 
+[deterministic-item-atlas.md](references/deterministic-item-atlas.md) holds the
+segmentation defaults (`alpha_high 64`, `alpha_low 2`, `halo_radius 6`, 8-connectivity),
+cell and packing rules, classification and review CLIs, and QA flags. When a Studio,
+another agent or an external runner drives the skill, read
+[agent-first-studio.md](references/agent-first-studio.md).
+
 Packing uses consecutive, largest-first rectangular shelves, configurable padding,
 and bounded pages. It never rotates or scales sprites to fit. Tags belong to stable
 IDs, outside PNG pixels. Review pixels, semantics and placement separately; changed

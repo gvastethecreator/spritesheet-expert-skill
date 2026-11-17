@@ -22,6 +22,19 @@ Create a portable layered pack whose sources, declared camera contract and proof
    Use the existing Python runtime and [requirements](requirements-runtime.txt). Install missing requirements only within the task's authority. Do not change the project toolchain to run a proof. Done when validation passes for the current bytes or the actual failure is retained.
 5. Inspect the composite and scroll sample. The composite proves layer order and blend placement for that rendered view. Judge continuity, readability behind gameplay, depth and framing. The GIF samples horizontal offsets; it does not prove vertical parallax, every camera crop, horizon behavior or a game's runtime integration. Add the actual requested view/interaction proof when needed. Done when all applicable visual claims are observed and missing proof stays explicit.
 
+## Rules that fail a pack
+
+Plan the art against these before generating; the validator rejects each one.
+
+- Every layer is exactly `canvas.width` × `canvas.height`. A repeating panorama is one canvas-wide tile, not a wider strip.
+- `order` is 0, 1, 2… with no gaps, back to front. `depth`, `parallax_x` and `parallax_y` (each 0–1) never decrease as `order` rises. Typical starting factors: sky 0–0.1, far 0.2–0.4, mid 0.5–0.7, near and foreground up to 1.0. A foreground faster than the camera (factor above 1) is not representable in v1.
+- A `repeat_x: true` layer fails when the mean absolute RGBA difference between its first and last pixel columns exceeds 0.03 (about 8 of 255 per channel). Ask for a horizontally tileable image and check the wrap before writing hashes. There is no vertical repeat check.
+- Enums: `role` is `sky`, `far`, `mid`, `near`, `foreground`, `fog` or `lighting`; `blend_mode` is `normal`, `screen`, `multiply` or `add`. `canvas.color_space` is `srgb`; `style_fingerprint` is `sha256:` plus 64 hex characters.
+- Paths are relative POSIX paths inside the pack root: no `\`, `:`, leading `/`, `..`, trailing dot or space, or Windows reserved names (`CON`, `NUL`, `COM1`…).
+- `grok-imagine-image` layers require `provider_record` (`path`, `sha256`) inside the pack root. `verification_status` is always `verified`; `fixture` is true only with `source_type: fixture`.
+- `camera.focal_safe_zone` is a normalized rect that must fit inside 0–1; `horizon_y` is 0–1.
+- The scroll GIF moves each layer `8 × parallax_x` pixels per frame at 160 ms. It never shows `parallax_y`.
+
 ## Validator and proof scope
 
 The CLI writes `qa/background-pack-report.json`, `qa/background-composite.png` and `qa/background-scroll.gif`. Replacement is atomic per file, not a transaction across the set. Output-path preflight errors print JSON to stdout without writing a report. Other contract failures can write a failure report while preserving existing proof images; old images alone are not a current successful result. An I/O failure can leave a mixed generation, so check final report/proof hashes before accepting it.
